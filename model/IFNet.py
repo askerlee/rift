@@ -76,7 +76,7 @@ class IFNet(nn.Module):
         gt = x[:, 6:] # In inference time, gt is None
         flow_list = []
         to_merge = []
-        merged = []
+        merged = [None, None, None]
         mask_list = []
         warped_img0 = img0
         warped_img1 = img1
@@ -95,8 +95,8 @@ class IFNet(nn.Module):
             flow_list.append(flow)
             warped_img0 = warp(img0, flow[:, :2])
             warped_img1 = warp(img1, flow[:, 2:4])
-            merged_student = (warped_img0, warped_img1)
-            to_merge.append(merged_student)
+            to_merge_student = (warped_img0, warped_img1)
+            to_merge.append(to_merge_student)
         
         breakpoint()
         if gt.shape[1] == 3:
