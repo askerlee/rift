@@ -18,8 +18,9 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     )
 
 class IFBlock(nn.Module):
-    def __init__(self, in_planes, c=64):
+    def __init__(self, name, in_planes, c=64):
         super(IFBlock, self).__init__()
+        self.name = name
         self.conv0 = nn.Sequential(
             conv(in_planes, c//2, 3, 2, 1),
             conv(c//2, c, 3, 2, 1),
@@ -43,8 +44,12 @@ class IFBlock(nn.Module):
         if flow != None:
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
+        # conv0: 2 layers of conv, kernel size 3.
         x = self.conv0(x)
-        # convblock: 8 layers of conv.
+        if self.name == 'block2':
+            breakpoint()
+
+        # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
         tmp = self.lastconv(x)
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
@@ -56,10 +61,10 @@ class IFBlock(nn.Module):
 class IFNet(nn.Module):
     def __init__(self, use_f2trans=False):
         super(IFNet, self).__init__()
-        self.block0 = IFBlock(6, c=240)
-        self.block1 = IFBlock(13+4, c=150)
-        self.block2 = IFBlock(13+4, c=90)
-        self.block_tea = IFBlock(16+4, c=90)
+        self.block0 = IFBlock('block0', 6, c=240)
+        self.block1 = IFBlock('block1', 13+4, c=150)
+        self.block2 = IFBlock('block2', 13+4, c=90)
+        self.block_tea = IFBlock('block_tea', 16+4, c=90)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -73,7 +78,8 @@ class IFNet(nn.Module):
     def forward(self, x, scale_list=[4,2,1], timestep=0.5):
         img0 = x[:, :3]
         img1 = x[:, 3:6]
-        gt = x[:, 6:] # In inference time, gt is None
+        # During inference, gt is an empty tensor.
+        gt = x[:, 6:] 
         flow_list = []
         to_merge = []
         merged = [None, None, None]
@@ -98,10 +104,12 @@ class IFNet(nn.Module):
             to_merge_student = (warped_img0, warped_img1)
             to_merge.append(to_merge_student)
         
-        breakpoint()
         if gt.shape[1] == 3:
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes gt as extra input.
+            # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
+            # flow_d: flow difference between the teacher and the student. 
+            # (or residual of the teacher)
             flow_d, mask_d = self.block_tea(torch.cat((img0, img1, warped_img0, warped_img1, mask, gt), 1), flow, scale=1)
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
