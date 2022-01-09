@@ -27,7 +27,9 @@ class Model:
         self.lap = LapLoss()
         self.sobel = SOBEL()
         if local_rank != -1:
-            self.flownet = DDP(self.flownet, device_ids=[local_rank], output_device=local_rank)
+            self.flownet = DDP(self.flownet, device_ids=[local_rank], 
+                               output_device=local_rank,
+                               find_unused_parameters=True)
 
     def train(self):
         self.flownet.train()
