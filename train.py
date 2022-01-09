@@ -135,10 +135,9 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--trans', dest='trans_layer_idx', default=-1, type=int, 
                         help='Which IFBlock to apply transformer (default: -1, not to use transformer)')
-
-    parser.add_argument('--local_rank', default=0, type=int, help='local rank')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     args = parser.parse_args()
+    args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
     torch.distributed.init_process_group(backend="nccl", init_method='env://')
     torch.cuda.set_device(args.local_rank)
     seed = 1234
