@@ -16,6 +16,9 @@ from torch.utils.data.distributed import DistributedSampler
 
 device = torch.device("cuda")
 log_path = 'train_log'
+if not os.path.exists(log_path):
+    os.makedirs(log_path)
+    
 exp = os.path.abspath('.').split('/')[-1]
 
 def get_learning_rate(step):
@@ -40,7 +43,7 @@ def train(model, local_rank):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
-        
+
     step = 0
     nr_eval = 0
     dataset = VimeoDataset('train')
