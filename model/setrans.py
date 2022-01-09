@@ -11,7 +11,6 @@ import torch.nn.functional as F
 from torch import einsum
 from einops import rearrange
 from .setrans_ablation import RandPosEmbedder, SinuPosEmbedder, ZeroEmbedder, MultiHeadFeatTrans
-from utils.utils import print0
 torch.set_printoptions(sci_mode=False)
 
 bb2_stage_dims = {  'raft-small':   [32, 32,  64,  96,   128],   
@@ -27,6 +26,12 @@ bb2_stage_dims = {  'raft-small':   [32, 32,  64,  96,   128],
                     'eff-b4':       [24, 32,  56,  160,  1792],   # input: 380
                     'i3d':          [64, 192, 480, 832,  1024]    # input: 224
                  }
+
+# Only print on GPU0. Avoid duplicate messages.
+def print0(*print_args, **kwargs):
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    if local_rank == 0:
+        print(*print_args, **kwargs)
 
 # Can also be implemented using torch.meshgrid().
 def gen_all_indices(shape, device):

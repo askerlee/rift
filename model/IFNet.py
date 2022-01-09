@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.warplayer import warp
 from model.refine import *
-from model.setrans import SETransConfig, SelfAttVisPosTrans
+from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.Sequential(
@@ -60,7 +60,7 @@ class IFBlock(nn.Module):
             self.trans_config.pos_code_type      = 'bias'
             self.trans_config.pos_code_weight    = 1.0
             self.trans = SelfAttVisPosTrans(self.trans_config, f"{self.name} transformer")
-            print("trans config:\n{}".format(self.trans_config.__dict__))            
+            print0("trans config:\n{}".format(self.trans_config.__dict__))            
         else:
             self.trans = nn.Identity()
 
