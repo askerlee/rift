@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
 device = torch.device("cuda")
-
+log_path = 'train_log'
 exp = os.path.abspath('.').split('/')[-1]
 
 def get_learning_rate(step):
@@ -40,6 +40,7 @@ def train(model, local_rank):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
+        
     step = 0
     nr_eval = 0
     dataset = VimeoDataset('train')
@@ -85,17 +86,18 @@ def train(model, local_rank):
             step += 1
         nr_eval += 1
         if nr_eval % 5 == 0:
-            evaluate(model, val_data, step)
+            evaluate(model, val_data, step, local_rank, writer_val)
         model.save_model(log_path, local_rank)    
         dist.barrier()
 
-def evaluate(model, val_data, nr_eval):
+def evaluate(model, val_data, nr_eval, local_rank, writer_val):
     loss_stu_list = []
     loss_distill_list = []
     loss_tea_list = []
     psnr_list = []
     psnr_list_teacher = []
     time_stamp = time.time()
+
     for i, data in enumerate(val_data):
         data_gpu = data.to(device, non_blocking=True) / 255.
         imgs = data_gpu[:, :6]
