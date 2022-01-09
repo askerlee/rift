@@ -94,8 +94,8 @@ class IFNet(nn.Module):
         self.trans_layer_idx = trans_layer_idx
         self.block0 = IFBlock('block0', 6,          c=240, apply_trans=(trans_layer_idx==0))
         self.block1 = IFBlock('block1', 13+4,       c=152, apply_trans=(trans_layer_idx==1))
-        self.block2 = IFBlock('block2', 13+4,       c=90,  apply_trans=(trans_layer_idx==2))
-        self.block_tea = IFBlock('block_tea', 16+4, c=90,  apply_trans=(trans_layer_idx==2))
+        self.block2 = IFBlock('block2', 13+4,       c=88,  apply_trans=(trans_layer_idx==2))
+        self.block_tea = IFBlock('block_tea', 16+4, c=88,  apply_trans=(trans_layer_idx==2))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
