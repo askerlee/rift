@@ -18,7 +18,7 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     )
 
 class IFBlock(nn.Module):
-    def __init__(self, in_planes, c=64):
+    def __init__(self, in_planes, c=64, apply_trans=False):
         super(IFBlock, self).__init__()
         self.conv0 = nn.Sequential(
             conv(in_planes, c//2, 3, 2, 1),
@@ -35,7 +35,8 @@ class IFBlock(nn.Module):
             conv(c, c),
         )
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
-
+        self.apply_trans = apply_trans
+        
     def forward(self, x, flow, scale):
         if scale != 1:
             x = F.interpolate(x, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
@@ -52,12 +53,13 @@ class IFBlock(nn.Module):
 
 # The IFBlock's in IFNet_m takes one extra input channel: timestep.
 class IFNet_m(nn.Module):
-    def __init__(self, use_f2trans=False):
+    def __init__(self, trans_layer_idx=-1):
         super(IFNet_m, self).__init__()
-        self.block0 = IFBlock(6+1, c=240)
-        self.block1 = IFBlock(13+4+1, c=150)
-        self.block2 = IFBlock(13+4+1, c=90)
-        self.block_tea = IFBlock(16+4+1, c=90)
+        self.trans_layer_idx = trans_layer_idx
+        self.block0 = IFBlock(6+1, c=240, apply_trans=(trans_layer_idx==0))
+        self.block1 = IFBlock(13+4+1, c=150, apply_trans=(trans_layer_idx==1))
+        self.block2 = IFBlock(13+4+1, c=90, apply_trans=(trans_layer_idx==2))
+        self.block_tea = IFBlock(16+4+1, c=90, apply_trans=(trans_layer_idx==2))
         self.contextnet = Contextnet()
         self.unet = Unet()
 

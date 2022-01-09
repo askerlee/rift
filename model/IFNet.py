@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.warplayer import warp
 from model.refine import *
+from model.setrans import SETransConfig, SelfAttVisPosTrans
 
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.Sequential(
@@ -18,7 +19,7 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     )
 
 class IFBlock(nn.Module):
-    def __init__(self, name, in_planes, c=64):
+    def __init__(self, name, in_planes, c=64, apply_trans=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.conv0 = nn.Sequential(
@@ -38,6 +39,31 @@ class IFBlock(nn.Module):
         # lastconv outputs 5 channels: 4 flow and 1 mask
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
+        self.apply_trans = apply_trans
+        if self.apply_trans:
+            self.trans_config = SETransConfig()
+            self.trans_config.in_feat_dim = c
+            self.trans_config.feat_dim  = c
+            # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
+            self.trans_config.has_input_skip = True
+            # No FFN. f2trans simply aggregates similar features.
+            self.trans_config.has_FFN = False
+            # When doing feature aggregation, set attn_mask_radius > 0 to exclude points that are too far apart, to reduce noises.
+            # E.g., 64 corresponds to 64*8=512 pixels in the image space.
+            self.trans_config.attn_mask_radius = -1
+            # Not tying QK performs slightly better.
+            self.trans_config.tie_qk_scheme = None
+            self.trans_config.qk_have_bias  = False
+            self.trans_config.out_attn_probs_only    = False
+            self.trans_config.attn_diag_cycles   = 1000
+            self.trans_config.num_modes          = 4
+            self.trans_config.pos_code_type      = 'bias'
+            self.trans_config.pos_code_weight    = 1.0
+            self.trans = SelfAttVisPosTrans(self.trans_config, f"{self.name} transformer")
+            print("trans config:\n{}".format(self.trans_config.__dict__))            
+        else:
+            self.trans = nn.Identity()
+
     def forward(self, x, flow, scale):
         if scale != 1:
             x = F.interpolate(x, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
@@ -46,11 +72,14 @@ class IFBlock(nn.Module):
             x = torch.cat((x, flow), 1)
         # conv0: 2 layers of conv, kernel size 3.
         x = self.conv0(x)
-        if self.name == 'block2':
-            breakpoint()
+        # x: [1, 240, 16, 28] in 'block0'.
+        #    [1, 150, 32, 56] in 'block1'.
+        #    [1, 90, 64, 112] in 'block2'.
 
         # convblock: 8 layers of conv, kernel size 3.
-        x = self.convblock(x) + x
+        # if apply_trans, trans is a transformer layer with a skip connection: 
+        # x' = w*trans(conv(x)) + (1-w) * conv(x) + x. w is a learnable weight.
+        x = self.trans(self.convblock(x)) + x
         tmp = self.lastconv(x)
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # flow has 4 channels. 2 for one direction, 2 for the other direction
@@ -59,17 +88,17 @@ class IFBlock(nn.Module):
         return flow, mask
     
 class IFNet(nn.Module):
-    def __init__(self, use_f2trans=False):
+    def __init__(self, trans_layer_idx=-1):
         super(IFNet, self).__init__()
-        self.block0 = IFBlock('block0', 6, c=240)
-        self.block1 = IFBlock('block1', 13+4, c=150)
-        self.block2 = IFBlock('block2', 13+4, c=90)
-        self.block_tea = IFBlock('block_tea', 16+4, c=90)
+        self.trans_layer_idx = trans_layer_idx
+        self.block0 = IFBlock('block0', 6,          c=240, apply_trans=(trans_layer_idx==0))
+        self.block1 = IFBlock('block1', 13+4,       c=150, apply_trans=(trans_layer_idx==1))
+        self.block2 = IFBlock('block2', 13+4,       c=90,  apply_trans=(trans_layer_idx==2))
+        self.block_tea = IFBlock('block_tea', 16+4, c=90,  apply_trans=(trans_layer_idx==2))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        self.use_f2trans = use_f2trans
-        #if self.use_f2trans:
+        #if self.apply_trans:
         #    self.f2trans = F2trans()
         
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]

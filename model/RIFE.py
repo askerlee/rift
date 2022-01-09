@@ -16,11 +16,11 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, arbitrary=False, f2trans=False):
+    def __init__(self, local_rank=-1, arbitrary=False, trans_layer_idx=-1):
         if arbitrary == True:
-            self.flownet = IFNet_m()
+            self.flownet = IFNet_m(trans_layer_idx)
         else:
-            self.flownet = IFNet(f2trans)
+            self.flownet = IFNet(trans_layer_idx)
         self.device()
         self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=1e-3) # use large weight decay may avoid NaN loss
         self.epe = EPE()

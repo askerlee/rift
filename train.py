@@ -133,6 +133,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
+    parser.add_argument('--trans', dest='trans_layer_idx', default=-1, type=int, 
+                        help='Which IFBlock to apply transformer (default: -1, not to use transformer)')
+
     parser.add_argument('--local_rank', default=0, type=int, help='local rank')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     args = parser.parse_args()
@@ -144,6 +147,6 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
-    model = Model(args.local_rank)
+    model = Model(args.local_rank, trans_layer_idx=args.trans_layer_idx)
     train(model, args.local_rank)
         
