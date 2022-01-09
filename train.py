@@ -48,10 +48,10 @@ def train(model, local_rank):
     nr_eval = 0
     dataset = VimeoDataset('train')
     sampler = DistributedSampler(dataset)
-    train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=8, pin_memory=True, drop_last=True, sampler=sampler)
+    train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
-    val_data = DataLoader(dataset_val, batch_size=16, pin_memory=True, num_workers=8)
+    val_data = DataLoader(dataset_val, batch_size=16, pin_memory=True, num_workers=4)
     print('training...')
     time_stamp = time.time()
     for epoch in range(args.epoch):
@@ -88,7 +88,7 @@ def train(model, local_rank):
                 print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, i, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']))
             step += 1
         nr_eval += 1
-        
+
         if local_rank == 0:
             model.save_model(log_path, local_rank)
             if nr_eval % 5 == 0:
