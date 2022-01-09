@@ -43,6 +43,9 @@ def train(model, local_rank):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
+    else:
+        writer = None
+        writer_val = None
 
     step = 0
     nr_eval = 0
@@ -52,11 +55,12 @@ def train(model, local_rank):
     args.step_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
     val_data = DataLoader(dataset_val, batch_size=16, pin_memory=True, num_workers=4)
+
     print('training...')
     time_stamp = time.time()
     for epoch in range(args.epoch):
         sampler.set_epoch(epoch)
-        for i, data in enumerate(train_data):
+        for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
             time_stamp = time.time()
             data_gpu = data.to(device, non_blocking=True) / 255.
@@ -84,15 +88,16 @@ def train(model, local_rank):
                     writer.add_image(str(i) + '/flow', np.concatenate((flow2rgb(flow0[i]), flow2rgb(flow1[i])), 1), step, dataformats='HWC')
                     writer.add_image(str(i) + '/mask', mask[i], step, dataformats='HWC')
                 writer.flush()
+                
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, i, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']))
+                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']))
+
             step += 1
         nr_eval += 1
 
-        if local_rank == 0:
-            model.save_model(log_path, local_rank)
-            if nr_eval % 5 == 0:
-                evaluate(model, val_data, step, local_rank, writer_val)
+        model.save_model(log_path, local_rank)
+        if nr_eval % 1 == 0:
+            evaluate(model, val_data, step, local_rank, writer_val)
           
         dist.barrier()
 
@@ -105,12 +110,13 @@ def evaluate(model, val_data, nr_eval, local_rank, writer_val):
     time_stamp = time.time()
 
     for i, data in enumerate(val_data):
-        data_gpu = data.to(device, non_blocking=True) / 255.
+        data_gpu = data.cuda() / 255.
         imgs = data_gpu[:, :6]
         gt = data_gpu[:, 6:9]
         with torch.no_grad():
             pred, info = model.update(imgs, gt, training=False)
             merged_img = info['merged_tea']
+        
         loss_stu_list.append(info['loss_stu'].cpu().numpy())
         loss_tea_list.append(info['loss_tea'].cpu().numpy())
         loss_distill_list.append(info['loss_distill'].cpu().numpy())
@@ -134,6 +140,7 @@ def evaluate(model, val_data, nr_eval, local_rank, writer_val):
 
     if local_rank != 0:
         return
+
     writer_val.add_scalar('psnr', np.array(psnr_list).mean(), nr_eval)
     writer_val.add_scalar('psnr_teacher', np.array(psnr_list_teacher).mean(), nr_eval)
         

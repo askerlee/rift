@@ -99,9 +99,7 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        #if self.apply_trans:
-        #    self.f2trans = F2trans()
-        
+
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
