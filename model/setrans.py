@@ -10,7 +10,7 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch import einsum
 from einops import rearrange
-from setrans_ablation import RandPosEmbedder, SinuPosEmbedder, ZeroEmbedder, MultiHeadFeatTrans
+from .setrans_ablation import RandPosEmbedder, SinuPosEmbedder, ZeroEmbedder, MultiHeadFeatTrans
 from utils.utils import print0
 torch.set_printoptions(sci_mode=False)
 
