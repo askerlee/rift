@@ -88,9 +88,12 @@ def train(model, local_rank):
                 print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, i, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']))
             step += 1
         nr_eval += 1
-        if local_rank == 0 and nr_eval % 5 == 0:
-            evaluate(model, val_data, step, local_rank, writer_val)
-        model.save_model(log_path, local_rank)    
+        
+        if local_rank == 0:
+            model.save_model(log_path, local_rank)
+            if nr_eval % 5 == 0:
+                evaluate(model, val_data, step, local_rank, writer_val)
+          
         dist.barrier()
 
 def evaluate(model, val_data, nr_eval, local_rank, writer_val):
