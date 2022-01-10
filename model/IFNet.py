@@ -50,7 +50,7 @@ class IFBlock(nn.Module):
                 conv(c//2, c, 3, 2, 1),
                 )
             self.nonimg_chans = c - 2 * img_chans
-            self.conv_bridge = conv(c + self.nonimg_chans, c, 3, 2, 1)
+            self.conv_bridge = conv(2 * c + self.nonimg_chans, c, 3, 2, 1)
 
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
