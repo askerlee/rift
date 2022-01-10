@@ -143,7 +143,9 @@ def evaluate(model, val_data, nr_eval, local_rank, writer_val):
 
     writer_val.add_scalar('psnr', np.array(psnr_list).mean(), nr_eval)
     writer_val.add_scalar('psnr_teacher', np.array(psnr_list_teacher).mean(), nr_eval)
-        
+    writer_val.flush()
+    print('epoch:{} psnr:{:.2f}'.format(nr_eval, np.array(psnr_list).mean()))
+
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
