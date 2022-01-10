@@ -19,13 +19,18 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     )
 
 class IFBlock(nn.Module):
-    def __init__(self, name, in_planes, c=64, apply_trans=False):
+    def __init__(self, name, in_planes, c=64, img_chans=3, apply_trans=False):
         super(IFBlock, self).__init__()
         self.name = name
-        self.conv0 = nn.Sequential(
-            conv(in_planes, c//2, 3, 2, 1),
-            conv(c//2, c, 3, 2, 1),
-            )
+        self.apply_trans = apply_trans
+        self.img_chans   = img_chans
+
+        if not self.apply_trans:
+            self.conv0 = nn.Sequential(
+                conv(in_planes, c//2, 3, 2, 1),
+                conv(c//2, c, 3, 2, 1),
+                )
+
         self.convblock = nn.Sequential(
             conv(c, c),
             conv(c, c),
@@ -39,8 +44,14 @@ class IFBlock(nn.Module):
         # lastconv outputs 5 channels: 4 flow and 1 mask
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
-        self.apply_trans = apply_trans
         if self.apply_trans:
+            self.conv_img = nn.Sequential(
+                conv(img_chans, c//2, 3, 2, 1),
+                conv(c//2, c, 3, 2, 1),
+                )
+            self.nonimg_chans = c - 2 * img_chans
+            self.conv_bridge = conv(c + self.nonimg_chans, c, 3, 2, 1)
+
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
             self.trans_config.feat_dim  = c
@@ -61,9 +72,7 @@ class IFBlock(nn.Module):
             self.trans_config.pos_bias_radius   = 7
             self.trans_config.pos_code_weight   = 1.0
             self.trans = SelfAttVisPosTrans(self.trans_config, f"{self.name} transformer")
-            print0("trans config:\n{}".format(self.trans_config.__dict__))            
-        else:
-            self.trans = nn.Identity()
+            print0("trans config:\n{}".format(self.trans_config.__dict__))
 
     def forward(self, x, flow, scale):
         if scale != 1:
@@ -71,16 +80,26 @@ class IFBlock(nn.Module):
         if flow != None:
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
-        # conv0: 2 layers of conv, kernel size 3.
-        x = self.conv0(x)
-        # x: [1, 240, 16, 28] in 'block0'.
-        #    [1, 150, 32, 56] in 'block1'.
-        #    [1, 90, 64, 112] in 'block2'.
 
-        # convblock: 8 layers of conv, kernel size 3.
-        # if apply_trans, trans is a transformer layer with a skip connection: 
-        # x' = w*trans(conv(x)) + (1-w) * conv(x) + x. w is a learnable weight.
-        x = self.trans(self.convblock(x)) + x
+        if not self.apply_trans:
+            # conv0: 2 layers of conv, kernel size 3.
+            x = self.conv0(x)
+            # x: [1, 240, 16, 28] in 'block0'.
+            #    [1, 150, 32, 56] in 'block1'.
+            #    [1, 90, 64, 112] in 'block2'.
+
+            # convblock: 8 layers of conv, kernel size 3.
+            # if apply_trans, trans is a transformer layer with a skip connection: 
+            # x' = w*trans(conv(x)) + (1-w) * conv(x) + x. w is a learnable weight.
+            x = self.convblock(x) + x
+        else:
+            img0 = x[:, 0:self.img_chans]
+            img1 = x[:, self.img_chans:self.img_chans*2]
+            nonimg = x[:, self.img_chans*2:]
+            x0 = self.conv_img(img0)
+            x1 = self.trans(self.conv_img(img1))
+            x  = self.conv_bridge(torch.cat((x0, x1, nonimg), 1))
+
         tmp = self.lastconv(x)
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # flow has 4 channels. 2 for one direction, 2 for the other direction
@@ -92,10 +111,14 @@ class IFNet(nn.Module):
     def __init__(self, trans_layer_idx=-1):
         super(IFNet, self).__init__()
         self.trans_layer_idx = trans_layer_idx
-        self.block0 = IFBlock('block0', 6,          c=240, apply_trans=(trans_layer_idx==0))
-        self.block1 = IFBlock('block1', 13+4,       c=144, apply_trans=(trans_layer_idx==1))
-        self.block2 = IFBlock('block2', 13+4,       c=80,  apply_trans=(trans_layer_idx==2))
-        self.block_tea = IFBlock('block_tea', 16+4, c=80,  apply_trans=(trans_layer_idx==2))
+        self.block0 = IFBlock('block0', 6,          c=240, img_chans=3, 
+                              apply_trans=(trans_layer_idx==0))
+        self.block1 = IFBlock('block1', 13+4,       c=144, img_chans=6, 
+                              apply_trans=(trans_layer_idx==1))
+        self.block2 = IFBlock('block2', 13+4,       c=80,  img_chans=6, 
+                              apply_trans=(trans_layer_idx==2))
+        self.block_tea = IFBlock('block_tea', 16+4, c=80,  img_chans=6, 
+                              apply_trans=(trans_layer_idx==2))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -120,7 +143,7 @@ class IFNet(nn.Module):
         for i in range(3):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained.
             if flow != None:
-                flow_d, mask_d = stu[i](torch.cat((img0, img1, warped_img0, warped_img1, mask), 1), flow, scale=scale_list[i])
+                flow_d, mask_d = stu[i](torch.cat((img0, warped_img0, img1, warped_img1, mask), 1), flow, scale=scale_list[i])
                 flow = flow + flow_d
                 mask = mask + mask_d
             else:
@@ -138,7 +161,7 @@ class IFNet(nn.Module):
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher)
-            flow_d, mask_d = self.block_tea(torch.cat((img0, img1, warped_img0, warped_img1, mask, gt), 1), flow, scale=1)
+            flow_d, mask_d = self.block_tea(torch.cat((img0, warped_img0, img1, warped_img1, mask, gt), 1), flow, scale=1)
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
             warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])
