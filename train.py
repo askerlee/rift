@@ -54,7 +54,7 @@ def train(model, local_rank):
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
-    val_data = DataLoader(dataset_val, batch_size=16, pin_memory=True, num_workers=4)
+    val_data = DataLoader(dataset_val, batch_size=8, pin_memory=False, num_workers=4)
 
     print('training...')
     time_stamp = time.time()
