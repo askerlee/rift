@@ -90,18 +90,18 @@ def train(model, local_rank):
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']))
+                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), flush=True)
 
             step += 1
         nr_eval += 1
 
         model.save_model(log_path, local_rank)
         if nr_eval % 1 == 0:
-            evaluate(model, val_data, step, local_rank, writer_val)
+            evaluate(model, val_data, epoch, step, local_rank, writer_val)
           
         dist.barrier()
 
-def evaluate(model, val_data, nr_eval, local_rank, writer_val):
+def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     loss_stu_list = []
     loss_distill_list = []
     loss_tea_list = []
@@ -144,7 +144,7 @@ def evaluate(model, val_data, nr_eval, local_rank, writer_val):
     writer_val.add_scalar('psnr', np.array(psnr_list).mean(), nr_eval)
     writer_val.add_scalar('psnr_teacher', np.array(psnr_list_teacher).mean(), nr_eval)
     writer_val.flush()
-    print('iter:{} psnr:{:.2f}'.format(nr_eval, np.array(psnr_list).mean()))
+    print('epoch:{}, iter:{}, psnr:{:.2f}'.format(epoch, nr_eval, np.array(psnr_list).mean()))
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()

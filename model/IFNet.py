@@ -96,19 +96,19 @@ class IFBlock(nn.Module):
             #    [1, 150, 32, 56] in 'block1'.
             #    [1, 90, 64, 112] in 'block2'.
 
-            # convblock: 8 layers of conv, kernel size 3.
-            # if apply_trans, trans is a transformer layer with a skip connection: 
-            # x' = w*trans(conv(x)) + (1-w) * conv(x) + x. w is a learnable weight.
-            x = self.convblock(x) + x
         else:
             img0 = x[:, 0:self.img_chans]
             img1 = x[:, self.img_chans:self.img_chans*2]
             nonimg = x[:, self.img_chans*2:]
             x0 = self.conv_img(img0)
+            # if apply_trans, trans is a transformer layer with a skip connection: 
+            # x' = w*trans(conv_img(img1)) + (1-w) * conv_img(img1). w is a learnable weight.
             x1 = self.trans(self.conv_img(img1))
             x_nonimg = self.conv_nonimg(nonimg)
             x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
 
+        # convblock: 8 layers of conv, kernel size 3.
+        x = self.convblock(x) + x
         tmp = self.lastconv(x)
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # flow has 4 channels. 2 for one direction, 2 for the other direction
