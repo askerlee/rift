@@ -4,6 +4,10 @@ import torch.nn.functional as F
 from model.warplayer import warp
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
+import os
+import torch.distributed as dist
+
+local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.Sequential(
@@ -45,12 +49,16 @@ class IFBlock(nn.Module):
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
         if self.apply_trans:
+            self.nonimg_chans = in_planes - 2 * img_chans
             self.conv_img = nn.Sequential(
                 conv(img_chans, c//2, 3, 2, 1),
                 conv(c//2, c, 3, 2, 1),
                 )
-            self.nonimg_chans = c - 2 * img_chans
-            self.conv_bridge = conv(2 * c + self.nonimg_chans, c, 3, 2, 1)
+            self.conv_nonimg = nn.Sequential(
+                conv(self.nonimg_chans, c//2, 3, 2, 1),
+                conv(c//2, c, 3, 2, 1),
+                )
+            self.conv_bridge = conv(3 * c, c, 3, 1, 1)
 
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
@@ -98,7 +106,8 @@ class IFBlock(nn.Module):
             nonimg = x[:, self.img_chans*2:]
             x0 = self.conv_img(img0)
             x1 = self.trans(self.conv_img(img1))
-            x  = self.conv_bridge(torch.cat((x0, x1, nonimg), 1))
+            x_nonimg = self.conv_nonimg(nonimg)
+            x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
 
         tmp = self.lastconv(x)
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
