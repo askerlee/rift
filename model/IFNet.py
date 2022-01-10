@@ -47,7 +47,7 @@ class IFBlock(nn.Module):
             # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
             self.trans_config.has_input_skip = True
             # No FFN. f2trans simply aggregates similar features.
-            self.trans_config.has_FFN = False
+            self.trans_config.has_FFN = True
             # When doing feature aggregation, set attn_mask_radius > 0 to exclude points that are too far apart, to reduce noises.
             # E.g., 64 corresponds to 64*8=512 pixels in the image space.
             self.trans_config.attn_mask_radius = -1
