@@ -131,7 +131,7 @@ def evaluate(model, val_data, nr_eval, local_rank, writer_val):
         flow0 = info['flow'].permute(0, 2, 3, 1).cpu().numpy()
         flow1 = info['flow_tea'].permute(0, 2, 3, 1).cpu().numpy()
         if i == 0 and local_rank == 0:
-            for j in range(10):
+            for j in range(8):
                 imgs = np.concatenate((merged_img[j], pred[j], gt[j]), 1)[:, :, ::-1]
                 writer_val.add_image(str(j) + '/img', imgs.copy(), nr_eval, dataformats='HWC')
                 writer_val.add_image(str(j) + '/flow', flow2rgb(flow0[j][:, :, ::-1]), nr_eval, dataformats='HWC')
