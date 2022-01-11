@@ -22,6 +22,7 @@ if not os.path.exists(log_path):
 exp = os.path.abspath('.').split('/')[-1]
 
 def get_learning_rate(step):
+    # warmup. 0 -> 0.0003
     if step < 2000:
         mul = step / 2000.
         return 3e-4 * mul
@@ -153,8 +154,8 @@ if __name__ == "__main__":
     parser.add_argument('--trans', dest='trans_layer_idx', default=-1, type=int, 
                         help='Which IFBlock to apply transformer (default: -1, not to use transformer)')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
-    parser.add_argument('--lr', type=float, default=0.00001)
-    parser.add_argument('--wdecay', type=float, default=.0001)
+    parser.add_argument('--lr', type=float, default=1e-6)
+    parser.add_argument('--wdecay', type=float, default=2e-4)
 
     args = parser.parse_args()
     args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
