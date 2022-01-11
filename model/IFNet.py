@@ -98,7 +98,7 @@ class IFBlock(nn.Module):
             self.trans_config.qk_have_bias  = False
             self.trans_config.out_attn_probs_only   = False
             self.trans_config.attn_diag_cycles  = 1000
-            self.trans_config.num_modes         = 4
+            self.trans_config.num_modes         = 8
             self.trans_config.pos_code_type     = 'bias'
             self.trans_config.pos_bias_radius   = 7
             self.trans_config.pos_code_weight   = 1.0
