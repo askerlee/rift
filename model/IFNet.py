@@ -94,7 +94,7 @@ class IFBlock(nn.Module):
             # E.g., 64 corresponds to 64*8=512 pixels in the image space.
             self.trans_config.attn_mask_radius = -1
             # Not tying QK performs slightly better.
-            self.trans_config.tie_qk_scheme = 'shared'
+            self.trans_config.tie_qk_scheme = None
             self.trans_config.qk_have_bias  = False
             self.trans_config.out_attn_probs_only   = False
             self.trans_config.attn_diag_cycles  = 1000
