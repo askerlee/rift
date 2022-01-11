@@ -154,8 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('--trans', dest='trans_layer_idx', default=-1, type=int, 
                         help='Which IFBlock to apply transformer (default: -1, not to use transformer)')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
-    parser.add_argument('--lr', type=float, default=1e-6)
-    parser.add_argument('--wdecay', type=float, default=2e-4)
+    parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
 
     args = parser.parse_args()
     args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
@@ -168,6 +167,6 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
     model = Model(args.local_rank, trans_layer_idx=args.trans_layer_idx, 
-                  lr=args.lr, weight_decay=args.wdecay)
+                  trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)
         
