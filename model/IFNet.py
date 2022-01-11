@@ -35,16 +35,17 @@ class IFBlock(nn.Module):
                 conv(c//2, c, 3, 2, 1),
                 )
 
-        self.convblock = nn.Sequential(
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-            conv(c, c),
-        )
+            self.convblock = nn.Sequential(
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+            )
+
         # lastconv outputs 5 channels: 4 flow and 1 mask
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
@@ -53,20 +54,34 @@ class IFBlock(nn.Module):
             self.conv_img = nn.Sequential(
                 conv(img_chans, c//2, 3, 2, 1),
                 conv(c//2, c, 3, 2, 1),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),                
                 )
             self.conv_nonimg = nn.Sequential(
                 conv(self.nonimg_chans, c//2, 3, 2, 1),
                 conv(c//2, c, 3, 2, 1),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),                
                 )
             self.conv_bridge = conv(3 * c, c, 3, 1, 1)
-
+            self.convblock = nn.Sequential(
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+                conv(c, c),
+            )
+            
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
             self.trans_config.feat_dim  = c
             # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
             self.trans_config.has_input_skip = True
             # No FFN. f2trans simply aggregates similar features.
-            self.trans_config.has_FFN = True
+            # has_FFN reduces performance.
+            self.trans_config.has_FFN = False
             # When doing feature aggregation, set attn_mask_radius > 0 to exclude points that are too far apart, to reduce noises.
             # E.g., 64 corresponds to 64*8=512 pixels in the image space.
             self.trans_config.attn_mask_radius = -1
