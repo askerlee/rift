@@ -58,14 +58,22 @@ class IFBlock(nn.Module):
                 conv(c, c),
                 conv(c, c),                
                 )
-            self.conv_nonimg = nn.Sequential(
-                conv(self.nonimg_chans, c//2, 3, 2, 1),
-                conv(c//2, c, 3, 2, 1),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),                
-                )
-            self.conv_bridge = conv(3 * c, c, 3, 1, 1)
+            if self.nonimg_chans > 0:
+                # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
+                self.conv_nonimg = nn.Sequential(
+                    conv(self.nonimg_chans, c//2, 3, 2, 1),
+                    conv(c//2, c, 3, 2, 1),
+                    conv(c, c),
+                    conv(c, c),
+                    conv(c, c),                
+                    )
+                self.conv_bridge = conv(3 * c, c, 3, 1, 1)
+            else:
+                # No non-img channels. Just to bridge the channel number difference.
+                self.conv_nonimg = nn.Identity()
+                self.conv_bridge = conv(2 * c, c, 3, 1, 1)
+
+            # Moved 3 conv layers from convblock to conv_img and conv_nonimg.
             self.convblock = nn.Sequential(
                 conv(c, c),
                 conv(c, c),
@@ -73,7 +81,7 @@ class IFBlock(nn.Module):
                 conv(c, c),
                 conv(c, c),
             )
-            
+
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
             self.trans_config.feat_dim  = c
