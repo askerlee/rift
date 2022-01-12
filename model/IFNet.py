@@ -58,7 +58,7 @@ class IFBlock(nn.Module):
                             )
             if self.nonimg_chans > 0:
                 # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
-                self.conv_nonimg = conv(self.nonimg_chans, c//2, 3, 2, 1)
+                self.conv_nonimg = conv(self.nonimg_chans, c, 3, 2, 1)
                 self.conv_bridge = conv(3 * c, c, 3, 1, 1)
             else:
                 # No non-img channels. Just to bridge the channel number difference.
