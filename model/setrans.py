@@ -91,8 +91,8 @@ class SETransConfig(object):
         # When doing ablation study of multi-head, num_modes means num_heads, 
         # to avoid introducing extra config parameters.
         self.num_modes = 4
-        self.tie_qk_scheme  = 'shared'          # shared, loose, or none.
-        self.trans_output_type  = 'private'     # shared or private.
+        self.tie_qk_scheme  = 'shared'          # 'shared', 'loose', or 'none'/None.
+        self.trans_output_type  = 'private'     # 'shared' or 'private'.
         self.act_fun = F.gelu
 
         self.attn_clip = 100
@@ -109,7 +109,7 @@ class SETransConfig(object):
         self.feattrans_lin1_idbias_scale = 10
 
         # Pooling settings
-        self.pool_modes_feat  = 'softmax'       # softmax, max, mean, or none.
+        self.pool_modes_feat  = 'softmax'       # 'softmax', 'max', 'mean', or 'none'/None.
 
         # Randomness settings
         self.hidden_dropout_prob = 0.1
@@ -185,7 +185,8 @@ class SETransInitWeights(nn.Module):
             module.bias.data.zero_()
 
 def tie_qk(module):
-    if isinstance(module, CrossAttFeatTrans) and module.tie_qk_scheme != 'none':
+    if isinstance(module, CrossAttFeatTrans) \
+            and module.tie_qk_scheme != 'none' and module.tie_qk_scheme != None:
         module.tie_qk()
 
 def add_identity_bias(module):
@@ -402,7 +403,7 @@ class ExpandedFeatTrans(nn.Module):
             trans_feat = mm_trans_feat.max(dim=1)[0]
         elif self.pool_modes_feat == 'mean':
             trans_feat = mm_trans_feat.mean(dim=1)
-        elif self.pool_modes_feat == 'none':
+        elif self.pool_modes_feat == 'none' or self.pool_modes_feat == None:
             trans_feat = mm_trans_feat
 
         # Have to ensure U1 == U2.

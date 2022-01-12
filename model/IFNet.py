@@ -29,44 +29,36 @@ class IFBlock(nn.Module):
         self.apply_trans = apply_trans
         self.img_chans   = img_chans
 
-        if not self.apply_trans:
-            self.conv0 = nn.Sequential(
-                conv(in_planes, c//2, 3, 2, 1),
-                conv(c//2, c, 3, 2, 1),
-                )
-
-            self.convblock = nn.Sequential(
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-            )
-
         # lastconv outputs 5 channels: 4 flow and 1 mask
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
-        if self.apply_trans:
+        if not self.apply_trans:
+            self.conv0 = nn.Sequential(
+                            conv(in_planes, c//2, 3, 2, 1),
+                            conv(c//2, c, 3, 2, 1),
+                         )
+
+            self.convblock = nn.Sequential(
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                             )
+        else:
             self.nonimg_chans = in_planes - 2 * img_chans
             self.conv_img = nn.Sequential(
-                conv(img_chans, c//2, 3, 2, 1),
-                conv(c//2, c, 3, 2, 1),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),                
-                )
+                                conv(img_chans, c, 3, 2, 1),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),                
+                            )
             if self.nonimg_chans > 0:
                 # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
-                self.conv_nonimg = nn.Sequential(
-                    conv(self.nonimg_chans, c//2, 3, 2, 1),
-                    conv(c//2, c, 3, 2, 1),
-                    conv(c, c),
-                    conv(c, c),
-                    conv(c, c),                
-                    )
+                self.conv_nonimg = conv(self.nonimg_chans, c//2, 3, 2, 1)
                 self.conv_bridge = conv(3 * c, c, 3, 1, 1)
             else:
                 # No non-img channels. Just to bridge the channel number difference.
@@ -75,16 +67,16 @@ class IFBlock(nn.Module):
 
             # Moved 3 conv layers from convblock to conv_img and conv_nonimg.
             self.convblock = nn.Sequential(
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-                conv(c, c),
-            )
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                                conv(c, c),
+                             )
 
             self.trans_config = SETransConfig()
             self.trans_config.in_feat_dim = c
-            self.trans_config.feat_dim  = c
+            self.trans_config.feat_dim    = c
             # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
             self.trans_config.has_input_skip = True
             # No FFN. f2trans simply aggregates similar features.
@@ -94,7 +86,7 @@ class IFBlock(nn.Module):
             # E.g., 64 corresponds to 64*8=512 pixels in the image space.
             self.trans_config.attn_mask_radius = -1
             # Not tying QK performs slightly better.
-            self.trans_config.tie_qk_scheme = None
+            self.trans_config.tie_qk_scheme = 'none'
             self.trans_config.qk_have_bias  = False
             self.trans_config.out_attn_probs_only   = False
             self.trans_config.attn_diag_cycles  = 1000
@@ -164,28 +156,28 @@ class IFNet(nn.Module):
         # During inference, gt is an empty tensor.
         gt = x[:, 6:] 
         flow_list = []
-        to_merge = []
-        merged = [None, None, None]
+        warped_imgs_list = []
+        merged_img_list = [None, None, None]
         mask_list = []
         warped_img0 = img0
         warped_img1 = img1
         flow = None 
         loss_distill = 0
-        stu = [self.block0, self.block1, self.block2]
+        stu_blocks = [self.block0, self.block1, self.block2]
         for i in range(3):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained.
             if flow != None:
-                flow_d, mask_d = stu[i](torch.cat((img0, warped_img0, img1, warped_img1, mask), 1), flow, scale=scale_list[i])
+                flow_d, mask_d = stu_blocks[i](torch.cat((img0, warped_img0, img1, warped_img1, mask), 1), flow, scale=scale_list[i])
                 flow = flow + flow_d
                 mask = mask + mask_d
             else:
-                flow, mask = stu[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
+                flow,  mask    = stu_blocks[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
             mask_list.append(torch.sigmoid(mask))
             flow_list.append(flow)
             warped_img0 = warp(img0, flow[:, :2])
             warped_img1 = warp(img1, flow[:, 2:4])
-            to_merge_student = (warped_img0, warped_img1)
-            to_merge.append(to_merge_student)
+            warped_imgs = (warped_img0, warped_img1)
+            warped_imgs_list.append(warped_imgs)
         
         if gt.shape[1] == 3:
             # teacher only works at the last scale, i.e., the full image.
@@ -204,12 +196,13 @@ class IFNet(nn.Module):
             merged_teacher = None
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
-            # merged[i]: average of 1->2 and 2->1 warped images.
-            merged[i] = to_merge[i][0] * mask_list[i] + to_merge[i][1] * (1 - mask_list[i])
+            # merged_img_list[i]: average of 1->2 and 2->1 warped images.
+            merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
+                                 warped_imgs_list[i][1] * (1 - mask_list[i])
             if gt.shape[1] == 3:
                 # loss_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
-                loss_mask = ((merged[i] - gt).abs().mean(1, True) > (merged_teacher - gt).abs().mean(1, True) + 0.01).float().detach()
+                loss_mask = ((merged_img_list[i] - gt).abs().mean(1, True) > (merged_teacher - gt).abs().mean(1, True) + 0.01).float().detach()
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * loss_mask).mean()
@@ -219,6 +212,6 @@ class IFNet(nn.Module):
         tmp = self.unet(img0, img1, warped_img0, warped_img1, mask, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         res = tmp[:, :3] * 2 - 1
-        merged[2] = torch.clamp(merged[2] + res, 0, 1)
+        merged_img_list[2] = torch.clamp(merged_img_list[2] + res, 0, 1)
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged, flow_teacher, merged_teacher, loss_distill
+        return flow_list, mask_list[2], merged_img_list, flow_teacher, merged_teacher, loss_distill
