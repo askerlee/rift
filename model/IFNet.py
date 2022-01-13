@@ -49,21 +49,25 @@ class IFBlock(nn.Module):
                                 conv(c, c),
                              )
         else:
-            self.nonimg_chans = in_planes - 2 * img_chans
+            self.nonimg_chans = in_planes - 2 * self.img_chans
             self.conv_img = nn.Sequential(
-                                conv(img_chans, c, 3, 2, 1),
-                                conv(c, c),
-                                conv(c, c),
-                                conv(c, c),                
+                                conv(self.img_chans, c//2, 3, 2, 1),
+                                conv(c//2, c//2, 3, 2, 1),
+                                conv(c//2, c//2),
+                                conv(c//2, c//2),
+                                conv(c//2, c//2),                
                             )
             if self.nonimg_chans > 0:
                 # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
-                self.conv_nonimg = conv(self.nonimg_chans, c, 3, 2, 1)
-                self.conv_bridge = conv(3 * c, c, 3, 1, 1)
+                self.conv_nonimg = nn.Sequential(
+                                        conv(self.nonimg_chans, c//2, 3, 2, 1),
+                                        conv(c//2, c//2, 3, 2, 1)
+                                   )
+                self.conv_bridge = conv(3 * (c//2), c, 3, 1, 1)
             else:
                 # No non-img channels. Just to bridge the channel number difference.
                 self.conv_nonimg = nn.Identity()
-                self.conv_bridge = conv(2 * c, c, 3, 1, 1)
+                self.conv_bridge = conv(c, c, 3, 1, 1)
 
             # Moved 3 conv layers from convblock to conv_img and conv_nonimg.
             self.convblock = nn.Sequential(
@@ -125,6 +129,7 @@ class IFBlock(nn.Module):
         # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
         tmp = self.lastconv(x)
+        
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # flow has 4 channels. 2 for one direction, 2 for the other direction
         flow = tmp[:, :4] * scale * 2
