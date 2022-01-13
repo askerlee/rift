@@ -48,8 +48,8 @@ class VimeoDataset(Dataset):
                             #     pad_cval=0
                             # )),
                             # apply the following augmenters to most images
-                            iaa.Fliplr(0.3),  # Horizontally flip 20% of all images
-                            iaa.Flipud(0.3),  # Vertically flip 20% of all images
+                            iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
+                            iaa.Flipud(0.5),  # Vertically flip 50% of all images
                             # iaa.Sometimes(0.2, iaa.Rot90((1,3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
                             # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
                             # iaa.Sometimes(affine_prob, iaa.Affine(
@@ -62,8 +62,8 @@ class VimeoDataset(Dataset):
                             # iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades.
                             # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                             # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
-                            iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),    
-                            iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
+                            #iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
+                            #iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
                         ])
                         
 
@@ -103,6 +103,12 @@ class VimeoDataset(Dataset):
     def __getitem__(self, index):        
         img0, gt, img1 = self.getimg(index)
         if self.dataset_name == 'train':
+            # reverse the order of the RGB channels
+            if random.uniform(0, 1) < 0.5:
+                img0 = img0[:, :, ::-1]
+                img1 = img1[:, :, ::-1]
+                gt = gt[:, :, ::-1]
+
             img0, gt, img1 = self.aug(img0, gt, img1, 224, 224)
             comb_img = np.concatenate((img0, gt, img1), axis=2)
             comb_img = self.geo_aug_func.augment_image(comb_img)
