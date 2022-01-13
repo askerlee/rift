@@ -79,8 +79,8 @@ class IFBlock(nn.Module):
                              )
 
             self.trans_config = SETransConfig()
-            self.trans_config.in_feat_dim = c
-            self.trans_config.feat_dim    = c
+            self.trans_config.in_feat_dim = c // 2
+            self.trans_config.feat_dim    = c // 2
             # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
             self.trans_config.has_input_skip = True
             # No FFN. f2trans simply aggregates similar features.
@@ -94,7 +94,7 @@ class IFBlock(nn.Module):
             self.trans_config.qk_have_bias  = False
             self.trans_config.out_attn_probs_only   = False
             self.trans_config.attn_diag_cycles  = 1000
-            self.trans_config.num_modes         = 8
+            self.trans_config.num_modes         = 4
             self.trans_config.pos_code_type     = 'bias'
             self.trans_config.pos_bias_radius   = 7
             self.trans_config.pos_code_weight   = 1.0
