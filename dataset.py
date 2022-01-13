@@ -103,16 +103,16 @@ class VimeoDataset(Dataset):
     def __getitem__(self, index):        
         img0, gt, img1 = self.getimg(index)
         if self.dataset_name == 'train':
+            # img0, gt, img1 = self.aug(img0, gt, img1, 224, 224)
+            comb_img = np.concatenate((img0, gt, img1), axis=2)
+            comb_img = self.geo_aug_func.augment_image(comb_img)
+            img0, gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
             # reverse the order of the RGB channels
             if random.uniform(0, 1) < 0.5:
                 img0 = img0[:, :, ::-1]
                 img1 = img1[:, :, ::-1]
                 gt = gt[:, :, ::-1]
 
-            img0, gt, img1 = self.aug(img0, gt, img1, 224, 224)
-            comb_img = np.concatenate((img0, gt, img1), axis=2)
-            comb_img = self.geo_aug_func.augment_image(comb_img)
-            img0, gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
             # swap img0 and img1
             if random.uniform(0, 1) < 0.5:
                 img0, img1 = img1, img0
