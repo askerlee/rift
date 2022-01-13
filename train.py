@@ -55,7 +55,7 @@ def train(model, local_rank):
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
-    val_data = DataLoader(dataset_val, batch_size=16, pin_memory=False, num_workers=4)
+    val_data = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
 
     print('training...')
     time_stamp = time.time()
@@ -80,11 +80,11 @@ def train(model, local_rank):
                 gt = (gt.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 mask = (torch.cat((info['mask'], info['mask_tea']), 3).permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 pred = (pred.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
-                merged_img = (info['merged_tea'].permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
+                tea_pred = (info['merged_tea'].permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 flow0 = info['flow'].permute(0, 2, 3, 1).detach().cpu().numpy()
                 flow1 = info['flow_tea'].permute(0, 2, 3, 1).detach().cpu().numpy()
                 for i in range(5):
-                    imgs = np.concatenate((merged_img[i], pred[i], gt[i]), 1)[:, :, ::-1]
+                    imgs = np.concatenate((tea_pred[i], pred[i], gt[i]), 1)[:, :, ::-1]
                     writer.add_image(str(i) + '/img', imgs, step, dataformats='HWC')
                     writer.add_image(str(i) + '/flow', np.concatenate((flow2rgb(flow0[i]), flow2rgb(flow1[i])), 1), step, dataformats='HWC')
                     writer.add_image(str(i) + '/mask', mask[i], step, dataformats='HWC')
@@ -116,7 +116,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
         gt = data_gpu[:, 6:9]
         with torch.no_grad():
             pred, info = model.update(imgs, gt, training=False)
-            merged_img = info['merged_tea']
+            tea_pred = info['merged_tea']
         
         loss_stu_list.append(info['loss_stu'].cpu().numpy())
         loss_tea_list.append(info['loss_tea'].cpu().numpy())
@@ -124,16 +124,16 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
         for j in range(gt.shape[0]):
             psnr = -10 * math.log10(torch.mean((gt[j] - pred[j]) * (gt[j] - pred[j])).cpu().data)
             psnr_list.append(psnr)
-            psnr = -10 * math.log10(torch.mean((merged_img[j] - gt[j]) * (merged_img[j] - gt[j])).cpu().data)
+            psnr = -10 * math.log10(torch.mean((tea_pred[j] - gt[j]) * (tea_pred[j] - gt[j])).cpu().data)
             psnr_list_teacher.append(psnr)
         gt = (gt.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         pred = (pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
-        merged_img = (merged_img.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
+        tea_pred = (tea_pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         flow0 = info['flow'].permute(0, 2, 3, 1).cpu().numpy()
         flow1 = info['flow_tea'].permute(0, 2, 3, 1).cpu().numpy()
         if i == 0 and local_rank == 0:
             for j in range(6):
-                imgs = np.concatenate((merged_img[j], pred[j], gt[j]), 1)[:, :, ::-1]
+                imgs = np.concatenate((tea_pred[j], pred[j], gt[j]), 1)[:, :, ::-1]
                 writer_val.add_image(str(j) + '/img', imgs.copy(), nr_eval, dataformats='HWC')
                 writer_val.add_image(str(j) + '/flow', flow2rgb(flow0[j][:, :, ::-1]), nr_eval, dataformats='HWC')
     
@@ -142,10 +142,12 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     if local_rank != 0:
         return
 
-    writer_val.add_scalar('psnr', np.array(psnr_list).mean(), nr_eval)
-    writer_val.add_scalar('psnr_teacher', np.array(psnr_list_teacher).mean(), nr_eval)
+    psnr = np.array(psnr_list).mean()
+    psnr_teacher = np.array(psnr_list_teacher).mean()
+    writer_val.add_scalar('psnr', psnr, nr_eval)
+    writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch:{}, iter:{}, psnr:{:.2f}'.format(epoch, nr_eval, np.array(psnr_list).mean()))
+    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}'.format(epoch, nr_eval, psnr, psnr_teacher))
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
