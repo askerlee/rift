@@ -52,13 +52,13 @@ class VimeoDataset(Dataset):
                             iaa.Flipud(0.3),  # Vertically flip 20% of all images
                             # iaa.Sometimes(0.2, iaa.Rot90((1,3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
                             # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
-                            iaa.Sometimes(affine_prob, iaa.Affine(
-                                    rotate=(-45, 45), # rotate by -45 to +45 degrees
-                                    shear=(-16, 16), # shear by -16 to +16 degrees
-                                    order=1,
-                                    cval=(0,255),
-                                    mode='reflect'
-                            )),
+                            # iaa.Sometimes(affine_prob, iaa.Affine(
+                            #         rotate=(-45, 45), # rotate by -45 to +45 degrees
+                            #         shear=(-16, 16), # shear by -16 to +16 degrees
+                            #         order=1,
+                            #         cval=(0,255),
+                            #         mode='reflect'
+                            # )),
                             # iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades.
                             # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                             # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
