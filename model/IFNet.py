@@ -146,8 +146,9 @@ class IFNet(nn.Module):
                               apply_trans=(trans_layer_idx==1))
         self.block2 = IFBlock('block2', 13+4,       c=80,  img_chans=6, 
                               apply_trans=(trans_layer_idx==2))
+        # block_tea takes gt (the middle frame) as extra input.
         self.block_tea = IFBlock('block_tea', 16+4, c=80,  img_chans=6, 
-                              apply_trans=(trans_layer_idx==2))
+                              apply_trans=(trans_layer_idx==3))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -186,7 +187,7 @@ class IFNet(nn.Module):
         
         if gt.shape[1] == 3:
             # teacher only works at the last scale, i.e., the full image.
-            # block_tea ~ block2, except that block_tea takes gt as extra input.
+            # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher)
