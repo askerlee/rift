@@ -152,7 +152,7 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        self.distill_scheme = 'hard' # 'hard' or 'soft'
+        self.distill_scheme = 'soft' # 'hard' or 'soft'
         # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
@@ -194,7 +194,7 @@ class IFNet(nn.Module):
             # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
-            # (or residual of the teacher)
+            # (or residual of the teacher). The teacher only predicts the residual.
             flow_d, mask_d = self.block_tea(torch.cat((img0, warped_img0, img1, warped_img1, mask, gt), 1), flow, scale=1)
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
@@ -218,7 +218,7 @@ class IFNet(nn.Module):
                     loss_mask = (student_residual > teacher_residual + 0.01).float().detach()
                 else:
                     loss_mask = (student_residual - teacher_residual).sigmoid().detach()
-                    loss_mask = (loss_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
+                    loss_mask = 2 * (loss_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
 
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
