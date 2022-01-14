@@ -152,6 +152,10 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
+        self.distill_scheme = 'hard' # 'hard' or 'soft'
+        # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
+        # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
+        self.distill_soft_min_weight = 0.4  
 
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -208,7 +212,14 @@ class IFNet(nn.Module):
             if gt.shape[1] == 3:
                 # loss_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
-                loss_mask = ((merged_img_list[i] - gt).abs().mean(1, True) > (merged_teacher - gt).abs().mean(1, True) + 0.01).float().detach()
+                student_residual = (merged_img_list[i] - gt).abs().mean(1, True)
+                teacher_residual = (merged_teacher - gt).abs().mean(1, True)
+                if self.distill_scheme == 'hard':
+                    loss_mask = (student_residual > teacher_residual + 0.01).float().detach()
+                else:
+                    loss_mask = (student_residual - teacher_residual).sigmoid().detach()
+                    loss_mask = (loss_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
+
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * loss_mask).mean()

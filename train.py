@@ -91,7 +91,9 @@ def train(model, local_rank):
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), flush=True)
+                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(
+                       epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), 
+                       flush=True)
 
             step += 1
         nr_eval += 1
@@ -144,10 +146,13 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
 
     psnr = np.array(psnr_list).mean()
     psnr_teacher = np.array(psnr_list_teacher).mean()
+    loss_distill = np.array(loss_distill_list).mean()
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}'.format(epoch, nr_eval, psnr, psnr_teacher))
+    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}, loss_dist:{:.2f}'.format( \
+           epoch, nr_eval, psnr, psnr_teacher, loss_distill), 
+           flush=True)
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
