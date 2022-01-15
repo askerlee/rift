@@ -141,15 +141,15 @@ class IFBlock(nn.Module):
         x = self.convblock(x) + x
         # unscaled_output size = input size / scale / 2.
         unscaled_output = self.lastconv(x)
-        unscaled_flow = unscaled_output[:, :4]
-        unscaled_mask_score = unscaled_output[:, 4:5]
+        #unscaled_flow = unscaled_output[:, :4]
+        #unscaled_mask_score = unscaled_output[:, 4:5]
         
         scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # tmp/flow/mask_score size = input size.
         # flow has 4 channels. 2 for one direction, 2 for the other direction
         flow = scaled_output[:, :4] * scale * 2
         mask_score = scaled_output[:, 4:5]
-        return flow, mask_score, unscaled_flow, unscaled_mask_score
+        return flow, mask_score
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, trans_layer_indices=()):
