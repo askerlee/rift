@@ -20,9 +20,9 @@ class Model:
                  use_rife_settings=False, 
                  trans_layer_indices=(), trans_weight_decay=1e-5):
         if arbitrary == True:
-            self.flownet = IFNet_m(block_widths, trans_layer_indices)
+            self.flownet = IFNet_m(use_rife_settings, trans_layer_indices)
         else:
-            self.flownet = IFNet(block_widths, trans_layer_indices)
+            self.flownet = IFNet(use_rife_settings, trans_layer_indices)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
