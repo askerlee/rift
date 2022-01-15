@@ -17,7 +17,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 device = torch.device("cuda")
 timestamp = datetime.now().strftime("%m%d%H%M")
-checkpoint_dir = f"../checkpoints/{timestamp}"
+checkpoint_dir = f"checkpoints/{timestamp}"
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 if local_rank == 0:
     print("Model checkpoints will be saved to '%s'" %checkpoint_dir)
