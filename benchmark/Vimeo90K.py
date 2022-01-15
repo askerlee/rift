@@ -16,7 +16,7 @@ parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=st
                     help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
 parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
-parser.add_argument('--rife', action='store_true', help='Use rife settings')
+parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
 
 args = parser.parse_args()

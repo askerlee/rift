@@ -188,7 +188,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
-                  use_rife_settings=args.rife,
+                  use_rife_settings=args.use_rife_settings,
                   trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)
