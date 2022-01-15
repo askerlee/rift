@@ -12,6 +12,7 @@ local_rank = int(os.environ.get('LOCAL_RANK', 0))
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.Sequential(
         torch.nn.ConvTranspose2d(in_channels=in_planes, out_channels=out_planes, kernel_size=4, stride=2, padding=1),
+        nn.BatchNorm2d(out_planes),
         nn.PReLU(out_planes)
     )
 
@@ -19,6 +20,7 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     return nn.Sequential(
         nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
                   padding=padding, dilation=dilation, bias=True),
+        nn.BatchNorm2d(out_planes),
         nn.PReLU(out_planes)
     )
 
