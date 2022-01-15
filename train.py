@@ -163,6 +163,7 @@ if __name__ == "__main__":
                         help='Which IFBlock to apply transformer (default: "", not to use transformer in any blocks)')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
+    parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -176,7 +177,8 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
-    model = Model(args.local_rank, trans_layer_indices=args.trans_layer_indices, 
+    model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
+                  trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)
         

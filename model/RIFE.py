@@ -16,7 +16,8 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, trans_layer_indices=(), trans_weight_decay=1e-5):
+    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, distill_loss_weight=0.01,
+                 trans_layer_indices=(), trans_weight_decay=1e-5):
         if arbitrary == True:
             self.flownet = IFNet_m(trans_layer_indices)
         else:
@@ -44,6 +45,7 @@ class Model:
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
                                find_unused_parameters=True)
+        self.distill_loss_weight = distill_loss_weight
 
     def train(self):
         self.flownet.train()
@@ -97,7 +99,7 @@ class Model:
         if training:
             self.optimG.zero_grad()
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            loss_G = loss_stu + loss_tea + loss_distill * 0.01
+            loss_G = loss_stu + loss_tea + loss_distill * self.distill_loss_weight
             loss_G.backward()
             self.optimG.step()
         else:

@@ -139,15 +139,17 @@ class IFBlock(nn.Module):
                 
         # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
-        # tmp size = input size / scale / 2.
-        tmp = self.lastconv(x)
+        # unscaled_output size = input size / scale / 2.
+        unscaled_output = self.lastconv(x)
+        unscaled_flow = unscaled_output[:, :4]
+        unscaled_mask_score = unscaled_output[:, 4:5]
         
-        tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
-        # tmp/flow/mask size = input size.
+        scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
+        # tmp/flow/mask_score size = input size.
         # flow has 4 channels. 2 for one direction, 2 for the other direction
-        flow = tmp[:, :4] * scale * 2
-        mask = tmp[:, 4:5]
-        return flow, mask
+        flow = scaled_output[:, :4] * scale * 2
+        mask_score = scaled_output[:, 4:5]
+        return flow, mask_score, unscaled_flow, unscaled_mask_score
     
 class IFNet(nn.Module):
     def __init__(self, trans_layer_indices=()):
@@ -194,12 +196,14 @@ class IFNet(nn.Module):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from small to large images.
             if flow != None:
                 # flow_d, flow returned from an IFBlock is always of the size of the original image.
-                flow_d, mask_d = stu_blocks[i](torch.cat((img0, warped_img0, img1, warped_img1, mask), 1), flow, scale=scale_list[i])
+                flow_d, mask_score_d, unscaled_flow_d, unscaled_mask_score_d = \
+                    stu_blocks[i](torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1), flow, scale=scale_list[i])
                 flow = flow + flow_d
-                mask = mask + mask_d
+                mask_score = mask_score_d # + mask_score
             else:
-                flow,  mask    = stu_blocks[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
-            mask_list.append(torch.sigmoid(mask))
+                flow,  mask_score, unscaled_flow_d, unscaled_mask_score_d = \
+                    stu_blocks[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
+            mask_list.append(torch.sigmoid(mask_score))
             flow_list.append(flow)
             warped_img0 = warp(img0, flow[:, :2])
             warped_img1 = warp(img1, flow[:, 2:4])
@@ -212,11 +216,13 @@ class IFNet(nn.Module):
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher). The teacher only predicts the residual.
-            flow_d, mask_d = self.block_tea(torch.cat((img0, warped_img0, img1, warped_img1, mask, gt), 1), flow, scale=1)
+            flow_d, mask_score_d, unscaled_flow_d, unscaled_mask_score_d = \
+                self.block_tea(torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1), flow, scale=1)
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
             warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])
-            mask_teacher = torch.sigmoid(mask + mask_d)
+            mask_score = mask_score_d # + mask_score
+            mask_teacher = torch.sigmoid(mask_score)
             merged_teacher = warped_img0_teacher * mask_teacher + warped_img1_teacher * (1 - mask_teacher)
         else:
             flow_teacher = None
@@ -227,26 +233,26 @@ class IFNet(nn.Module):
             merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
                                  warped_imgs_list[i][1] * (1 - mask_list[i])
             if gt.shape[1] == 3:
-                # loss_mask indicates where the warped images according to student's prediction 
+                # distil_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
                 student_residual = (merged_img_list[i] - gt).abs().mean(1, True)
                 teacher_residual = (merged_teacher - gt).abs().mean(1, True)
                 if self.distill_scheme == 'hard':
-                    loss_mask = (student_residual > teacher_residual + 0.01).float().detach()
+                    distil_mask = (student_residual > teacher_residual + 0.01).float().detach()
                 else:
-                    loss_mask = (student_residual - teacher_residual).sigmoid().detach()
-                    # / (1 - self.distill_soft_min_weight) to normalize loss_mask to be within (0, 1).
-                    # * 2 to make the mean of loss_mask to be 1, same as the 'hard' scheme.
-                    loss_mask = 2 * (loss_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
+                    distil_mask = (student_residual - teacher_residual).sigmoid().detach()
+                    # / (1 - self.distill_soft_min_weight) to normalize distil_mask to be within (0, 1).
+                    # * 2 to make the mean of distil_mask to be 1, same as the 'hard' scheme.
+                    distil_mask = 2 * (distil_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
 
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 # loss_distill is the sum of the distillation losses at 3 different scales.
-                loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * loss_mask).mean()
+                loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * distil_mask).mean()
                 
         c0 = self.contextnet(img0, flow[:, :2])
         c1 = self.contextnet(img1, flow[:, 2:4])
-        tmp = self.unet(img0, img1, warped_img0, warped_img1, mask, flow, c0, c1)
+        tmp = self.unet(img0, img1, warped_img0, warped_img1, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
         merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
