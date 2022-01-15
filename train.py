@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
-    
+
     args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
     torch.distributed.init_process_group(backend="nccl", init_method='env://')
     torch.cuda.set_device(args.local_rank)
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
-    model = Model(args.local_rank, trans_layer_idx=args.trans_layer_idx, 
+    model = Model(args.local_rank, trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)
         
