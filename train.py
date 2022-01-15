@@ -25,13 +25,14 @@ if local_rank == 0:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
 def get_learning_rate(step):
-    # warmup. 0 -> 0.0003
+    M = 1e-4 # old: 3e-4
+    # warmup. 0 -> 0.0001
     if step < 2000:
         mul = step / 2000.
-        return 3e-4 * mul
+        return M * mul
     else:
         mul = np.cos((step - 2000) / (args.epoch * args.step_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
-        return (3e-4 - 3e-5) * mul + 3e-5
+        return (M - M * 0.1) * mul + (M * 0.1)
 
 def flow2rgb(flow_map_np):
     h, w, _ = flow_map_np.shape
@@ -164,7 +165,6 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
                         help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
-    parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
     parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
