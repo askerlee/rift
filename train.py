@@ -113,6 +113,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     time_stamp = time.time()
 
     for i, data in enumerate(val_data):
+        # scale images to [0, 1].
         data_gpu = data.cuda() / 255.
         imgs = data_gpu[:, :6]
         gt = data_gpu[:, 6:9]
@@ -158,12 +159,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
-    parser.add_argument('--trans', dest='trans_layer_idx', default=-1, type=int, 
-                        help='Which IFBlock to apply transformer (default: -1, not to use transformer)')
+    parser.add_argument('--trans', dest='trans_layer_indices', default="", type=str, 
+                        help='Which IFBlock to apply transformer (default: "", not to use transformer in any blocks)')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
 
     args = parser.parse_args()
+    args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
+    
     args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
     torch.distributed.init_process_group(backend="nccl", init_method='env://')
     torch.cuda.set_device(args.local_rank)

@@ -16,11 +16,11 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, trans_layer_idx=-1, trans_weight_decay=1e-5):
+    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, trans_layer_indices=(), trans_weight_decay=1e-5):
         if arbitrary == True:
-            self.flownet = IFNet_m(trans_layer_idx)
+            self.flownet = IFNet_m(trans_layer_indices)
         else:
-            self.flownet = IFNet(trans_layer_idx)
+            self.flownet = IFNet(trans_layer_indices)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
@@ -71,12 +71,13 @@ class Model:
 
     def inference(self, img0, img1, scale_list=[4, 2, 1], TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
-        flow, mask, merged, flow_teacher, merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
+        flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
+        stu_pred = merged_img_list[2]
         if TTA == False:
-            return merged[2]
+            return stu_pred
         else:
-            flow2, mask2, merged2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
-            return (merged[2] + merged2[2].flip(2).flip(3)) / 2
+            flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
+            return (stu_pred + merged_img_list2[2].flip(2).flip(3)) / 2
     
     def update(self, imgs, gt, learning_rate=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
@@ -87,9 +88,10 @@ class Model:
             self.train()
         else:
             self.eval()
-        flow, mask, merged, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
+        flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
+        stu_pred = merged_img_list[2]
         # lap: laplacian pyramid loss.
-        loss_stu = (self.lap(merged[2], gt)).mean()
+        loss_stu = (self.lap(stu_pred, gt)).mean()
         # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
         loss_tea = (self.lap(merged_teacher, gt)).mean()
         if training:
@@ -101,7 +103,7 @@ class Model:
         else:
             flow_teacher = flow[2]
 
-        return merged[2], {
+        return stu_pred, {
             'merged_tea': merged_teacher,
             'mask': mask,
             'mask_tea': mask,

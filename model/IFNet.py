@@ -22,6 +22,12 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
         nn.PReLU(out_planes)
     )
 
+def debug():
+    if local_rank == 0:
+        breakpoint()
+    else:
+        dist.barrier()
+
 class IFBlock(nn.Module):
     def __init__(self, name, in_planes, c=64, img_chans=3, apply_trans=False):
         super(IFBlock, self).__init__()
@@ -29,10 +35,11 @@ class IFBlock(nn.Module):
         self.apply_trans = apply_trans
         self.img_chans   = img_chans
 
-        # lastconv outputs 5 channels: 4 flow and 1 mask
+        # lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
         self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
 
         if not self.apply_trans:
+            # downsample by 4x.
             self.conv0 = nn.Sequential(
                             conv(in_planes, c//2, 3, 2, 1),
                             conv(c//2, c, 3, 2, 1),
@@ -102,19 +109,21 @@ class IFBlock(nn.Module):
             print0("trans config:\n{}".format(self.trans_config.__dict__))
 
     def forward(self, x, flow, scale):
+        # resize x to input size / scale.
         if scale != 1:
             x = F.interpolate(x, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         if flow != None:
+            # the size and magnitudes of the flow is scaled to the size of this layer. 
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
 
         if not self.apply_trans:
             # conv0: 2 layers of conv, kernel size 3.
             x = self.conv0(x)
-            # x: [1, 240, 16, 28] in 'block0'.
-            #    [1, 150, 32, 56] in 'block1'.
-            #    [1, 90, 64, 112] in 'block2'.
-
+            # x: [1, 240, 14, 14] in 'block0'.
+            #    [1, 150, 28, 28] in 'block1'.
+            #    [1, 90,  56, 56] in 'block2'.
+            # That is, input size / scale / 4. 
         else:
             img0 = x[:, 0:self.img_chans]
             img1 = x[:, self.img_chans:self.img_chans*2]
@@ -128,27 +137,29 @@ class IFBlock(nn.Module):
 
         # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
+        # tmp size = input size / scale / 2.
         tmp = self.lastconv(x)
         
         tmp = F.interpolate(tmp, scale_factor = scale * 2, mode="bilinear", align_corners=False)
+        # tmp/flow/mask size = input size.
         # flow has 4 channels. 2 for one direction, 2 for the other direction
         flow = tmp[:, :4] * scale * 2
         mask = tmp[:, 4:5]
         return flow, mask
     
 class IFNet(nn.Module):
-    def __init__(self, trans_layer_idx=-1):
+    def __init__(self, trans_layer_indices=()):
         super(IFNet, self).__init__()
-        self.trans_layer_idx = trans_layer_idx
+        self.trans_layer_indices = trans_layer_indices
         self.block0 = IFBlock('block0', 6,          c=240, img_chans=3, 
-                              apply_trans=(trans_layer_idx==0))
+                              apply_trans=(0 in trans_layer_indices))
         self.block1 = IFBlock('block1', 13+4,       c=144, img_chans=6, 
-                              apply_trans=(trans_layer_idx==1))
+                              apply_trans=(1 in trans_layer_indices))
         self.block2 = IFBlock('block2', 13+4,       c=80,  img_chans=6, 
-                              apply_trans=(trans_layer_idx==2))
+                              apply_trans=(2 in trans_layer_indices))
         # block_tea takes gt (the middle frame) as extra input.
         self.block_tea = IFBlock('block_tea', 16+4, c=80,  img_chans=6, 
-                              apply_trans=(trans_layer_idx==3))
+                              apply_trans=(3 in trans_layer_indices))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -165,6 +176,9 @@ class IFNet(nn.Module):
         img1 = x[:, 3:6]
         # During inference, gt is an empty tensor.
         gt = x[:, 6:] 
+        # gt is provided, i.e., in the training stage.
+        is_training = gt.shape[1] == 3
+
         flow_list = []
         warped_imgs_list = []
         merged_img_list = [None, None, None]
@@ -175,8 +189,9 @@ class IFNet(nn.Module):
         loss_distill = 0
         stu_blocks = [self.block0, self.block1, self.block2]
         for i in range(3):
-            # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained.
+            # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from small to large images.
             if flow != None:
+                # flow_d, flow returned from an IFBlock is always of the size of the original image.
                 flow_d, mask_d = stu_blocks[i](torch.cat((img0, warped_img0, img1, warped_img1, mask), 1), flow, scale=scale_list[i])
                 flow = flow + flow_d
                 mask = mask + mask_d
@@ -189,7 +204,7 @@ class IFNet(nn.Module):
             warped_imgs = (warped_img0, warped_img1)
             warped_imgs_list.append(warped_imgs)
         
-        if gt.shape[1] == 3:
+        if is_training:
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
@@ -218,17 +233,20 @@ class IFNet(nn.Module):
                     loss_mask = (student_residual > teacher_residual + 0.01).float().detach()
                 else:
                     loss_mask = (student_residual - teacher_residual).sigmoid().detach()
+                    # / (1 - self.distill_soft_min_weight) to normalize loss_mask to be within (0, 1).
+                    # * 2 to make the mean of loss_mask to be 1, same as the 'hard' scheme.
                     loss_mask = 2 * (loss_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
 
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
+                # loss_distill is the sum of the distillation losses at 3 different scales.
                 loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * loss_mask).mean()
                 
         c0 = self.contextnet(img0, flow[:, :2])
         c1 = self.contextnet(img1, flow[:, 2:4])
         tmp = self.unet(img0, img1, warped_img0, warped_img1, mask, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        res = tmp[:, :3] * 2 - 1
-        merged_img_list[2] = torch.clamp(merged_img_list[2] + res, 0, 1)
+        img_residual = tmp[:, :3] * 2 - 1
+        merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], merged_img_list, flow_teacher, merged_teacher, loss_distill
