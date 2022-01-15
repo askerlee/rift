@@ -152,17 +152,17 @@ class IFBlock(nn.Module):
         return flow, mask_score, unscaled_flow, unscaled_mask_score
     
 class IFNet(nn.Module):
-    def __init__(self, trans_layer_indices=()):
+    def __init__(self, block_widths=(240, 144, 80), trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
-        self.block0 = IFBlock('block0', 6,          c=240, img_chans=3, 
+        self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
                               apply_trans=(0 in trans_layer_indices))
-        self.block1 = IFBlock('block1', 13+4,       c=144, img_chans=6, 
+        self.block1 = IFBlock('block1', 13+4,       c=block_widths[1], img_chans=6, 
                               apply_trans=(1 in trans_layer_indices))
-        self.block2 = IFBlock('block2', 13+4,       c=80,  img_chans=6, 
+        self.block2 = IFBlock('block2', 13+4,       c=block_widths[2],  img_chans=6, 
                               apply_trans=(2 in trans_layer_indices))
         # block_tea takes gt (the middle frame) as extra input.
-        self.block_tea = IFBlock('block_tea', 16+4, c=80,  img_chans=6, 
+        self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
                               apply_trans=(3 in trans_layer_indices))
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.

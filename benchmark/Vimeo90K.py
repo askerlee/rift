@@ -11,10 +11,22 @@ from model.pytorch_msssim import ssim_matlab
 from model.RIFE import Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if len(sys.argv) > 1 and sys.argv[1] == '-paper':
+parser = argparse.ArgumentParser()
+parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
+                    help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
+parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
+parser.add_argument('--hd', action='store_true', help='Use newer HD model')
+parser.add_argument('--bwidth', dest='block_widths', type=str, default="240,144,80")
+
+args = parser.parse_args()
+args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
+args.block_widths = [ int(width) for width in args.block_widths.split(",") ]
+
+if args.paper:
+    args.block_widths = [240, 150, 90]
     model = Model()
     model.load_model('train_log_paper')
-else:
+elif args.hd:
     from train_log.RIFE_HDv3 import Model
     model = Model()
     if not hasattr(model, 'version'):
@@ -22,6 +34,9 @@ else:
     # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
     model.load_model('train_log', -1)
     print("Loaded 3.x/4.x HD model.")
+else:
+    model = Model(trans_layer_indices=args.trans_layer_indices)
+    model.load_model('train_log')
 
 model.eval()
 model.device()
