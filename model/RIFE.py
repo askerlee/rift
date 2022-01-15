@@ -16,8 +16,8 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, distill_loss_weight=0.01,
-                 use_rife_settings=False, 
+    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, grad_clip=-1, 
+                 distill_loss_weight=0.01, use_rife_settings=False, 
                  trans_layer_indices=(), trans_weight_decay=1e-5):
         if arbitrary == True:
             self.flownet = IFNet_m(use_rife_settings, trans_layer_indices)
@@ -47,6 +47,7 @@ class Model:
                                output_device=local_rank,
                                find_unused_parameters=True)
         self.distill_loss_weight = distill_loss_weight
+        self.grad_clip = grad_clip
 
     def train(self):
         self.flownet.train()
@@ -102,6 +103,9 @@ class Model:
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
             loss_G = loss_stu + loss_tea + loss_distill * self.distill_loss_weight
             loss_G.backward()
+            if self.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(self.flownet.parameters(), self.grad_clip)
+                
             self.optimG.step()
         else:
             flow_teacher = flow[2]

@@ -165,6 +165,8 @@ if __name__ == "__main__":
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
     parser.add_argument('--rife', action='store_true', help='Use rife settings')
+    parser.add_argument('--clip', default=0.1, type=float,
+                        metavar='C', help='gradient clip to C (default: -1, disabled)')
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -179,6 +181,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
+                  grad_clip=args.clip,
                   use_rife_settings=args.rife,
                   trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
