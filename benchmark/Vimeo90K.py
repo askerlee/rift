@@ -62,4 +62,5 @@ for i in f:
     psnr = -10 * math.log10(((I1 - mid) * (I1 - mid)).mean())
     psnr_list.append(psnr)
     ssim_list.append(ssim)
-    print("Avg PSNR: {} SSIM: {}".format(np.mean(psnr_list), np.mean(ssim_list)))
+    print("PSNR {:.3} Avg {:.3}, SSIM {:.3} Avg {:.3}".format( \
+          psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
