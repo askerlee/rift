@@ -26,7 +26,7 @@ class VimeoDataset(Dataset):
         with open(test_fn, 'r') as f:
             self.testlist = f.read().splitlines()   
         self.load_data()
-        self.aug_scheme = 'old'
+        self.aug_scheme = 'new'
         if self.dataset_name == 'train':
             if self.aug_scheme == 'new':
                 tgt_height, tgt_width = 224, 224
@@ -60,7 +60,7 @@ class VimeoDataset(Dataset):
                                     cval=(0,255),
                                     mode='reflect'
                             )),
-                            # iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades.
+                            iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades.
                             # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                             # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
                             #iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
