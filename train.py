@@ -168,7 +168,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
-    args.block_widths = [ int(width) for width in args.block_widths.split(",") ]
 
     args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
     torch.distributed.init_process_group(backend="nccl", init_method='env://')

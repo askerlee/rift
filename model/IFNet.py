@@ -161,7 +161,7 @@ class IFNet(nn.Module):
             self.mask_score_res_weight = 1
         else:
             block_widths = [240, 144, 80]
-            self.mask_score_res_weight = 0
+            self.mask_score_res_weight = 0.5
 
         self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
                               apply_trans=(0 in trans_layer_indices))
@@ -175,11 +175,10 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        self.distill_scheme = 'soft' # 'hard' or 'soft'
+        self.distill_scheme = 'hard' # 'hard' or 'soft'
         # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
-        
 
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
