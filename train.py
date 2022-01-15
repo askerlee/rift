@@ -167,7 +167,7 @@ if __name__ == "__main__":
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
-    parser.add_argument('--rife', action='store_true', help='Use rife settings')
+    parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (default: -1, disabled)')
 
