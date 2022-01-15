@@ -7,6 +7,7 @@ import torch.distributed as dist
 import numpy as np
 import random
 import argparse
+from datetime import datetime
 
 from model.RIFE import Model
 from dataset import *
@@ -15,11 +16,13 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
 device = torch.device("cuda")
-log_path = 'train_log'
-if not os.path.exists(log_path):
-    os.makedirs(log_path)
-
-exp = os.path.abspath('.').split('/')[-1]
+timestamp = datetime.now().strftime("%m%d%H%M")
+checkpoint_dir = f"../checkpoints/{timestamp}"
+local_rank = int(os.environ.get('LOCAL_RANK', 0))
+if local_rank == 0:
+    print("Model checkpoints will be saved to '%s'" %checkpoint_dir)
+    if not os.path.isdir(checkpoint_dir):
+        os.makedirs(checkpoint_dir, exist_ok=True)
 
 def get_learning_rate(step):
     # warmup. 0 -> 0.0003
@@ -98,7 +101,7 @@ def train(model, local_rank):
             step += 1
         nr_eval += 1
 
-        model.save_model(log_path, local_rank)
+        model.save_model(checkpoint_dir, epoch, local_rank)
         if nr_eval % 1 == 0:
             evaluate(model, val_data, epoch, step, local_rank, writer_val)
           
@@ -171,7 +174,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
 
-    args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    args.local_rank = local_rank
+    if args.local_rank == 0:
+        print(f"Args:\n{args}")
+
     torch.distributed.init_process_group(backend="nccl", init_method='env://')
     torch.cuda.set_device(args.local_rank)
     seed = 1234

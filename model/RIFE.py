@@ -67,11 +67,11 @@ class Model:
             }
             
         if rank <= 0:
-            self.flownet.load_state_dict(convert(torch.load('{}/flownet.pkl'.format(path))))
+            self.flownet.load_state_dict(convert(torch.load(path)))
         
-    def save_model(self, path, rank=0):
+    def save_model(self, path, epoch, rank=0):
         if rank == 0:
-            torch.save(self.flownet.state_dict(),'{}/flownet.pkl'.format(path))
+            torch.save(self.flownet.state_dict(), '{}/ep{:03}.pth'.format(path, epoch))
 
     def inference(self, img0, img1, scale_list=[4, 2, 1], TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
@@ -105,7 +105,7 @@ class Model:
             loss_G.backward()
             if self.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(self.flownet.parameters(), self.grad_clip)
-                
+
             self.optimG.step()
         else:
             flow_teacher = flow[2]

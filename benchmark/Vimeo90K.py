@@ -17,24 +17,26 @@ parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=st
 parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
 parser.add_argument('--rife', action='store_true', help='Use rife settings')
+parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
 
 args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
 
 if args.paper:
     model = Model(use_rife_settings=True)
-    model.load_model('train_log_paper')
+    model.load_model('rife_checkpoint/flownet.pth')
 elif args.hd:
     from train_log.RIFE_HDv3 import Model
-    model = Model()
+    model = Model(use_rife_settings=True)
     if not hasattr(model, 'version'):
         model.version = 0
     # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
-    model.load_model('train_log', -1)
+    model.load_model('rife_hd_checkpoint/flownet.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(trans_layer_indices=args.trans_layer_indices)
-    model.load_model('train_log')
+    model = Model(use_rife_settings=args.use_rife_settings, 
+                  trans_layer_indices=args.trans_layer_indices)
+    model.load_model(args.cp)
 
 model.eval()
 model.device()
