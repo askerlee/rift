@@ -73,7 +73,6 @@ class IFBlock(nn.Module):
                 self.conv_bridge = conv(3 * (c//2), c, 3, 1, 1)
             else:
                 # No non-img channels. Just to bridge the channel number difference.
-                self.conv_nonimg = nn.Identity()
                 self.conv_bridge = conv(c, c, 3, 1, 1)
 
             # Moved 3 conv layers from convblock to conv_img and conv_nonimg.
@@ -132,9 +131,12 @@ class IFBlock(nn.Module):
             # if apply_trans, trans is a transformer layer with a skip connection: 
             # x' = w*trans(conv_img(img1)) + (1-w) * conv_img(img1). w is a learnable weight.
             x1 = self.trans(self.conv_img(img1))
-            x_nonimg = self.conv_nonimg(nonimg)
-            x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
-
+            if self.nonimg_chans > 0:
+                x_nonimg = self.conv_nonimg(nonimg)
+                x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
+            else:
+                x  = self.conv_bridge(torch.cat((x0, x1), 1))
+                
         # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
         # tmp size = input size / scale / 2.
