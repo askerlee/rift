@@ -201,21 +201,21 @@ class IFNet(nn.Module):
         loss_distill = 0
         stu_blocks = [self.block0, self.block1, self.block2]
         for i in range(3):
-            # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from small to large images.
+            # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
             if flow != None:
                 if self.use_rife_settings:
-                    block_input = torch.cat((img0, img1, warped_img0, warped_img1, mask_score), 1)
+                    stu_input = torch.cat((img0, img1, warped_img0, warped_img1, mask_score), 1)
                 else:
-                    block_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1)
+                    stu_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1)
 
                 # flow_d, flow returned from an IFBlock is always of the size of the original image.
-                flow_d, mask_score_d, unscaled_flow_d, unscaled_mask_score_d = \
-                    stu_blocks[i](block_input, flow, scale=scale_list[i])
+                flow_d, mask_score_d = stu_blocks[i](stu_input, flow, scale=scale_list[i])
                 flow = flow + flow_d
                 mask_score = mask_score_d + mask_score * self.mask_score_res_weight
             else:
-                flow,  mask_score, unscaled_flow_d, unscaled_mask_score_d = \
-                    stu_blocks[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
+                stu_input = torch.cat((img0, img1), 1)
+                flow,   mask_score   = stu_blocks[i](stu_input, None, scale=scale_list[i])
+
             mask_list.append(torch.sigmoid(mask_score))
             flow_list.append(flow)
             warped_img0 = warp(img0, flow[:, :2])
@@ -229,8 +229,8 @@ class IFNet(nn.Module):
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher). The teacher only predicts the residual.
-            flow_d, mask_score_d, unscaled_flow_d, unscaled_mask_score_d = \
-                self.block_tea(torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1), flow, scale=1)
+            tea_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1)
+            flow_d, mask_score_d = self.block_tea(tea_input, flow, scale=1)
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
             warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])

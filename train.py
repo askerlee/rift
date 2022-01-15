@@ -162,8 +162,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
-    parser.add_argument('--trans', dest='trans_layer_indices', default="", type=str, 
-                        help='Which IFBlock to apply transformer (default: "", not to use transformer in any blocks)')
+    parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
+                        help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
