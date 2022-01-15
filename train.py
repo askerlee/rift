@@ -164,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument('--world_size', default=4, type=int, help='world size')
     parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5)
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
-    parser.add_argument('--bwidth', dest='block_widths', type=str, default="240,144,80")
+    parser.add_argument('--rife', action='store_true', help='Use rife settings')
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
-                  block_widths=args.block_widths,
+                  use_rife_settings=args.rife,
                   trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)

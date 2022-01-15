@@ -152,9 +152,17 @@ class IFBlock(nn.Module):
         return flow, mask_score, unscaled_flow, unscaled_mask_score
     
 class IFNet(nn.Module):
-    def __init__(self, block_widths=(240, 144, 80), trans_layer_indices=()):
+    def __init__(self, use_rife_settings=False, trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
+        self.use_rife_settings = use_rife_settings
+        if self.use_rife_settings:
+            block_widths = [240, 150, 90]
+            self.mask_score_res_weight = 1
+        else:
+            block_widths = [240, 144, 80]
+            self.mask_score_res_weight = 0
+
         self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
                               apply_trans=(0 in trans_layer_indices))
         self.block1 = IFBlock('block1', 13+4,       c=block_widths[1], img_chans=6, 
@@ -171,6 +179,7 @@ class IFNet(nn.Module):
         # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
+        
 
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -195,11 +204,16 @@ class IFNet(nn.Module):
         for i in range(3):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from small to large images.
             if flow != None:
+                if self.use_rife_settings:
+                    block_input = torch.cat((img0, img1, warped_img0, warped_img1, mask_score), 1)
+                else:
+                    block_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1)
+
                 # flow_d, flow returned from an IFBlock is always of the size of the original image.
                 flow_d, mask_score_d, unscaled_flow_d, unscaled_mask_score_d = \
-                    stu_blocks[i](torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1), flow, scale=scale_list[i])
+                    stu_blocks[i](block_input, flow, scale=scale_list[i])
                 flow = flow + flow_d
-                mask_score = mask_score_d # + mask_score
+                mask_score = mask_score_d + mask_score * self.mask_score_res_weight
             else:
                 flow,  mask_score, unscaled_flow_d, unscaled_mask_score_d = \
                     stu_blocks[i](torch.cat((img0, img1), 1), None, scale=scale_list[i])
@@ -221,7 +235,7 @@ class IFNet(nn.Module):
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
             warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])
-            mask_score = mask_score_d # + mask_score
+            mask_score = mask_score_d + mask_score * self.mask_score_res_weight
             mask_teacher = torch.sigmoid(mask_score)
             merged_teacher = warped_img0_teacher * mask_teacher + warped_img1_teacher * (1 - mask_teacher)
         else:
