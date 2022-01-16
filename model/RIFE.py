@@ -19,7 +19,8 @@ class Model:
     def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, grad_clip=-1, 
                  distill_loss_weight=0.01, use_rife_settings=False, 
                  mask_score_res_weight=-1,
-                 trans_layer_indices=(), trans_weight_decay=1e-5):
+                 trans_layer_indices=(), 
+                 conv_weight_decay=1e-3, trans_weight_decay=1e-5):
         if arbitrary == True:
             self.flownet = IFNet_m(use_rife_settings, mask_score_res_weight, trans_layer_indices)
         else:
@@ -36,7 +37,7 @@ class Model:
         # Use a large weight decay may avoid NaN loss, but reduces transformer performance.
         # lr here doesn't really matter. Will be overwritten in update(), 
         # where the actual LR is obtained from train.py:get_learning_rate().
-        self.optimG = AdamW( [ { 'params': conv_param_groups,  'lr': lr, 'weight_decay': 1e-3 }, 
+        self.optimG = AdamW( [ { 'params': conv_param_groups,  'lr': lr, 'weight_decay': conv_weight_decay  }, 
                                { 'params': trans_param_groups, 'lr': lr, 'weight_decay': trans_weight_decay } 
                              ] )
 
