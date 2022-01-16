@@ -30,6 +30,16 @@ def debug():
     else:
         dist.barrier()
 
+# https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
+class Clamp01(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        return input.clamp(min=0, max=1)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.clone()
+
 class IFBlock(nn.Module):
     def __init__(self, name, in_planes, c=64, img_chans=3, apply_trans=False):
         super(IFBlock, self).__init__()
@@ -186,6 +196,11 @@ class IFNet(nn.Module):
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
 
+        self.use_grad_clamp = True
+        if self.use_grad_clamp:
+            clamp01_inst = Clamp01()
+            self.clamp01 = clamp01_inst.apply
+
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
@@ -275,9 +290,10 @@ class IFNet(nn.Module):
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
 
-        if is_training:
-            merged_img_list[2] = merged_img_list[2] + img_residual
+        if self.use_grad_clamp:
+            merged_img_list[2] = self.clamp01(merged_img_list[2] + img_residual)
         else:
             merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
+            
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
