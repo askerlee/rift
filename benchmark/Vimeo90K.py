@@ -18,6 +18,7 @@ parser.add_argument('--paper', action='store_true', help='Use the model in the R
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
 parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
+parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 
 args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -46,6 +47,9 @@ f = open(path + 'tri_testlist.txt', 'r')
 psnr_list = []
 ssim_list = []
 for i in f:
+    if args.count > 0 and i == args.count:
+        break
+    
     name = str(i).strip()
     if(len(name) <= 1):
         continue

@@ -163,7 +163,7 @@ class IFNet(nn.Module):
             self.mask_score_res_weight = 1
         else:
             block_widths = [240, 144, 80]
-            self.mask_score_res_weight = 1
+            self.mask_score_res_weight = 0.5
 
         self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
                               apply_trans=(0 in trans_layer_indices))
