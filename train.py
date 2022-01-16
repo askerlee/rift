@@ -167,7 +167,7 @@ if __name__ == "__main__":
                         help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
-    parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-5,
+    parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-2,
                         help='weight decay for transformer layers (default: 1e-5)')
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
     parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
