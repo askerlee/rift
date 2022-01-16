@@ -236,8 +236,8 @@ class IFNet(nn.Module):
             flow_teacher = flow + flow_d
             warped_img0_teacher = warp(img0, flow_teacher[:, :2])
             warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])
-            mask_score = mask_score_d + mask_score * self.mask_score_res_weight
-            mask_teacher = torch.sigmoid(mask_score)
+            mask_score_tea = mask_score_d + mask_score * self.mask_score_res_weight
+            mask_teacher = torch.sigmoid(mask_score_tea)
             merged_teacher = warped_img0_teacher * mask_teacher + warped_img1_teacher * (1 - mask_teacher)
         else:
             flow_teacher = None
