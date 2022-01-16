@@ -196,7 +196,7 @@ class IFNet(nn.Module):
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
 
-        self.use_grad_clamp = True
+        self.use_grad_clamp = False
         if self.use_grad_clamp:
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
@@ -294,6 +294,6 @@ class IFNet(nn.Module):
             merged_img_list[2] = self.clamp01(merged_img_list[2] + img_residual)
         else:
             merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
-            
+
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill

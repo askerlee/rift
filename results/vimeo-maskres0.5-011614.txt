@@ -109,7 +109,8 @@ Trans 0 (mask res weight 0)
 54 PSNR 32.698 Avg 35.151, SSIM 0.963 Avg 0.981
 55 PSNR 32.933 Avg 34.986, SSIM 0.964 Avg 0.981
 56 PSNR 32.687 Avg 35.141, SSIM 0.963 Avg 0.980
-57 
+57 PSNR 32.715 Avg 35.391, SSIM 0.963 Avg 0.981
+58 
 
 Trans 0 (mask res weight 0, training output grad clip, conv decay 1e-3)
 00 PSNR 29.055 Avg 30.066, SSIM 0.877 Avg 0.928
@@ -140,6 +141,7 @@ Trans 0 (mask res weight 0, training output grad clip, conv decay 1e-3)
 25 PSNR 31.358 Avg 34.556, SSIM 0.953 Avg 0.977
 26 PSNR 31.377 Avg 34.546, SSIM 0.954 Avg 0.978
 27 PSNR 31.300 Avg 34.392, SSIM 0.947 Avg 0.977
+28 PSNR 31.312 Avg 34.592, SSIM 0.949 Avg 0.977
 
 Trans 0 (mask res weight 0, training no output clip, conv decay 1e-5)
 00 PSNR 29.327 Avg 30.214, SSIM 0.850 Avg 0.910

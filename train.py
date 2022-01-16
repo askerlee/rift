@@ -25,7 +25,7 @@ if local_rank == 0:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
 def get_learning_rate(step):
-    M = 2e-4 # old: 3e-4
+    M = 3e-4 # old: 3e-4
     # warmup. 0 -> 0.0001
     if step < 2000:
         mul = step / 2000.
