@@ -274,6 +274,10 @@ class IFNet(nn.Module):
         tmp = self.unet(img0, img1, warped_img0, warped_img1, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
-        merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
+
+        if is_training:
+            merged_img_list[2] = merged_img_list[2] + img_residual
+        else:
+            merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
