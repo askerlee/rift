@@ -46,11 +46,11 @@ path = 'vimeo_triplet/'
 f = open(path + 'tri_testlist.txt', 'r')
 psnr_list = []
 ssim_list = []
-for i in f:
+for i, line in enumerate(f):
     if args.count > 0 and i == args.count:
         break
-    
-    name = str(i).strip()
+
+    name = str(line).strip()
     if(len(name) <= 1):
         continue
     print(path + 'sequences/' + name + '/im1.png')
