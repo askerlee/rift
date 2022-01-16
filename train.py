@@ -171,6 +171,9 @@ if __name__ == "__main__":
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (default: -1, disabled)')
 
+    parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
+                        help='Weight of the mask score residual connection')
+
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
 
@@ -189,6 +192,7 @@ if __name__ == "__main__":
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
                   use_rife_settings=args.use_rife_settings,
+                  mask_score_res_weight=args.mask_score_res_weight,
                   trans_layer_indices=args.trans_layer_indices, 
                   trans_weight_decay=args.trans_weight_decay)
     train(model, args.local_rank)

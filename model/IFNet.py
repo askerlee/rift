@@ -154,7 +154,8 @@ class IFBlock(nn.Module):
         return flow, mask_score
     
 class IFNet(nn.Module):
-    def __init__(self, use_rife_settings=False, trans_layer_indices=()):
+    def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
+                 trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
         self.use_rife_settings = use_rife_settings
@@ -163,7 +164,10 @@ class IFNet(nn.Module):
             self.mask_score_res_weight = 1
         else:
             block_widths = [240, 144, 80]
-            self.mask_score_res_weight = 0.5
+            if mask_score_res_weight >= 0:
+                self.mask_score_res_weight = mask_score_res_weight
+            else:
+                self.mask_score_res_weight = 0
 
         self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
                               apply_trans=(0 in trans_layer_indices))
@@ -233,15 +237,15 @@ class IFNet(nn.Module):
             # (or residual of the teacher). The teacher only predicts the residual.
             tea_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1)
             flow_d, mask_score_d = self.block_tea(tea_input, flow, scale=1)
-            flow_teacher = flow + flow_d
-            warped_img0_teacher = warp(img0, flow_teacher[:, :2])
-            warped_img1_teacher = warp(img1, flow_teacher[:, 2:4])
+            flow_tea = flow + flow_d
+            warped_img0_tea = warp(img0, flow_tea[:, :2])
+            warped_img1_tea = warp(img1, flow_tea[:, 2:4])
             mask_score_tea = mask_score_d + mask_score * self.mask_score_res_weight
-            mask_teacher = torch.sigmoid(mask_score_tea)
-            merged_teacher = warped_img0_teacher * mask_teacher + warped_img1_teacher * (1 - mask_teacher)
+            mask_tea = torch.sigmoid(mask_score_tea)
+            merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
         else:
-            flow_teacher = None
-            merged_teacher = None
+            flow_tea = None
+            merged_tea = None
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
             # merged_img_list[i]: average of 1->2 and 2->1 warped images.
@@ -251,7 +255,7 @@ class IFNet(nn.Module):
                 # distil_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
                 student_residual = (merged_img_list[i] - gt).abs().mean(1, True)
-                teacher_residual = (merged_teacher - gt).abs().mean(1, True)
+                teacher_residual = (merged_tea - gt).abs().mean(1, True)
                 if self.distill_scheme == 'hard':
                     distil_mask = (student_residual > teacher_residual + 0.01).float().detach()
                 else:
@@ -263,7 +267,7 @@ class IFNet(nn.Module):
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 # loss_distill is the sum of the distillation losses at 3 different scales.
-                loss_distill += ((flow_teacher.detach() - flow_list[i]).abs() * distil_mask).mean()
+                loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
                 
         c0 = self.contextnet(img0, flow[:, :2])
         c1 = self.contextnet(img1, flow[:, 2:4])
@@ -272,4 +276,4 @@ class IFNet(nn.Module):
         img_residual = tmp[:, :3] * 2 - 1
         merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged_img_list, flow_teacher, merged_teacher, loss_distill
+        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill

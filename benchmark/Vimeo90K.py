@@ -19,6 +19,8 @@ parser.add_argument('--hd', action='store_true', help='Use newer HD model')
 parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
+parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
+                    help='Weight of the mask score residual connection')
 
 args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -36,6 +38,7 @@ elif args.hd:
     print("Loaded 3.x/4.x HD model.")
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
+                  mask_score_res_weight=args.mask_score_res_weight,
                   trans_layer_indices=args.trans_layer_indices)
     model.load_model(args.cp)
 
