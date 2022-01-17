@@ -40,15 +40,77 @@ class Clamp01(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output.clone()
 
+def multiwarp(img0, img1, flows, M):
+    warped_img0s = []
+    warped_img1s = []
+    # flows at dim=1: 
+    # flow01_1, flow01_2, ..., flow01_M, flow10_1, flow10_2, ..., flow10_M
+    # Each block has 2 channels.
+    for j in range(M):
+        warped_img0 = warp(img0, flows[:, j*2 : j*2+2])
+        warped_img1 = warp(img1, flows[:, j*2+2*M : j*2+2*M+2])
+        warped_img0s.append(warped_img0)
+        warped_img1s.append(warped_img1)
+
+    return warped_img0s, warped_img1s
+
+def multimerge(warped_img0s, warped_img1s, multimask_score, M):
+    # warped_img0s, warped_img1s are two lists, each of length M.
+    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+    # 1 for the warp0-warp1 combination weight.
+    if M == 1:
+        mask_score = torch.sigmoid(multimask_score[:, -1])
+        merged_img = warped_img0s[0] * mask_score + warped_img1s[0] * (1 - mask_score)
+    else:
+        # warped_img0s_ts, warped_img1s_ts: [16, M, 3, 224, 224]
+        warped_img0s_ts = torch.stack(warped_img0s, dim=1)
+        warped_img1s_ts = torch.stack(warped_img1s, dim=1)
+        # warp0_attn: [16, M, 1, 224, 224]
+        warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
+        warp1_attn = torch.oftmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
+        # mask_score: [16, 1, 224, 224]
+        mask = torch.sigmoid(multimask_score[:, -1])
+        # merged_img: [16, 3, 224, 224]
+        merged_img = (warp0_attn * warped_img0s).sum(dim=1) * mask + \
+                     (warp1_attn * warped_img1s).sum(dim=1) * (1 - mask)
+    
+    return merged_img
+
+def multimerge_flow(flows, multimask_score, M):
+    if M == 1:
+        flow01, flow10 = flows[:, :2], flows[:, 2:4]
+        flow = flows
+    else:
+        newshape = list(flows.shape)
+        newshape[1:2] = [M, 2]
+        # flows01, flows10: [16, M, 2, 224, 224]
+        flows01 = flows[:, :M*2].reshape(newshape)
+        flows10 = flows[:, M*2:].reshape(newshape)
+        # warp0_attn: [16, M, 1, 224, 224]
+        warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
+        warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
+        # flow01, flow10: [16, 2, 224, 224]
+        flow01 = (warp0_attn * flows01).sum(dim=1)
+        flow10 = (warp1_attn * flows10).sum(dim=1)
+        flow = torch.cat([flow01, flow10], dim=1)
+    return flow, flow01, flow10
+
 class IFBlock(nn.Module):
-    def __init__(self, name, in_planes, c=64, img_chans=3, apply_trans=False):
+    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, apply_trans=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.apply_trans = apply_trans
         self.img_chans   = img_chans
-
-        # lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
-        self.lastconv = nn.ConvTranspose2d(c, 5, 4, 2, 1)
+        # M, multi: How many copies of flow/mask are generated?
+        self.M = multi
+        if self.M == 1:
+            # originally, lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
+            out_chan_num = 5
+        else:
+            # when outputting multiple flows, 4*M flow channels, 
+            # 2*M flow attention channels, 1 mask weight channel to combine warp0 and warp1.
+            out_chan_num = 6 * self.M + 1
+        self.lastconv = nn.ConvTranspose2d(c, out_chan_num, 4, 2, 1)
 
         if not self.apply_trans:
             # downsample by 4x.
@@ -119,14 +181,14 @@ class IFBlock(nn.Module):
             self.trans = SelfAttVisPosTrans(self.trans_config, f"{self.name} transformer")
             print0("trans config:\n{}".format(self.trans_config.__dict__))
 
-    def forward(self, x, flow, scale):
+    def forward(self, x, flows, scale):
         # resize x to input size / scale.
         if scale != 1:
             x = F.interpolate(x, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
-        if flow != None:
+        if flows != None:
             # the size and magnitudes of the flow is scaled to the size of this layer. 
-            flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
-            x = torch.cat((x, flow), 1)
+            flows = F.interpolate(flows, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
+            x = torch.cat((x, flows), 1)
 
         if not self.apply_trans:
             # conv0: 2 layers of conv, kernel size 3.
@@ -153,19 +215,22 @@ class IFBlock(nn.Module):
         x = self.convblock(x) + x
         # unscaled_output size = input size / scale / 2.
         unscaled_output = self.lastconv(x)
-        #unscaled_flow = unscaled_output[:, :4]
-        #unscaled_mask_score = unscaled_output[:, 4:5]
-        
+
         scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # tmp/flow/mask_score size = input size.
         # flow has 4 channels. 2 for one direction, 2 for the other direction
-        flow = scaled_output[:, :4] * scale * 2
-        mask_score = scaled_output[:, 4:5]
-        return flow, mask_score
+        flows = scaled_output[:, : 4*self.M] * scale * 2
+        # multimask_score: 
+        # if M == 1, multimask_score has one channel, just as the original scheme.
+        # if M > 1, 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+        # 1 for the warp0-warp1 combination weight.
+        # If M==1, the first two channels are redundant and never used or involved into training.
+        multimask_score = scaled_output[:, 4*self.M : ]
+        return flows, multimask_score
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 trans_layer_indices=()):
+                 multi=1, trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
         self.use_rife_settings = use_rife_settings
@@ -179,15 +244,18 @@ class IFNet(nn.Module):
             else:
                 self.mask_score_res_weight = 0
 
-        self.block0 = IFBlock('block0', 6,          c=block_widths[0], img_chans=3, 
-                              apply_trans=(0 in trans_layer_indices))
-        self.block1 = IFBlock('block1', 13+4,       c=block_widths[1], img_chans=6, 
-                              apply_trans=(1 in trans_layer_indices))
-        self.block2 = IFBlock('block2', 13+4,       c=block_widths[2],  img_chans=6, 
-                              apply_trans=(2 in trans_layer_indices))
-        # block_tea takes gt (the middle frame) as extra input.
+        self.M = multi
+        self.block0 =    IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
+                                 multi=self.M)
+        self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
+                                 multi=self.M)
+        self.block2 =    IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
+                                 multi=self.M)
+        # block_tea takes gt (the middle frame) as extra input. 
+        # block_tea only outputs one group of flow, as it takes extra info and the single group of 
+        # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                              apply_trans=(3 in trans_layer_indices))
+                                 multi=1)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -196,6 +264,7 @@ class IFNet(nn.Module):
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
 
+        # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_grad_clamp = False
         if self.use_grad_clamp:
             clamp01_inst = Clamp01()
@@ -212,60 +281,68 @@ class IFNet(nn.Module):
         # gt is provided, i.e., in the training stage.
         is_training = gt.shape[1] == 3
 
+        multiflow_list = []
         flow_list = []
-        warped_imgs_list = []
-        merged_img_list = [None, None, None]
-        mask_list = []
+        warped_img0s_list = []
+        warped_img1s_list = []
+        merged_img_list  = [None, None, None]
+        mask_score_list = []
+        multimask_score_list = []
         warped_img0 = img0
         warped_img1 = img1
-        flow = None 
+        multiflow = None 
         loss_distill = 0
         stu_blocks = [self.block0, self.block1, self.block2]
         for i in range(3):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
-            if flow != None:
+            if multiflow != None:
                 if self.use_rife_settings:
                     stu_input = torch.cat((img0, img1, warped_img0, warped_img1, mask_score), 1)
                 else:
                     stu_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score), 1)
 
+                # flow, flow_d: [16, 4*M, 224, 224]
+                # mask_score, mask_score_d:   [16, 1*M, 224, 224]
                 # flow_d, flow returned from an IFBlock is always of the size of the original image.
-                flow_d, mask_score_d = stu_blocks[i](stu_input, flow, scale=scale_list[i])
-                flow = flow + flow_d
-                mask_score = mask_score_d + mask_score * self.mask_score_res_weight
+                multiflow_d, multimask_score_d = stu_blocks[i](stu_input, flow, scale=scale_list[i])
+                multiflow = multiflow + multiflow_d
+                multimask_score = multimask_score_d + multimask_score * self.mask_score_res_weight
             else:
                 stu_input = torch.cat((img0, img1), 1)
-                flow,   mask_score   = stu_blocks[i](stu_input, None, scale=scale_list[i])
+                multiflow,   multimask_score   = stu_blocks[i](stu_input, None, scale=scale_list[i])
 
-            mask_list.append(torch.sigmoid(mask_score))
+            mask_score = multimask_score[:, -1]
+            mask_score_list.append(mask_score)
+            multimask_score_list.append(multimask_score)
+            multiflow_list.append(multiflow)
+            flow, flow01, flow10 = multimerge_flow(multiflow, multimask_score, self.M)
             flow_list.append(flow)
-            warped_img0 = warp(img0, flow[:, :2])
-            warped_img1 = warp(img1, flow[:, 2:4])
-            warped_imgs = (warped_img0, warped_img1)
-            warped_imgs_list.append(warped_imgs)
-        
+            warped_img0s, warped_img1s = multiwarp(img0, img1, multiflow, self.M)
+            warped_img0s_list.append(warped_img0s)
+            warped_img1s_list.append(warped_img1s)
+
         if is_training:
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher). The teacher only predicts the residual.
-            tea_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1)
+            tea_input = torch.cat((img0, warped_img0, img1, warped_img1, multimask_score, gt), 1)
             flow_d, mask_score_d = self.block_tea(tea_input, flow, scale=1)
             flow_tea = flow + flow_d
             warped_img0_tea = warp(img0, flow_tea[:, :2])
-            warped_img1_tea = warp(img1, flow_tea[:, 2:4])
+            warped_img1_tea = warp(img1, flow_tea[:, 2:4])            
             mask_score_tea = mask_score_d + mask_score * self.mask_score_res_weight
             mask_tea = torch.sigmoid(mask_score_tea)
             merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
         else:
             flow_tea = None
             merged_tea = None
+
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
             # merged_img_list[i]: average of 1->2 and 2->1 warped images.
-            merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
-                                 warped_imgs_list[i][1] * (1 - mask_list[i])
+            merged_img_list[i] = multimerge(warped_img0s_list[i], warped_img1s_list[i], multimask_score_list[i])
             if gt.shape[1] == 3:
                 # distil_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
@@ -283,9 +360,9 @@ class IFNet(nn.Module):
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 # loss_distill is the sum of the distillation losses at 3 different scales.
                 loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
-                
-        c0 = self.contextnet(img0, flow[:, :2])
-        c1 = self.contextnet(img1, flow[:, 2:4])
+
+        c0 = self.contextnet(img0, flow01)
+        c1 = self.contextnet(img1, flow10)
         tmp = self.unet(img0, img1, warped_img0, warped_img1, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
@@ -296,4 +373,4 @@ class IFNet(nn.Module):
             merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
 
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
+        return flow_list, mask_score_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
