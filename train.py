@@ -177,6 +177,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
+    parser.add_argument('--multi', dest='multi', default=1, type=int, metavar='M', 
+                        help='Output M groups of flow (default: 1, single group)')
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -197,6 +199,7 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
+                  multi=args.multi,
                   trans_layer_indices=args.trans_layer_indices, 
                   conv_weight_decay=args.conv_weight_decay,
                   trans_weight_decay=args.trans_weight_decay)
