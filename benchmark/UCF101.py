@@ -60,8 +60,8 @@ path = 'UCF101/ucf101_interp_ours/'
 dirs = os.listdir(path)
 psnr_list = []
 ssim_list = []
-print(len(dirs))
-for d in dirs:
+total_triplets = len(dirs)
+for i, d in enumerate(dirs):
     img0 = (path + d + '/frame_00.png')
     img1 = (path + d + '/frame_02.png')
     gt = (path + d + '/frame_01_gt.png')
@@ -76,4 +76,5 @@ for d in dirs:
     psnr = -10 * math.log10(((gt - out) * (gt - out)).mean())
     psnr_list.append(psnr)
     ssim_list.append(ssim)
-    print("Avg PSNR: {} SSIM: {}".format(np.mean(psnr_list), np.mean(ssim_list)))
+    print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
+          i, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))

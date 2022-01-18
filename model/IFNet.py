@@ -260,17 +260,18 @@ class IFNet(nn.Module):
                 self.mask_score_res_weight = 0
 
         self.M = multi
+        self.MT = self.M
         self.block0 =    IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
-                                 multi=self.M, do_BN=do_BN)
+                                 multi=self.M,  do_BN=do_BN)
         self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
-                                 multi=self.M, do_BN=do_BN)
+                                 multi=self.M,  do_BN=do_BN)
         self.block2 =    IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                 multi=self.M, do_BN=do_BN)
+                                 multi=self.MT, do_BN=do_BN)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=1,      do_BN=do_BN)
+                                 multi=self.M, do_BN=do_BN)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -344,11 +345,11 @@ class IFNet(nn.Module):
             else:
                 tea_input = torch.cat((img0, warped_img0, img1, warped_img1, mask_score, gt), 1)    
 
-            flow_d, mask_score_d = self.block_tea(tea_input, flow, scale=1)
-            flow_tea = flow + flow_d
-            warped_img0_tea = warp(img0, flow_tea[:, :2])
-            warped_img1_tea = warp(img1, flow_tea[:, 2:4])            
-            mask_score_tea = mask_score_d + mask_score * self.mask_score_res_weight
+            multiflow_d, multimask_score_d = self.block_tea(tea_input, flow, scale=1)
+            multiflow_tea = multiflow + multiflow_d
+            multimask_score_tea = multimask_score_d + multimask_score * self.mask_score_res_weight
+            warped_img0_tea, warped_img1_tea = multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.MT)        
+            mask_score_tea = multimask_score_tea[:, [-1]]
             mask_tea = torch.sigmoid(mask_score_tea)
             merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
         else:
