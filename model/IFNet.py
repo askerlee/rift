@@ -12,7 +12,7 @@ local_rank = int(os.environ.get('LOCAL_RANK', 0))
 def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
     return nn.Sequential(
         torch.nn.ConvTranspose2d(in_channels=in_planes, out_channels=out_planes, kernel_size=4, stride=2, padding=1),
-        #nn.BatchNorm2d(out_planes),
+        nn.BatchNorm2d(out_planes),
         nn.PReLU(out_planes)
     )
 
@@ -20,7 +20,7 @@ def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
     return nn.Sequential(
         nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
                   padding=padding, dilation=dilation, bias=True),
-        #nn.BatchNorm2d(out_planes),
+        nn.BatchNorm2d(out_planes),
         nn.PReLU(out_planes)
     )
 
@@ -40,7 +40,8 @@ class Clamp01(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output.clone()
 
-def multiwarp(img0, img1, multiflow, M):
+# Warp images with multiple groups of flow, and combine them into one group with flow group attention.
+def multiwarp(img0, img1, multiflow, multimask_score, M):
     warped_img0s = []
     warped_img1s = []
     # multiflow at dim=1: 
@@ -52,28 +53,23 @@ def multiwarp(img0, img1, multiflow, M):
         warped_img0s.append(warped_img0)
         warped_img1s.append(warped_img1)
 
-    return warped_img0s, warped_img1s
+    if M == 1:
+        return warped_img0s[0], warped_img1s[0]
 
-def multimerge(warped_img0s, warped_img1s, multimask_score, M):
     # warped_img0s, warped_img1s are two lists, each of length M.
+    # => [16, M, 3, 224, 224]
+    warped_img0s = torch.stack(warped_img0s, dim=1)
+    warped_img1s = torch.stack(warped_img1s, dim=1)
     # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
     # 1: mask, for the warp0-warp1 combination weight.
-    # mask: [16, 1, 224, 224]
-    mask = torch.sigmoid(multimask_score[:, [-1]])
-    if M == 1:
-        merged_img = warped_img0s[0] * mask + warped_img1s[0] * (1 - mask)
-    else:
-        # warped_img0s_ts, warped_img1s_ts: [16, M, 3, 224, 224]
-        warped_img0s_ts = torch.stack(warped_img0s, dim=1)
-        warped_img1s_ts = torch.stack(warped_img1s, dim=1)
-        # warp0_attn: [16, M, 1, 224, 224]
-        warp0_attn = torch.softmax(multimask_score[:, :M],    dim=1).unsqueeze(dim=2)
-        warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
-        # merged_img: [16, 3, 224, 224]
-        merged_img = (warp0_attn * warped_img0s_ts).sum(dim=1) * mask + \
-                     (warp1_attn * warped_img1s_ts).sum(dim=1) * (1 - mask)
-    
-    return merged_img
+    # warp0_attn: [16, M, 1, 224, 224]
+    assert multimask_score.shape[1] == 2*M+1
+    warp0_attn = torch.softmax(multimask_score[:, :M],    dim=1).unsqueeze(dim=2)
+    warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
+    warped_img0 = (warp0_attn * warped_img0s).sum(dim=1)
+    warped_img1 = (warp1_attn * warped_img1s).sum(dim=1)
+
+    return warped_img0, warped_img1
 
 # Use flow group attention to combine multiple flow groups into one.
 def multimerge_flow(multiflow, multimask_score, M):
@@ -283,11 +279,9 @@ class IFNet(nn.Module):
 
         multiflow_list = []
         flow_list = []
-        warped_img0s_list = []
-        warped_img1s_list = []
+        warped_imgs_list = []
         merged_img_list  = [None, None, None]
-        mask_score_list = []
-        multimask_score_list = []
+        mask_list = []
         warped_img0 = img0
         warped_img1 = img1
         multiflow = None 
@@ -312,14 +306,13 @@ class IFNet(nn.Module):
                 multiflow,   multimask_score   = stu_blocks[i](stu_input, None, scale=scale_list[i])
 
             mask_score = multimask_score[:, [-1]]
-            mask_score_list.append(mask_score)
-            multimask_score_list.append(multimask_score)
+            mask_list.append(torch.sigmoid(mask_score))
             multiflow_list.append(multiflow)
             flow, flow01, flow10 = multimerge_flow(multiflow, multimask_score, self.M)
             flow_list.append(flow)
-            warped_img0s, warped_img1s = multiwarp(img0, img1, multiflow, self.M)
-            warped_img0s_list.append(warped_img0s)
-            warped_img1s_list.append(warped_img1s)
+            warped_img0, warped_img1 = multiwarp(img0, img1, multiflow, multimask_score, self.M)
+            warped_imgs = (warped_img0, warped_img1)
+            warped_imgs_list.append(warped_imgs)
 
         if is_training:
             # teacher only works at the last scale, i.e., the full image.
@@ -346,8 +339,9 @@ class IFNet(nn.Module):
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
             # merged_img_list[i]: average of 1->2 and 2->1 warped images.
-            merged_img_list[i] = multimerge(warped_img0s_list[i], warped_img1s_list[i], 
-                                            multimask_score_list[i], self.M)
+            merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
+                                 warped_imgs_list[i][1] * (1 - mask_list[i])
+                                 
             if gt.shape[1] == 3:
                 # distil_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
@@ -378,4 +372,4 @@ class IFNet(nn.Module):
             merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
 
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_score_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
+        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
