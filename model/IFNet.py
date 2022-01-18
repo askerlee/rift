@@ -9,20 +9,37 @@ import torch.distributed as dist
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
-def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
-    return nn.Sequential(
-        torch.nn.ConvTranspose2d(in_channels=in_planes, out_channels=out_planes, kernel_size=4, stride=2, padding=1),
-        nn.BatchNorm2d(out_planes),
-        nn.PReLU(out_planes)
-    )
+def deconv_gen(do_BN=False):
+    if do_BN:
+        norm_layer = nn.BatchNorm2d
+    else:
+        norm_layer = nn.Identity
 
-def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
-    return nn.Sequential(
-        nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
-                  padding=padding, dilation=dilation, bias=True),
-        nn.BatchNorm2d(out_planes),
-        nn.PReLU(out_planes)
-    )
+    def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
+        return nn.Sequential(
+                    torch.nn.ConvTranspose2d(in_channels=in_planes, out_channels=out_planes, 
+                                            kernel_size=kernel_size, stride=stride, padding=padding),
+                    norm_layer(out_planes),
+                    nn.PReLU(out_planes)
+                )
+
+    return deconv
+
+def conv_gen(do_BN=False):
+    if do_BN:
+        norm_layer = nn.BatchNorm2d
+    else:
+        norm_layer = nn.Identity
+
+    def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
+        return nn.Sequential(
+                    nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
+                            padding=padding, dilation=dilation, bias=True),
+                    norm_layer(out_planes),
+                    nn.PReLU(out_planes)
+                )
+
+    return conv
 
 def debug():
     if local_rank == 0:
@@ -92,7 +109,7 @@ def multimerge_flow(multiflow, multimask_score, M):
     return flow, flow01, flow10
 
 class IFBlock(nn.Module):
-    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, apply_trans=False):
+    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, apply_trans=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.apply_trans = apply_trans
@@ -107,6 +124,8 @@ class IFBlock(nn.Module):
             # 2*M flow group attention, 1 mask weight to combine warp0 and warp1.
             out_chan_num = 6 * self.M + 1
         self.lastconv = nn.ConvTranspose2d(c, out_chan_num, 4, 2, 1)
+
+        conv = conv_gen(do_BN=do_BN)
 
         if not self.apply_trans:
             # downsample by 4x.
@@ -226,7 +245,7 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=1, trans_layer_indices=()):
+                 multi=1, do_BN=False, trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
         self.use_rife_settings = use_rife_settings
@@ -242,16 +261,16 @@ class IFNet(nn.Module):
 
         self.M = multi
         self.block0 =    IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
-                                 multi=self.M)
+                                 multi=self.M, do_BN=do_BN)
         self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
-                                 multi=self.M)
+                                 multi=self.M, do_BN=do_BN)
         self.block2 =    IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                 multi=self.M)
+                                 multi=self.M, do_BN=do_BN)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=1)
+                                 multi=1,      do_BN=do_BN)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()

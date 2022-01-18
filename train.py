@@ -179,6 +179,8 @@ if __name__ == "__main__":
                         help='Weight of the mask score residual connection')
     parser.add_argument('--multi', dest='multi', default=1, type=int, metavar='M', 
                         help='Output M groups of flow (default: 1, single group)')
+    parser.add_argument('--bn', dest='do_BN', action='store_true', 
+                        help='Use batchnorm between conv layers')
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -200,8 +202,10 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
+                  do_BN=args.do_BN,
                   trans_layer_indices=args.trans_layer_indices, 
                   conv_weight_decay=args.conv_weight_decay,
                   trans_weight_decay=args.trans_weight_decay)
+                  
     train(model, args.local_rank)
         
