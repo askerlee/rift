@@ -352,6 +352,7 @@ class IFNet(nn.Module):
             mask_score_tea = multimask_score_tea[:, [-1]]
             mask_tea = torch.sigmoid(mask_score_tea)
             merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
+            flow_tea, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.MT)
         else:
             flow_tea = None
             merged_tea = None
