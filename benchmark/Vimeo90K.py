@@ -34,7 +34,7 @@ print(f"Args:\n{args}")
 if args.use_old_model:
     model = Model(use_old_model=True)
     model.load_model('rife_checkpoint/flownet.pth')
-if args.paper:
+elif args.paper:
     model = Model(use_rife_settings=True)
     model.load_model('rife_checkpoint/flownet.pth')
 elif args.hd:
