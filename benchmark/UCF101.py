@@ -77,4 +77,4 @@ for i, d in enumerate(dirs):
     psnr_list.append(psnr)
     ssim_list.append(ssim)
     print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
-          i, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
+          i+1, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
