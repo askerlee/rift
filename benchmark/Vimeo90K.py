@@ -9,12 +9,15 @@ import numpy as np
 from torch.nn import functional as F
 from model.pytorch_msssim import ssim_matlab
 from model.RIFE import Model
+from model.IFNet_rife import IFNet_rife
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
                     help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
 parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
+parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
+                    help='Use the old model in the RIFE repo')
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
 parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
@@ -28,6 +31,9 @@ args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
 print(f"Args:\n{args}")
 
+if args.use_old_model:
+    model = Model(use_old_model=True)
+    model.load_model('rife_checkpoint/flownet.pth')
 if args.paper:
     model = Model(use_rife_settings=True)
     model.load_model('rife_checkpoint/flownet.pth')

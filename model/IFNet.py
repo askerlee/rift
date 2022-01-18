@@ -75,6 +75,7 @@ def multimerge(warped_img0s, warped_img1s, multimask_score, M):
     
     return merged_img
 
+# Use flow group attention to combine multiple flow groups into one.
 def multimerge_flow(multiflow, multimask_score, M):
     if M == 1:
         flow01, flow10 = multiflow[:, :2], multiflow[:, 2:4]
@@ -107,7 +108,7 @@ class IFBlock(nn.Module):
             out_chan_num = 5
         else:
             # when outputting multiple flows, 4*M are flow channels, 
-            # 2*M flow attention channels, 1 mask weight channel to combine warp0 and warp1.
+            # 2*M flow group attention, 1 mask weight to combine warp0 and warp1.
             out_chan_num = 6 * self.M + 1
         self.lastconv = nn.ConvTranspose2d(c, out_chan_num, 4, 2, 1)
 
@@ -221,7 +222,7 @@ class IFBlock(nn.Module):
         multiflow = scaled_output[:, : 4*self.M] * scale * 2
         # multimask_score: 
         # if M == 1, multimask_score has one channel, just as the original scheme.
-        # if M > 1, 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+        # if M > 1, 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow group attention scores, 
         # 1 for the warp0-warp1 combination weight.
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]

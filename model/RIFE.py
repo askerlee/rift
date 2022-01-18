@@ -8,6 +8,7 @@ from model.warplayer import warp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from model.IFNet import *
 from model.IFNet_m import *
+from model.IFNet_rife import IFNet_rife
 import torch.nn.functional as F
 from model.loss import *
 from model.laplacian import *
@@ -16,13 +17,15 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, arbitrary=False, lr=1e-6, grad_clip=-1, 
+    def __init__(self, local_rank=-1, use_old_model=False, lr=1e-6, grad_clip=-1, 
                  distill_loss_weight=0.01, use_rife_settings=False, 
                  mask_score_res_weight=-1, multi=1,
                  trans_layer_indices=(), 
                  conv_weight_decay=1e-3, trans_weight_decay=1e-5):
-        if arbitrary == True:
-            self.flownet = IFNet_m(use_rife_settings, mask_score_res_weight, multi, trans_layer_indices)
+        #if arbitrary == True:
+        #    self.flownet = IFNet_m(use_rife_settings, mask_score_res_weight, multi, trans_layer_indices)
+        if use_old_model:
+            self.flownet = IFNet_rife()
         else:
             self.flownet = IFNet(use_rife_settings, mask_score_res_weight, multi, trans_layer_indices)
         self.device()
