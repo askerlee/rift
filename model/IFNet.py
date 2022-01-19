@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.warplayer import warp
+from model.warp import warp
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
@@ -59,30 +59,37 @@ class Clamp01(torch.autograd.Function):
 
 # Warp images with multiple groups of flow, and combine them into one group with flow group attention.
 def multiwarp(img0, img1, multiflow, multimask_score, M):
-    warped_img0s = []
-    warped_img1s = []
+    warped_img0_list = []
+    warped_img1_list = []
+    multimask01_score_list = []
+    multimask10_score_list = []
     # multiflow at dim=1: 
     # flow01_1, flow01_2, ..., flow01_M, flow10_1, flow10_2, ..., flow10_M
     # Each block has 2 channels.
     for i in range(M):
         warped_img0 = warp(img0, multiflow[:, i*2 : i*2+2])
         warped_img1 = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
-        warped_img0s.append(warped_img0)
-        warped_img1s.append(warped_img1)
-
+        warped_img0_list.append(warped_img0)
+        warped_img1_list.append(warped_img1)
+        mask01_score = warp(multimask_score[:, i], multiflow[:, i*2 : i*2+2])
+        mask10_score = warp(multimask_score[:, i+M], multiflow[:, i*2+2*M : i*2+2*M+2])
+        multimask01_score_list.append(mask01_score)
+        multimask10_score_list.append(mask10_score)
     if M == 1:
-        return warped_img0s[0], warped_img1s[0]
+        return warped_img0_list[0], warped_img1_list[0]
 
-    # warped_img0s, warped_img1s are two lists, each of length M.
+    # warped_img0_list, warped_img1_list are two lists, each of length M.
     # => [16, M, 3, 224, 224]
-    warped_img0s = torch.stack(warped_img0s, dim=1)
-    warped_img1s = torch.stack(warped_img1s, dim=1)
+    warped_img0s = torch.stack(warped_img0_list, dim=1)
+    warped_img1s = torch.stack(warped_img1_list, dim=1)
     # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
     # 1: mask, for the warp0-warp1 combination weight.
     # warp0_attn: [16, M, 1, 224, 224]
     assert multimask_score.shape[1] == 2*M+1
-    warp0_attn = torch.softmax(multimask_score[:, :M],    dim=1).unsqueeze(dim=2)
-    warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
+    multimask01_score = torch.stack(multimask01_score_list, dim=1)
+    multimask10_score = torch.stack(multimask10_score_list, dim=1)
+    warp0_attn = torch.softmax(multimask01_score, dim=1).unsqueeze(dim=2)
+    warp1_attn = torch.softmax(multimask10_score, dim=1).unsqueeze(dim=2)
     warped_img0 = (warp0_attn * warped_img0s).sum(dim=1)
     warped_img1 = (warp1_attn * warped_img1s).sum(dim=1)
 
@@ -266,12 +273,12 @@ class IFNet(nn.Module):
         self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
                                  multi=self.M,  do_BN=do_BN)
         self.block2 =    IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                 multi=self.MT, do_BN=do_BN)
+                                 multi=self.M,  do_BN=do_BN)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.M, do_BN=do_BN)
+                                 multi=self.MT, do_BN=do_BN)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
