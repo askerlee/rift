@@ -258,7 +258,7 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=(1,1,1), do_BN=False, trans_layer_indices=()):
+                 multi=(16,4,4), do_BN=False, trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
         self.use_rife_settings = use_rife_settings

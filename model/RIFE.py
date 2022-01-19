@@ -20,7 +20,7 @@ class Model:
     def __init__(self, local_rank=-1, use_old_model=False, lr=1e-6, grad_clip=-1, 
                  distill_loss_weight=0.01, use_rife_settings=False, 
                  mask_score_res_weight=-1, 
-                 multi=(1,1,1), 
+                 multi=(16,4,4), 
                  do_BN=False,
                  trans_layer_indices=(), 
                  conv_weight_decay=1e-3, trans_weight_decay=1e-5):
