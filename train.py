@@ -186,6 +186,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
+    args.multi = [ int(m) for m in args.multi.split(",") ]
 
     args.local_rank = local_rank
     if args.local_rank == 0:
@@ -204,7 +205,6 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
-                  do_squeezed_multi=args.do_squeezed_multi,
                   do_BN=args.do_BN,
                   trans_layer_indices=args.trans_layer_indices, 
                   conv_weight_decay=args.conv_weight_decay,

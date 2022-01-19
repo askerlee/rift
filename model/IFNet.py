@@ -258,7 +258,7 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=1, do_squeezed_multi=True, do_BN=False, trans_layer_indices=()):
+                 multi=(1,1,1), do_BN=False, trans_layer_indices=()):
         super(IFNet, self).__init__()
         self.trans_layer_indices = trans_layer_indices
         self.use_rife_settings = use_rife_settings
@@ -272,11 +272,7 @@ class IFNet(nn.Module):
             else:
                 self.mask_score_res_weight = 0
 
-        self.M = multi
-        if do_squeezed_multi:
-            self.Ms = [ multi, multi, multi ]
-        else:
-            self.Ms = [ multi, max(multi // 2, 1), max(multi // 4, 1) ]
+        self.Ms = multi
         self.block0 =    IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
                                  multi=self.Ms[0],  do_BN=do_BN)
         self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  

@@ -23,8 +23,8 @@ parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from t
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                     help='Weight of the mask score residual connection')
-parser.add_argument('--multi', dest='multi', default=1, type=int, metavar='M', 
-                    help='Output M groups of flow (default: 1, single group)')
+parser.add_argument('--multi', dest='multi', default="16,4,4", type=str, metavar='M', 
+                    help='Output M groups of flow')   
 parser.add_argument('--nosqueeze', dest='do_squeezed_multi', action='store_false', 
                     help='Do not squeeze multi groups of flow')                    
 parser.add_argument('--bn', dest='do_BN', action='store_true', 
@@ -32,6 +32,8 @@ parser.add_argument('--bn', dest='do_BN', action='store_true',
 
 args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
+args.multi = [ int(m) for m in args.multi.split(",") ]
+
 print(f"Args:\n{args}")
 
 if args.use_old_model:
@@ -51,8 +53,7 @@ elif args.hd:
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
                   mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, do_squeezed_multi=args.do_squeezed_multi,
-                  do_BN=args.do_BN,
+                  multi=args.multi, do_BN=args.do_BN,
                   trans_layer_indices=args.trans_layer_indices)
     model.load_model(args.cp)
 
