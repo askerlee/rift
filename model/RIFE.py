@@ -30,7 +30,7 @@ class Model:
             self.flownet = IFNet_rife()
         else:
             self.flownet = IFNet(use_rife_settings, mask_score_res_weight, 
-                                 multi, do_squeezed_multi, do_BN, trans_layer_indices)
+                                 multi, do_BN, trans_layer_indices)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
