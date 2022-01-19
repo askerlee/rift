@@ -26,6 +26,8 @@ parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1,
                     help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default=1, type=int, metavar='M', 
                     help='Output M groups of flow (default: 1, single group)')
+parser.add_argument('--nosqueeze', dest='do_squeezed_multi', action='store_false', 
+                    help='Do not squeeze multi groups of flow')                    
 parser.add_argument('--bn', dest='do_BN', action='store_true', 
                     help='Use batchnorm between conv layers')
 
@@ -50,7 +52,8 @@ elif args.hd:
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
                   mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, do_BN=args.do_BN,
+                  multi=args.multi, do_squeezed_multi=args.do_squeezed_multi,
+                  do_BN=args.do_BN,
                   trans_layer_indices=args.trans_layer_indices)
     model.load_model(args.cp)
 

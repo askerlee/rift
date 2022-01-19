@@ -177,8 +177,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
-    parser.add_argument('--multi', dest='multi', default=1, type=int, metavar='M', 
-                        help='Output M groups of flow (default: 1, single group)')
+    parser.add_argument('--multi', dest='multi', default=8, type=int, metavar='M', 
+                        help='Output M groups of flow (default: 8, single group)')
+    parser.add_argument('--nosqueeze', dest='do_squeezed_multi', action='store_false', 
+                        help='Do not squeeze multi groups of flow')
     parser.add_argument('--bn', dest='do_BN', action='store_true', 
                         help='Use batchnorm between conv layers. BN reduces performance.')
 
@@ -202,6 +204,7 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
+                  do_squeezed_multi=args.do_squeezed_multi,
                   do_BN=args.do_BN,
                   trans_layer_indices=args.trans_layer_indices, 
                   conv_weight_decay=args.conv_weight_decay,
