@@ -71,8 +71,12 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
         warped_img1 = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
         warped_img0_list.append(warped_img0)
         warped_img1_list.append(warped_img1)
-        mask01_score = warp(multimask_score[:, i], multiflow[:, i*2 : i*2+2])
-        mask10_score = warp(multimask_score[:, i+M], multiflow[:, i*2+2*M : i*2+2*M+2])
+        # Warp the mask scores. The scores are generated mostly based on
+        # unwarped images, and there's misalignment between warped images and unwarped 
+        # scores. Therefore, we need to warp the mask scores as well.
+        # But doing so only leads to very slight improvement (~0.02 psnr).
+        mask01_score = warp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
+        mask10_score = warp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
         multimask01_score_list.append(mask01_score)
         multimask10_score_list.append(mask10_score)
     if M == 1:
@@ -88,8 +92,8 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     assert multimask_score.shape[1] == 2*M+1
     multimask01_score = torch.stack(multimask01_score_list, dim=1)
     multimask10_score = torch.stack(multimask10_score_list, dim=1)
-    warp0_attn = torch.softmax(multimask01_score, dim=1).unsqueeze(dim=2)
-    warp1_attn = torch.softmax(multimask10_score, dim=1).unsqueeze(dim=2)
+    warp0_attn = torch.softmax(multimask01_score, dim=1)
+    warp1_attn = torch.softmax(multimask10_score, dim=1)
     warped_img0 = (warp0_attn * warped_img0s).sum(dim=1)
     warped_img1 = (warp1_attn * warped_img1s).sum(dim=1)
 
@@ -106,7 +110,8 @@ def multimerge_flow(multiflow, multimask_score, M):
         # multiflow01, multiflow10: [16, M, 2, 224, 224]
         multiflow01 = multiflow[:, :M*2].reshape(newshape)
         multiflow10 = multiflow[:, M*2:].reshape(newshape)
-        # warp0_attn: [16, M, 1, 224, 224]
+        # warp0_attn, warp1_attn: [16, M, 1, 224, 224]
+        # multiflow is unwarped, so we don't need to warp the mask scores.
         warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
         warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
         # flow01, flow10: [16, 2, 224, 224]
@@ -337,7 +342,8 @@ class IFNet(nn.Module):
             multiflow_list.append(multiflow)
             flow, flow01, flow10 = multimerge_flow(multiflow, multimask_score, self.M)
             flow_list.append(flow)
-            warped_img0, warped_img1 = multiwarp(img0, img1, multiflow, multimask_score, self.M)
+            warped_img0, warped_img1 = \
+                multiwarp(img0, img1, multiflow, multimask_score, self.M)
             warped_imgs = (warped_img0, warped_img1)
             warped_imgs_list.append(warped_imgs)
 
@@ -355,7 +361,8 @@ class IFNet(nn.Module):
             multiflow_d, multimask_score_d = self.block_tea(tea_input, flow, scale=1)
             multiflow_tea = multiflow + multiflow_d
             multimask_score_tea = multimask_score_d + multimask_score * self.mask_score_res_weight
-            warped_img0_tea, warped_img1_tea = multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.MT)        
+            warped_img0_tea, warped_img1_tea = \
+                multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.MT)
             mask_score_tea = multimask_score_tea[:, [-1]]
             mask_tea = torch.sigmoid(mask_score_tea)
             merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
