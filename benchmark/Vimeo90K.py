@@ -58,9 +58,12 @@ model.eval()
 model.device()
 
 path = 'vimeo_triplet/'
-f = open(path + 'tri_testlist.txt', 'r')
+testlist_path = path + 'tri_testlist.txt'
+f = open(testlist_path, 'r')
 psnr_list = []
 ssim_list = []
+total_triplets = sum(1 for line in open(testlist_path, 'r'))
+
 for i, line in enumerate(f):
     if args.count > 0 and i == args.count:
         break
@@ -81,5 +84,5 @@ for i, line in enumerate(f):
     psnr = -10 * math.log10(((I1 - mid) * (I1 - mid)).mean())
     psnr_list.append(psnr)
     ssim_list.append(ssim)
-    print("PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
-          psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
+    print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
+          i+1, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
