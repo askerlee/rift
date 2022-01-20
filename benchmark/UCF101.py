@@ -21,7 +21,7 @@ parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from t
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                     help='Weight of the mask score residual connection')
-parser.add_argument('--multi', dest='multi', default="16,4,4", type=str, metavar='M', 
+parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                      
 parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true', 
                     help='Separately extract base features of images 0 and 1.')
