@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.warp import warp
+from model.warp import multiwarp, multimerge_flow
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
@@ -56,70 +56,6 @@ class Clamp01(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         return grad_output.clone()
-
-# Warp images with multiple groups of flow, and combine them into one group with flow group attention.
-def multiwarp(img0, img1, multiflow, multimask_score, M):
-    img0_warped_list = []
-    img1_warped_list = []
-    multimask01_score_list = []
-    multimask10_score_list = []
-    # multiflow at dim=1: 
-    # flow01_1, flow01_2, ..., flow01_M, flow10_1, flow10_2, ..., flow10_M
-    # Each block has 2 channels.
-    for i in range(M):
-        img0_warped = warp(img0, multiflow[:, i*2 : i*2+2])
-        img1_warped = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
-        img0_warped_list.append(img0_warped)
-        img1_warped_list.append(img1_warped)
-        # Warp the mask scores. The scores are generated mostly based on
-        # unwarped images, and there's misalignment between warped images and unwarped 
-        # scores. Therefore, we need to warp the mask scores as well.
-        # But doing so only leads to very slight improvement (~0.02 psnr).
-        mask01_score_warped = warp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
-        mask10_score_warped = warp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
-        multimask01_score_list.append(mask01_score_warped)
-        multimask10_score_list.append(mask10_score_warped)
-    if M == 1:
-        return img0_warped_list[0], img1_warped_list[0]
-
-    # img0_warped_list, img1_warped_list are two lists, each of length M.
-    # => [16, M, 3, 224, 224]
-    warped_img0s = torch.stack(img0_warped_list, dim=1)
-    warped_img1s = torch.stack(img1_warped_list, dim=1)
-    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
-    # 1: mask, for the warp0-warp1 combination weight.
-    # warp0_attn: [16, M, 1, 224, 224]
-    assert multimask_score.shape[1] == 2*M+1
-    multimask01_score = torch.stack(multimask01_score_list, dim=1)
-    multimask10_score = torch.stack(multimask10_score_list, dim=1)
-    warp0_attn = torch.softmax(multimask01_score, dim=1)
-    warp1_attn = torch.softmax(multimask10_score, dim=1)
-    img0_warped = (warp0_attn * warped_img0s).sum(dim=1)
-    img1_warped = (warp1_attn * warped_img1s).sum(dim=1)
-
-    return img0_warped, img1_warped
-
-# Use flow group attention to combine multiple flow groups into one.
-def multimerge_flow(multiflow, multimask_score, M):
-    if M == 1:
-        flow01, flow10 = multiflow[:, :2], multiflow[:, 2:4]
-        flow = multiflow
-    else:
-        # multiflow: [16, 4*M, 224, 224]
-        newshape = list(multiflow.shape)
-        newshape[1:2] = [M, 2]
-        # multiflow01, multiflow10: [16, M, 2, 224, 224]
-        multiflow01 = multiflow[:, :M*2].reshape(newshape)
-        multiflow10 = multiflow[:, M*2:].reshape(newshape)
-        # warp0_attn, warp1_attn: [16, M, 1, 224, 224]
-        # multiflow is unwarped, so we don't need to warp the mask scores.
-        warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
-        warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
-        # flow01, flow10: [16, 2, 224, 224]
-        flow01 = (warp0_attn * multiflow01).sum(dim=1)
-        flow10 = (warp1_attn * multiflow10).sum(dim=1)
-        flow = torch.cat([flow01, flow10], dim=1)
-    return flow, flow01, flow10
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
@@ -205,13 +141,14 @@ class IFBlock(nn.Module):
             # That is, input size / scale / 4. 
         else:
             img01 = x[:, 0:self.img_chans*2]
-            # Tuck the channels of the two images into the batch dimension,
+            # Pack the channels of the two images into the batch dimension,
             # so that the channel number is the same as one image.
+            # This makes the feature extraction of the two images slightly faster (hopefully).
             img01_bpack_shape = list(img01.shape)
             img01_bpack_shape[0:2] = [ img01_bpack_shape[0]*2, self.img_chans ]
             img01_bpack = img01.reshape(img01_bpack_shape)
             x01 = self.conv_img(img01_bpack)
-            # Flatten the two images in the batch dimension into the channel dimension.
+            # Unpack the two images in the batch dimension into the channel dimension.
             x01_bunpack_shape = list(x01.shape)
             x01_bunpack_shape[0:2] = [ x01_bunpack_shape[0]//2, x01_bunpack_shape[1]*2 ]
             x01_bunpack = x01.reshape(x01_bunpack_shape)
@@ -394,6 +331,8 @@ class IFNet(nn.Module):
                 # loss_distill is the sum of the distillation losses at 3 different scales.
                 loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
 
+        # contextnet generates warped features of the input image. 
+        # flow01/flow10 is not used as input to generate the features, but to warp the features.
         c0 = self.contextnet(img0, flow01)
         c1 = self.contextnet(img1, flow10)
         tmp = self.unet(img0, img1, img0_warped, img1_warped, mask_score, flow, c0, c1)

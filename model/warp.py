@@ -21,3 +21,79 @@ def warp(tenInput, tenFlow):
 
     g = (backwarp_tenGrid[k] + tenFlow).permute(0, 2, 3, 1)
     return torch.nn.functional.grid_sample(input=tenInput, grid=g, mode='bilinear', padding_mode='border', align_corners=True)
+
+
+# Warp images with multiple groups of flow, and combine them into one group with flow group attention.
+def multiwarp(img0, img1, multiflow, multimask_score, M):
+    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+    # 1: mask, for the warp0-warp1 combination weight.
+    assert multimask_score.shape[1] == 2*M+1
+
+    img0_warped_list = []
+    img1_warped_list = []
+    multimask01_score_list = []
+    multimask10_score_list = []
+    # multiflow at dim=1: 
+    # flow01_1, flow01_2, ..., flow01_M, flow10_1, flow10_2, ..., flow10_M
+    # Each block has 2 channels.
+    for i in range(M):
+        img0_warped = warp(img0, multiflow[:, i*2 : i*2+2])
+        img0_warped_list.append(img0_warped)
+        # Warp the mask scores. The scores are generated mostly based on
+        # unwarped images, and there's misalignment between warped images and unwarped 
+        # scores. Therefore, we need to warp the mask scores as well.
+        # But doing so only leads to very slight improvement (~0.02 psnr).
+        mask01_score_warped = warp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
+        multimask01_score_list.append(mask01_score_warped)
+
+        if img1 is not None:
+            img1_warped = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
+            img1_warped_list.append(img1_warped)
+            mask10_score_warped = warp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
+            multimask10_score_list.append(mask10_score_warped)
+        else:
+            # placeholder.
+            multimask10_score_list.append(None)
+
+    if M == 1:
+        return img0_warped_list[0], img1_warped_list[0]
+
+    # img0_warped_list, img1_warped_list are two lists, each of length M.
+    # => [16, M, 3, 224, 224]
+    warped_img0s        = torch.stack(img0_warped_list, dim=1)
+    multimask01_score   = torch.stack(multimask01_score_list, dim=1)
+    # warp0_attn: [16, M, 1, 224, 224]
+    warp0_attn  = torch.softmax(multimask01_score, dim=1)
+    img0_warped = (warp0_attn * warped_img0s).sum(dim=1)
+
+    if img1 is not None:
+        warped_img1s        = torch.stack(img1_warped_list, dim=1)
+        multimask10_score   = torch.stack(multimask10_score_list, dim=1)
+        warp1_attn  = torch.softmax(multimask10_score, dim=1)
+        img1_warped = (warp1_attn * warped_img1s).sum(dim=1)
+    else:
+        img1_warped = None
+
+    return img0_warped, img1_warped
+
+# Use flow group attention to combine multiple flow groups into one.
+def multimerge_flow(multiflow, multimask_score, M):
+    if M == 1:
+        flow01, flow10 = multiflow[:, :2], multiflow[:, 2:4]
+        flow = multiflow
+    else:
+        # multiflow: [16, 4*M, 224, 224]
+        newshape = list(multiflow.shape)
+        newshape[1:2] = [M, 2]
+        # multiflow01, multiflow10: [16, M, 2, 224, 224]
+        multiflow01 = multiflow[:, :M*2].reshape(newshape)
+        multiflow10 = multiflow[:, M*2:].reshape(newshape)
+        # warp0_attn, warp1_attn: [16, M, 1, 224, 224]
+        # multiflow is unwarped, so we don't need to warp the mask scores.
+        warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
+        warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
+        # flow01, flow10: [16, 2, 224, 224]
+        flow01 = (warp0_attn * multiflow01).sum(dim=1)
+        flow10 = (warp1_attn * multiflow10).sum(dim=1)
+        flow = torch.cat([flow01, flow10], dim=1)
+    return flow, flow01, flow10

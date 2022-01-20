@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.optim as optim
 import itertools
-from model.warp import warp
+from model.warp import multiwarp, multimerge_flow
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,36 +34,37 @@ class Conv2(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         return x
-    
-c = 16
+
+# Contextnet generates warped features of the input image. 
+# flow is not used as input to generate the features, but to warp the features.
 class Contextnet(nn.Module):
-    def __init__(self):
+    def __init__(self, c=16):
         super(Contextnet, self).__init__()
         self.conv1 = Conv2(3, c)
         self.conv2 = Conv2(c, 2*c)
         self.conv3 = Conv2(2*c, 4*c)
         self.conv4 = Conv2(4*c, 8*c)
     
-    def forward(self, x, flow):
+    def forward(self, x, multiflow, multimask_score, M):
         x = self.conv1(x)
-        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1 = warp(x, flow)        
+        multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f1, _ = multiwarp(x, multiflow, multimask_score, M)        
         x = self.conv2(x)
-        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f2 = warp(x, flow)
+        multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f2, _ = multiwarp(x, multiflow, multimask_score, M)
         x = self.conv3(x)
-        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f3 = warp(x, flow)
+        multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f3, _ = multiwarp(x, multiflow, multimask_score, M)
         x = self.conv4(x)
-        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f4 = warp(x, flow)
+        multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f4, _ = multiwarp(x, multiflow, multimask_score, M)
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         return [f1, f2, f3, f4]
 
 # Unet: 17 channels of input, 3 channels of output.
 class Unet(nn.Module):
-    def __init__(self):
+    def __init__(self, c=16):
         super(Unet, self).__init__()
         self.down0 = Conv2(17, 2*c)
         self.down1 = Conv2(4*c, 4*c)
