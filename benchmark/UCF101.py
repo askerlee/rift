@@ -12,8 +12,6 @@ from model.RIFE import Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
-                    help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
 parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
 parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
                     help='Use the old model in the RIFE repo')
@@ -25,8 +23,8 @@ parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1,
                     help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default="16,4,4", type=str, metavar='M', 
                     help='Output M groups of flow')                      
-parser.add_argument('--bn', dest='do_BN', action='store_true', 
-                    help='Use batchnorm between conv layers')
+parser.add_argument('--sepext', dest='sep_ext_01', action='store_true', 
+                    help='Separately extract base features of images 0 and 1.')
 
 args = parser.parse_args()
 args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
@@ -51,8 +49,7 @@ elif args.hd:
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
                   mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, do_BN=args.do_BN,
-                  trans_layer_indices=args.trans_layer_indices)
+                  multi=args.multi, sep_ext_01=args.sep_ext_01)
     model.load_model(args.cp)
 
 model.eval()

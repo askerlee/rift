@@ -24,8 +24,8 @@ if local_rank == 0:
     if not os.path.isdir(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-def get_learning_rate(step):
-    M = 3e-4 # old: 3e-4
+def get_learning_rate(init_ir, step):
+    M = init_ir # default: 3e-4
     # warmup. 0 -> 0.0001
     if step < 2000:
         mul = step / 2000.
@@ -45,7 +45,7 @@ def flow2rgb(flow_map_np):
     rgb_map[:, :, 2] += normalized_flow_map[:, :, 1]
     return rgb_map.clip(0, 1)
 
-def train(model, local_rank):
+def train(model, local_rank, init_lr):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -72,7 +72,7 @@ def train(model, local_rank):
             data_gpu = data.to(device, non_blocking=True) / 255.
             imgs = data_gpu[:, :6]
             gt = data_gpu[:, 6:9]
-            learning_rate = get_learning_rate(step)
+            learning_rate = get_learning_rate(init_lr, step)
             pred, info = model.update(imgs, gt, learning_rate, training=True)
             train_time_interval = time.time() - time_stamp
             time_stamp = time.time()
@@ -164,26 +164,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
-    parser.add_argument('--trans', dest='trans_layer_indices', default="-1", type=str, 
-                        help='Which IFBlock to apply transformer (default: "-1", not to use transformer in any blocks)')
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
-    parser.add_argument('--tdecay', dest='trans_weight_decay', type=float, default=1e-3,
-                        help='weight decay for transformer layers (default: 1e-5)')
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
     parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
     parser.add_argument('--clip', default=0.1, type=float,
-                        metavar='C', help='gradient clip to C (default: -1, disabled)')
+                        metavar='C', help='gradient clip to C (Set to -1 to disable)')
+    parser.add_argument('--lr', default=3e-4, type=float)
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')      
-    parser.add_argument('--bn', dest='do_BN', action='store_true', 
-                        help='Use batchnorm between conv layers. BN reduces performance.')
+    parser.add_argument('--sepext', dest='sep_ext_01', action='store_true', 
+                        help='Separately extract base features of images 0 and 1.')
 
     args = parser.parse_args()
-    args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
     args.multi = [ int(m) for m in args.multi.split(",") ]
 
     args.local_rank = local_rank
@@ -203,10 +199,8 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
-                  do_BN=args.do_BN,
-                  trans_layer_indices=args.trans_layer_indices, 
-                  conv_weight_decay=args.conv_weight_decay,
-                  trans_weight_decay=args.trans_weight_decay)
+                  sep_ext_01=args.sep_ext_01,
+                  conv_weight_decay=args.conv_weight_decay)
 
-    train(model, args.local_rank)
+    train(model, args.local_rank, args.lr)
         

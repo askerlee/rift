@@ -122,10 +122,11 @@ def multimerge_flow(multiflow, multimask_score, M):
     return flow, flow01, flow10
 
 class IFBlock(nn.Module):
-    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, apply_trans=False):
+    # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
+    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, sep_ext_01=False):
         super(IFBlock, self).__init__()
         self.name = name
-        self.apply_trans = apply_trans
+        self.sep_ext_01 = sep_ext_01
         self.img_chans   = img_chans
         # M, multi: How many copies of flow/mask are generated?
         self.M = multi
@@ -140,7 +141,7 @@ class IFBlock(nn.Module):
 
         conv = conv_gen(do_BN=do_BN)
 
-        if not self.apply_trans:
+        if not self.sep_ext_01:
             # downsample by 4x.
             self.conv0 = nn.Sequential(
                             conv(in_planes, c//2, 3, 2, 1),
@@ -186,29 +187,6 @@ class IFBlock(nn.Module):
                                 conv(c, c),
                              )
 
-            self.trans_config = SETransConfig()
-            self.trans_config.in_feat_dim = c//2
-            self.trans_config.feat_dim    = c//2
-            # f2trans(x) = attn_aggregate(v(x)) + x. Here attn_aggregate and v (first_linear) both have 4 modes.
-            self.trans_config.has_input_skip = True
-            # No FFN. f2trans simply aggregates similar features.
-            # has_FFN reduces performance.
-            self.trans_config.has_FFN = False
-            # When doing feature aggregation, set attn_mask_radius > 0 to exclude points that are too far apart, to reduce noises.
-            # E.g., 64 corresponds to 64*8=512 pixels in the image space.
-            self.trans_config.attn_mask_radius = -1
-            # Not tying QK performs slightly better.
-            self.trans_config.tie_qk_scheme = 'none'
-            self.trans_config.qk_have_bias  = False
-            self.trans_config.out_attn_probs_only   = False
-            self.trans_config.attn_diag_cycles  = 1000
-            self.trans_config.num_modes         = 4
-            self.trans_config.pos_code_type     = 'bias'
-            self.trans_config.pos_bias_radius   = 7
-            self.trans_config.pos_code_weight   = 1.0
-            self.trans = SelfAttVisPosTrans(self.trans_config, f"{self.name} transformer")
-            print0("trans config:\n{}".format(self.trans_config.__dict__))
-
     def forward(self, x, flow, scale):
         # resize x to input size / scale.
         if scale != 1:
@@ -218,7 +196,7 @@ class IFBlock(nn.Module):
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
 
-        if not self.apply_trans:
+        if not self.sep_ext_01:
             # conv0: 2 layers of conv, kernel size 3.
             x = self.conv0(x)
             # x: [1, 240, 14, 14] in 'block0'.
@@ -230,9 +208,7 @@ class IFBlock(nn.Module):
             img1 = x[:, self.img_chans:self.img_chans*2]
             nonimg = x[:, self.img_chans*2:]
             x0 = self.conv_img(img0)
-            # if apply_trans, trans is a transformer layer with a skip connection: 
-            # x' = w*trans(conv_img(img1)) + (1-w) * conv_img(img1). w is a learnable weight.
-            x1 = self.trans(self.conv_img(img1))
+            x1 = self.conv_img(img1)
             if self.nonimg_chans > 0:
                 x_nonimg = self.conv_nonimg(nonimg)
                 x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
@@ -258,9 +234,9 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=(16,4,4), do_BN=False, trans_layer_indices=()):
+                 multi=(16,4,4), sep_ext_01=False):
         super(IFNet, self).__init__()
-        self.trans_layer_indices = trans_layer_indices
+        self.sep_ext_01 = sep_ext_01
         self.use_rife_settings = use_rife_settings
         if self.use_rife_settings:
             block_widths = [240, 150, 90]
@@ -273,17 +249,17 @@ class IFNet(nn.Module):
                 self.mask_score_res_weight = 0
 
         self.Ms = multi
-        self.block0 =    IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
-                                 multi=self.Ms[0],  do_BN=do_BN)
-        self.block1 =    IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
-                                 multi=self.Ms[1],  do_BN=do_BN)
-        self.block2 =    IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                 multi=self.Ms[2],  do_BN=do_BN)
+        self.block0 =   IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
+                                multi=self.Ms[0],  sep_ext_01=sep_ext_01)
+        self.block1 =   IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
+                                multi=self.Ms[1],  sep_ext_01=sep_ext_01)
+        self.block2 =   IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
+                                multi=self.Ms[2],  sep_ext_01=sep_ext_01)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.Ms[2], do_BN=do_BN)
+                                 multi=self.Ms[2], sep_ext_01=sep_ext_01)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()

@@ -17,20 +17,19 @@ from model.refine import *
 device = torch.device("cuda")
     
 class Model:
-    def __init__(self, local_rank=-1, use_old_model=False, lr=1e-6, grad_clip=-1, 
+    def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
                  distill_loss_weight=0.01, use_rife_settings=False, 
                  mask_score_res_weight=-1, 
-                 multi=(16,4,4), 
-                 do_BN=False,
-                 trans_layer_indices=(), 
-                 conv_weight_decay=1e-3, trans_weight_decay=1e-5):
+                 multi=(8,8,4), 
+                 sep_ext_01=False, 
+                 conv_weight_decay=1e-3):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
             self.flownet = IFNet(use_rife_settings, mask_score_res_weight, 
-                                 multi, do_BN, trans_layer_indices)
+                                 multi, sep_ext_01)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
@@ -41,11 +40,9 @@ class Model:
                 conv_param_groups.append(param)
 
         # Use a large weight decay may avoid NaN loss, but reduces transformer performance.
-        # lr here doesn't really matter. Will be overwritten in update(), 
+        # lr here is just a placeholder. Will be overwritten in update(), 
         # where the actual LR is obtained from train.py:get_learning_rate().
-        self.optimG = AdamW( [ { 'params': conv_param_groups,  'lr': lr, 'weight_decay': conv_weight_decay  }, 
-                               { 'params': trans_param_groups, 'lr': lr, 'weight_decay': trans_weight_decay } 
-                             ] )
+        self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=conv_weight_decay)
 
         self.epe = EPE()
         self.lap = LapLoss()
