@@ -204,16 +204,23 @@ class IFBlock(nn.Module):
             #    [1, 90,  56, 56] in 'block2'.
             # That is, input size / scale / 4. 
         else:
-            img0 = x[:, 0:self.img_chans]
-            img1 = x[:, self.img_chans:self.img_chans*2]
-            nonimg = x[:, self.img_chans*2:]
-            x0 = self.conv_img(img0)
-            x1 = self.conv_img(img1)
+            img01 = x[:, 0:self.img_chans*2]
+            # Tuck the channels of the two images into the batch dimension,
+            # so that the channel number is the same as one image.
+            img01_bpack_shape = list(img01.shape)
+            img01_bpack_shape[0:2] = [ img01_bpack_shape[0]*2, self.img_chans ]
+            img01_bpack = img01.reshape(img01_bpack_shape)
+            x01 = self.conv_img(img01_bpack)
+            # Flatten the two images in the batch dimension into the channel dimension.
+            x01_bunpack_shape = list(x01.shape)
+            x01_bunpack_shape[0:2] = [ x01_bunpack_shape[0]//2, x01_bunpack_shape[1]*2 ]
+            x01_bunpack = x01.reshape(x01_bunpack_shape)
             if self.nonimg_chans > 0:
+                nonimg = x[:, 2*self.img_chans:]
                 x_nonimg = self.conv_nonimg(nonimg)
-                x  = self.conv_bridge(torch.cat((x0, x1, x_nonimg), 1))
+                x  = self.conv_bridge(torch.cat((x01_bunpack, x_nonimg), 1))
             else:
-                x  = self.conv_bridge(torch.cat((x0, x1), 1))
+                x  = self.conv_bridge(x01_bunpack)
                 
         # convblock: 8 layers of conv, kernel size 3.
         x = self.convblock(x) + x
