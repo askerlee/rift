@@ -51,7 +51,9 @@ elif args.hd:
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
                   mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, sepfeat01=args.sepfeat01)
+                  multi=args.multi, 
+                  mixfeat01=args.mixfeat01,
+                  ctx_use_merged_flow=args.ctx_use_merged_flow)
     model.load_model(args.cp)
 
 model.eval()
