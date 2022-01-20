@@ -24,7 +24,7 @@ parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1,
                     help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default="16,4,4", type=str, metavar='M', 
                     help='Output M groups of flow')                 
-parser.add_argument('--sepext', dest='sep_ext_01', action='store_true', 
+parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true', 
                     help='Separately extract base features of images 0 and 1.')
 
 args = parser.parse_args()
@@ -50,7 +50,7 @@ elif args.hd:
 else:
     model = Model(use_rife_settings=args.use_rife_settings, 
                   mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, sep_ext_01=args.sep_ext_01)
+                  multi=args.multi, sepfeat01=args.sepfeat01)
     model.load_model(args.cp)
 
 model.eval()

@@ -176,7 +176,7 @@ if __name__ == "__main__":
                         help='Weight of the mask score residual connection')
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')      
-    parser.add_argument('--sepext', dest='sep_ext_01', action='store_true', 
+    parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true', 
                         help='Separately extract base features of images 0 and 1.')
 
     args = parser.parse_args()
@@ -199,7 +199,7 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
-                  sep_ext_01=args.sep_ext_01,
+                  sepfeat01=args.sepfeat01,
                   conv_weight_decay=args.conv_weight_decay)
 
     train(model, args.local_rank, args.lr)

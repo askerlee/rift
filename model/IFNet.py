@@ -123,10 +123,10 @@ def multimerge_flow(multiflow, multimask_score, M):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, sep_ext_01=False):
+    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, sepfeat01=False):
         super(IFBlock, self).__init__()
         self.name = name
-        self.sep_ext_01 = sep_ext_01
+        self.sepfeat01 = sepfeat01
         self.img_chans   = img_chans
         # M, multi: How many copies of flow/mask are generated?
         self.M = multi
@@ -141,7 +141,7 @@ class IFBlock(nn.Module):
 
         conv = conv_gen(do_BN=do_BN)
 
-        if not self.sep_ext_01:
+        if not self.sepfeat01:
             # downsample by 4x.
             self.conv0 = nn.Sequential(
                             conv(in_planes, c//2, 3, 2, 1),
@@ -196,7 +196,7 @@ class IFBlock(nn.Module):
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
 
-        if not self.sep_ext_01:
+        if not self.sepfeat01:
             # conv0: 2 layers of conv, kernel size 3.
             x = self.conv0(x)
             # x: [1, 240, 14, 14] in 'block0'.
@@ -234,9 +234,9 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=(16,4,4), sep_ext_01=False):
+                 multi=(16,4,4), sepfeat01=False):
         super(IFNet, self).__init__()
-        self.sep_ext_01 = sep_ext_01
+        self.sepfeat01 = sepfeat01
         self.use_rife_settings = use_rife_settings
         if self.use_rife_settings:
             block_widths = [240, 150, 90]
@@ -250,16 +250,16 @@ class IFNet(nn.Module):
 
         self.Ms = multi
         self.block0 =   IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
-                                multi=self.Ms[0],  sep_ext_01=sep_ext_01)
+                                multi=self.Ms[0],  sepfeat01=sepfeat01)
         self.block1 =   IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
-                                multi=self.Ms[1],  sep_ext_01=sep_ext_01)
+                                multi=self.Ms[1],  sepfeat01=sepfeat01)
         self.block2 =   IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                multi=self.Ms[2],  sep_ext_01=sep_ext_01)
+                                multi=self.Ms[2],  sepfeat01=sepfeat01)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.Ms[2], sep_ext_01=sep_ext_01)
+                                 multi=self.Ms[2], sepfeat01=sepfeat01)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()

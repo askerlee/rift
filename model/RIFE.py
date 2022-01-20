@@ -21,7 +21,7 @@ class Model:
                  distill_loss_weight=0.01, use_rife_settings=False, 
                  mask_score_res_weight=-1, 
                  multi=(8,8,4), 
-                 sep_ext_01=False, 
+                 sepfeat01=False, 
                  conv_weight_decay=1e-3):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
@@ -29,7 +29,7 @@ class Model:
             self.flownet = IFNet_rife()
         else:
             self.flownet = IFNet(use_rife_settings, mask_score_res_weight, 
-                                 multi, sep_ext_01)
+                                 multi, sepfeat01)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
