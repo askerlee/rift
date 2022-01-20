@@ -79,7 +79,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
 # Use flow group attention to combine multiple flow groups into one.
 def multimerge_flow(multiflow, multimask_score, M):
     if M == 1:
-        flow01, flow10 = multiflow[:, :2], multiflow[:, 2:4]
+        multiflow01, multiflow10 = multiflow[:, :2], multiflow[:, 2:4]
         flow = multiflow
     else:
         # multiflow: [16, 4*M, 224, 224]
@@ -96,4 +96,4 @@ def multimerge_flow(multiflow, multimask_score, M):
         flow01 = (warp0_attn * multiflow01).sum(dim=1)
         flow10 = (warp1_attn * multiflow10).sum(dim=1)
         flow = torch.cat([flow01, flow10], dim=1)
-    return flow, flow01, flow10
+    return flow, multiflow01, multiflow10
