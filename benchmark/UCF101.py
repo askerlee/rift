@@ -26,7 +26,7 @@ parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar=
 parser.add_argument('--mixfeat', dest='mixfeat01', action='store_true', 
                     help='When extracting base features of images 0 and 1, mix them in the input '
                             '(instead of extracting features separately).')
-parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_false', 
+parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                     help='Use merged flow for contextnet.')
 
 args = parser.parse_args()
