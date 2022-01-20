@@ -97,7 +97,7 @@ def train(model, local_rank):
                 
             if local_rank == 0:
                 print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(
-                       epoch, bi, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), 
+                       epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), 
                        flush=True)
 
             step += 1
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
-    parser.add_argument('--multi', dest='multi', default="16,4,4", type=str, metavar='M', 
+    parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')      
     parser.add_argument('--bn', dest='do_BN', action='store_true', 
                         help='Use batchnorm between conv layers. BN reduces performance.')
