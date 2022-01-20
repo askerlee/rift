@@ -176,8 +176,11 @@ if __name__ == "__main__":
                         help='Weight of the mask score residual connection')
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')      
-    parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true', 
-                        help='Separately extract base features of images 0 and 1.')
+    parser.add_argument('--mixfeat', dest='mixfeat01', action='store_true', 
+                        help='When extracting base features of images 0 and 1, mix them in the input '
+                                '(instead of extracting features separately).')
+    parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_false', 
+                        help='Use merged flow for contextnet.')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -199,7 +202,8 @@ if __name__ == "__main__":
                   use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
-                  sepfeat01=args.sepfeat01,
+                  mixfeat01=args.mixfeat01,
+                  ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay)
 
     train(model, args.local_rank, args.lr)

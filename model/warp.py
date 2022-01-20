@@ -24,6 +24,7 @@ def warp(tenInput, tenFlow):
 
 
 # Warp images with multiple groups of flow, and combine them into one group with flow group attention.
+# If M==1, multiwarp falls back to warp.
 def multiwarp(img0, img1, multiflow, multimask_score, M):
     img0_warped_list = []
     img1_warped_list = []

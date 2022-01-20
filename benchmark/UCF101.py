@@ -23,8 +23,11 @@ parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1,
                     help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                      
-parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true', 
-                    help='Separately extract base features of images 0 and 1.')
+parser.add_argument('--mixfeat', dest='mixfeat01', action='store_true', 
+                    help='When extracting base features of images 0 and 1, mix them in the input '
+                            '(instead of extracting features separately).')
+parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_false', 
+                    help='Use merged flow for contextnet.')
 
 args = parser.parse_args()
 args.multi = [ int(m) for m in args.multi.split(",") ]

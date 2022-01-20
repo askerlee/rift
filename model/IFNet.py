@@ -59,10 +59,10 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, sepfeat01=False):
+    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, do_BN=False, mixfeat01=False):
         super(IFBlock, self).__init__()
         self.name = name
-        self.sepfeat01 = sepfeat01
+        self.mixfeat01 = mixfeat01
         self.img_chans   = img_chans
         # M, multi: How many copies of flow/mask are generated?
         self.M = multi
@@ -77,7 +77,8 @@ class IFBlock(nn.Module):
 
         conv = conv_gen(do_BN=do_BN)
 
-        if not self.sepfeat01:
+        # Original RIFE design.
+        if self.mixfeat01:
             # downsample by 4x.
             self.conv0 = nn.Sequential(
                             conv(in_planes, c//2, 3, 2, 1),
@@ -132,7 +133,7 @@ class IFBlock(nn.Module):
             flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             x = torch.cat((x, flow), 1)
 
-        if not self.sepfeat01:
+        if self.mixfeat01:
             # conv0: 2 layers of conv, kernel size 3.
             x = self.conv0(x)
             # x: [1, 240, 14, 14] in 'block0'.
@@ -178,9 +179,9 @@ class IFBlock(nn.Module):
     
 class IFNet(nn.Module):
     def __init__(self, use_rife_settings=False, mask_score_res_weight=-1,
-                 multi=(16,4,4), sepfeat01=False):
+                 multi=(16,4,4), mixfeat01=False, ctx_use_merged_flow=False):
         super(IFNet, self).__init__()
-        self.sepfeat01 = sepfeat01
+        self.mixfeat01 = mixfeat01
         self.use_rife_settings = use_rife_settings
         if self.use_rife_settings:
             block_widths = [240, 150, 90]
@@ -194,16 +195,16 @@ class IFNet(nn.Module):
 
         self.Ms = multi
         self.block0 =   IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
-                                multi=self.Ms[0],  sepfeat01=sepfeat01)
+                                multi=self.Ms[0],  mixfeat01=mixfeat01)
         self.block1 =   IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
-                                multi=self.Ms[1],  sepfeat01=sepfeat01)
+                                multi=self.Ms[1],  mixfeat01=mixfeat01)
         self.block2 =   IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
-                                multi=self.Ms[2],  sepfeat01=sepfeat01)
+                                multi=self.Ms[2],  mixfeat01=mixfeat01)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.Ms[2], sepfeat01=sepfeat01)
+                                 multi=self.Ms[2], mixfeat01=mixfeat01)
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -211,6 +212,7 @@ class IFNet(nn.Module):
         # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
         # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
         self.distill_soft_min_weight = 0.4  
+        self.ctx_use_merged_flow = ctx_use_merged_flow
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_grad_clamp = False
@@ -332,12 +334,16 @@ class IFNet(nn.Module):
                 # loss_distill is the sum of the distillation losses at 3 different scales.
                 loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
 
-        # Contextnet outputs warped features of the input image. 
-        # flow is not used as input to generate the features, but to warp the features.
-        # Do not use multiflow to warp contextual features. This will cause features at different locations
-        # merged together with reduced spatial resolution.
-        c0 = self.contextnet(img0, flow01)
-        c1 = self.contextnet(img1, flow10)
+        if self.ctx_use_merged_flow:
+            # contextnet generates warped features of the input image. 
+            # flow01/flow10 is not used as input to generate the features, but to warp the features.
+            # Setting M=1 makes multiwarp fall back to warp. So it's equivalent to the traditional RIFE scheme.
+            # Using merged flow seems to perform slightly worse.
+            c0 = self.contextnet(img0, flow01, multimask_score, 1)
+            c1 = self.contextnet(img1, flow10, multimask_score, 1)
+        else:
+            c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
+            c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
 
         tmp = self.unet(img0, img1, img0_warped, img1_warped, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
