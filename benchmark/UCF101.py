@@ -27,7 +27,6 @@ parser.add_argument('--sepfeat', dest='sepfeat01', action='store_true',
                     help='Separately extract base features of images 0 and 1.')
 
 args = parser.parse_args()
-args.trans_layer_indices = [ int(idx) for idx in args.trans_layer_indices.split(",") ]
 args.multi = [ int(m) for m in args.multi.split(",") ]
 
 print(f"Args:\n{args}")
