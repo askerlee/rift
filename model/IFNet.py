@@ -333,8 +333,8 @@ class IFNet(nn.Module):
 
         # contextnet generates warped features of the input image. 
         # flow01/flow10 is not used as input to generate the features, but to warp the features.
-        c0 = self.contextnet(img0, flow01)
-        c1 = self.contextnet(img1, flow10)
+        c0 = self.contextnet(img0, flow01, multimask_score, self.Ms[2])
+        c1 = self.contextnet(img1, flow10, multimask_score, self.Ms[2])
         tmp = self.unet(img0, img1, img0_warped, img1_warped, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
