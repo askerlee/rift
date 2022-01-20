@@ -48,16 +48,16 @@ class Contextnet(nn.Module):
     def forward(self, x, multiflow, multimask_score, M):
         x = self.conv1(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1, _ = multiwarp(x, multiflow, multimask_score, M)        
+        f1, _ = multiwarp(x, None, multiflow, multimask_score, M)        
         x = self.conv2(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f2, _ = multiwarp(x, multiflow, multimask_score, M)
+        f2, _ = multiwarp(x, None, multiflow, multimask_score, M)
         x = self.conv3(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f3, _ = multiwarp(x, multiflow, multimask_score, M)
+        f3, _ = multiwarp(x, None, multiflow, multimask_score, M)
         x = self.conv4(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f4, _ = multiwarp(x, multiflow, multimask_score, M)
+        f4, _ = multiwarp(x, None, multiflow, multimask_score, M)
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         return [f1, f2, f3, f4]
