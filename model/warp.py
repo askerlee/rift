@@ -82,18 +82,20 @@ def multimerge_flow(multiflow, multimask_score, M):
         multiflow01, multiflow10 = multiflow[:, :2], multiflow[:, 2:4]
         flow = multiflow
     else:
+        multiflow01 = multiflow[:, :M*2]
+        multiflow10 = multiflow[:, M*2:]
         # multiflow: [16, 4*M, 224, 224]
-        newshape = list(multiflow.shape)
-        newshape[1:2] = [M, 2]
+        mf_unpack_shape = list(multiflow.shape)
+        mf_unpack_shape[1:2] = [M, 2]
         # multiflow01, multiflow10: [16, M, 2, 224, 224]
-        multiflow01 = multiflow[:, :M*2].reshape(newshape)
-        multiflow10 = multiflow[:, M*2:].reshape(newshape)
+        multiflow01_unpack = multiflow01.reshape(mf_unpack_shape)
+        multiflow10_unpack = multiflow10.reshape(mf_unpack_shape)
         # warp0_attn, warp1_attn: [16, M, 1, 224, 224]
         # multiflow is unwarped, so we don't need to warp the mask scores.
         warp0_attn = torch.softmax(multimask_score[:, :M], dim=1).unsqueeze(dim=2)
         warp1_attn = torch.softmax(multimask_score[:, M:2*M], dim=1).unsqueeze(dim=2)
         # flow01, flow10: [16, 2, 224, 224]
-        flow01 = (warp0_attn * multiflow01).sum(dim=1)
-        flow10 = (warp1_attn * multiflow10).sum(dim=1)
+        flow01 = (warp0_attn * multiflow01_unpack).sum(dim=1)
+        flow10 = (warp1_attn * multiflow10_unpack).sum(dim=1)
         flow = torch.cat([flow01, flow10], dim=1)
     return flow, multiflow01, multiflow10
