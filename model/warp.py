@@ -25,10 +25,6 @@ def warp(tenInput, tenFlow):
 
 # Warp images with multiple groups of flow, and combine them into one group with flow group attention.
 def multiwarp(img0, img1, multiflow, multimask_score, M):
-    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
-    # 1: mask, for the warp0-warp1 combination weight.
-    assert multimask_score.shape[1] == 2*M+1
-
     img0_warped_list = []
     img1_warped_list = []
     multimask01_score_list = []
@@ -57,6 +53,10 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
 
     if M == 1:
         return img0_warped_list[0], img1_warped_list[0]
+
+    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+    # 1: mask, for the warp0-warp1 combination weight.
+    assert multimask_score.shape[1] == 2*M+1
 
     # img0_warped_list, img1_warped_list are two lists, each of length M.
     # => [16, M, 3, 224, 224]
@@ -100,4 +100,4 @@ def multimerge_flow(multiflow, multimask_score, M):
         flow = torch.cat([flow01, flow10], dim=1)
     # Returned multiflow01, multiflow10 are not combined with attention. 
     # They will be used in contextnet.
-    return flow, multiflow01, multiflow10
+    return flow, multiflow01, multiflow10, flow01, flow10

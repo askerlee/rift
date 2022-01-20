@@ -271,7 +271,8 @@ class IFNet(nn.Module):
             mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(mask_score))
             multiflow_list.append(multiflow)
-            flow, multiflow01, multiflow10 = multimerge_flow(multiflow, multimask_score, self.Ms[i])
+            flow, multiflow01, multiflow10, flow01, flow10 = \
+                multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
             img0_warped, img1_warped = \
                 multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
@@ -302,7 +303,7 @@ class IFNet(nn.Module):
             mask_score_tea = multimask_score_tea[:, [-1]]
             mask_tea = torch.sigmoid(mask_score_tea)
             merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
-            flow_tea, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
+            flow_tea, _, _, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
         else:
             flow_tea = None
             merged_tea = None
@@ -331,10 +332,13 @@ class IFNet(nn.Module):
                 # loss_distill is the sum of the distillation losses at 3 different scales.
                 loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
 
-        # contextnet generates warped features of the input image. 
-        # flow01/flow10 is not used as input to generate the features, but to warp the features.
-        c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
-        c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
+        # Contextnet outputs warped features of the input image. 
+        # flow is not used as input to generate the features, but to warp the features.
+        # Do not use multiflow to warp contextual features. This will cause features at different locations
+        # merged together with reduced spatial resolution.
+        c0 = self.contextnet(img0, flow01)
+        c1 = self.contextnet(img1, flow10)
+
         tmp = self.unet(img0, img1, img0_warped, img1_warped, mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
