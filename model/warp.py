@@ -50,7 +50,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
             multimask10_score_list.append(mask10_score_warped)
         else:
             # placeholder.
-            multimask10_score_list.append(None)
+            img1_warped_list.append(None)
 
     if M == 1:
         return img0_warped_list[0], img1_warped_list[0]
