@@ -183,11 +183,16 @@ class IFNet(nn.Module):
         super(IFNet, self).__init__()
         self.mixfeat01 = mixfeat01
         self.use_rife_settings = use_rife_settings
+        tie_tea_stu_ext = True
+
         if self.use_rife_settings:
             block_widths = [240, 150, 90]
             self.mask_score_res_weight = 1
         else:
-            block_widths = [240, 144, 80]
+            if mixfeat01:
+                block_widths = [240, 144, 80]
+            else:
+                block_widths = [240, 144, 144]
             if mask_score_res_weight >= 0:
                 self.mask_score_res_weight = mask_score_res_weight
             else:
@@ -206,8 +211,7 @@ class IFNet(nn.Module):
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
                                  multi=self.Ms[2], mixfeat01=mixfeat01)
         
-        tie_tea_stu_ext = True
-        if mixfeat01 == False and tie_tea_stu_ext == True:
+        if not mixfeat01 and tie_tea_stu_ext == True:
             self.block_tea.conv_img = self.block1.conv_img
             if local_rank == 0:
                 print("Tie the conv_img of block_tea and block1.")
