@@ -65,7 +65,8 @@ testlist_path = path + 'tri_testlist.txt'
 f = open(testlist_path, 'r')
 psnr_list = []
 ssim_list = []
-total_triplets = sum(1 for line in open(testlist_path, 'r'))
+# Don't count empty lines ("\n" or "\r\n")
+total_triplets = sum(len(line) > 2 for line in open(testlist_path, 'r'))
 
 for i, line in enumerate(f):
     if args.count > 0 and i == args.count:
