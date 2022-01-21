@@ -251,7 +251,7 @@ class IFNet(nn.Module):
                 multimask_score = multimask_score_d + multimask_score_res * self.mask_score_res_weight
             else:
                 img01 = torch.cat((img0, img1), 1)
-                multiflow,   multimask_score   = stu_blocks[i](img01, None, None, scale=scale_list[i])
+                multiflow,   multimask_score, x01_feat   = stu_blocks[i](img01, None, None, scale=scale_list[i])
 
             mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(mask_score))
@@ -271,7 +271,7 @@ class IFNet(nn.Module):
             # flow_d: flow difference between the teacher and the student. 
             # (or residual of the teacher). The teacher only predicts the residual.
             nonimg = torch.cat((mask_score, gt), 1)    
-            multiflow_d, multimask_score_d = self.block_tea(x01_feat, nonimg, flow, scale=1)
+            multiflow_d, multimask_score_d, _ = self.block_tea(x01_feat, nonimg, flow, scale=1)
 
             # multiflow and multimask_score are from block2, 
             # which always have the same M as the teacher.
