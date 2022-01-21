@@ -205,6 +205,13 @@ class IFNet(nn.Module):
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
                                  multi=self.Ms[2], mixfeat01=mixfeat01)
+        
+        tie_tea_stu_ext = True
+        if mixfeat01 == False and tie_tea_stu_ext == True:
+            self.block_tea.conv_img = self.block1.conv_img
+            if local_rank == 0:
+                print("Tie the conv_img of block_tea and block1.")
+
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -249,6 +256,11 @@ class IFNet(nn.Module):
                 else:
                     stu_input = torch.cat((img0, img0_warped, img1, img1_warped, mask_score), 1)
 
+                # multiflow, multiflow_d: [16, 4*M, 224, 224]
+                # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
+                # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
+                multiflow_d, multimask_score_d = stu_blocks[i](stu_input, flow, scale=scale_list[i])
+
                 if self.Ms[i-1] == self.Ms[i]:
                     multiflow_res       = multiflow
                     multimask_score_res = multimask_score
@@ -260,10 +272,7 @@ class IFNet(nn.Module):
                     multiflow_res       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
                     multimask_score_res = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
                                                       multimask_score[:, [-1]] ], 1)
-                # multiflow, multiflow_d: [16, 4*M, 224, 224]
-                # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
-                # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
-                multiflow_d, multimask_score_d = stu_blocks[i](stu_input, flow, scale=scale_list[i])
+
                 multiflow = multiflow_res + multiflow_d
                 multimask_score = multimask_score_d + multimask_score_res * self.mask_score_res_weight
             else:

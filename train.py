@@ -24,8 +24,8 @@ if local_rank == 0:
     if not os.path.isdir(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-def get_learning_rate(init_ir, step):
-    M = init_ir # default: 3e-4
+def get_learning_rate(base_lr, step):
+    M = base_lr # default: 3e-4
     # warmup. 0 -> 0.0001
     if step < 2000:
         mul = step / 2000.
@@ -45,7 +45,7 @@ def flow2rgb(flow_map_np):
     rgb_map[:, :, 2] += normalized_flow_map[:, :, 1]
     return rgb_map.clip(0, 1)
 
-def train(model, local_rank, init_lr):
+def train(model, local_rank, base_lr):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -72,7 +72,7 @@ def train(model, local_rank, init_lr):
             data_gpu = data.to(device, non_blocking=True) / 255.
             imgs = data_gpu[:, :6]
             gt = data_gpu[:, 6:9]
-            learning_rate = get_learning_rate(init_lr, step)
+            learning_rate = get_learning_rate(base_lr, step)
             pred, info = model.update(imgs, gt, learning_rate, training=True)
             train_time_interval = time.time() - time_stamp
             time_stamp = time.time()
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
-    parser.add_argument('--lr', default=3e-4, type=float)
+    parser.add_argument('--lr', dest='base_lr', default=2.5e-4, type=float)
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
@@ -206,5 +206,5 @@ if __name__ == "__main__":
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay)
 
-    train(model, args.local_rank, args.lr)
+    train(model, args.local_rank, args.base_lr)
         
