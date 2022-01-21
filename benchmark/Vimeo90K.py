@@ -13,20 +13,15 @@ from model.IFNet_rife import IFNet_rife
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--paper', action='store_true', help='Use the model in the RIFE paper')
 parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
                     help='Use the old model in the RIFE repo')
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
-parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                     help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                 
-parser.add_argument('--mixfeat', dest='mixfeat01', action='store_true', 
-                    help='When extracting base features of images 0 and 1, mix them in the input '
-                            '(instead of extracting features separately).')
 parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                     help='Use merged flow for contextnet.')
 
@@ -38,22 +33,17 @@ print(f"Args:\n{args}")
 if args.use_old_model:
     model = Model(use_old_model=True)
     model.load_model('rife_checkpoint/flownet.pth')
-elif args.paper:
-    model = Model(use_rife_settings=True)
-    model.load_model('rife_checkpoint/flownet.pth')
 elif args.hd:
     from train_log.RIFE_HDv3 import Model
-    model = Model(use_rife_settings=True)
+    model = Model()
     if not hasattr(model, 'version'):
         model.version = 0
     # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
     model.load_model('rife_hd_checkpoint/flownet.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(use_rife_settings=args.use_rife_settings, 
-                  mask_score_res_weight=args.mask_score_res_weight,
+    model = Model(mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi, 
-                  mixfeat01=args.mixfeat01,
                   ctx_use_merged_flow=args.ctx_use_merged_flow)
     model.load_model(args.cp)
 

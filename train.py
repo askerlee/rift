@@ -167,7 +167,6 @@ if __name__ == "__main__":
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
-    parser.add_argument('--rife', dest='use_rife_settings', action='store_true', help='Use rife settings')
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
     parser.add_argument('--lr', dest='base_lr', default=2.5e-4, type=float)
@@ -175,10 +174,7 @@ if __name__ == "__main__":
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
-                        help='Output M groups of flow')      
-    parser.add_argument('--mixfeat', dest='mixfeat01', action='store_true', 
-                        help='When extracting base features of images 0 and 1, mix them in the input '
-                                '(instead of extracting features separately).')
+                        help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
 
@@ -199,10 +195,8 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
-                  use_rife_settings=args.use_rife_settings,
                   mask_score_res_weight=args.mask_score_res_weight,
                   multi=args.multi,
-                  mixfeat01=args.mixfeat01,
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay)
 
