@@ -96,7 +96,7 @@ def train(model, local_rank, init_lr):
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4e}'.format(
+                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4f}'.format(
                        epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), 
                        flush=True)
 
