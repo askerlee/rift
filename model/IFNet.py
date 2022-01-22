@@ -49,6 +49,11 @@ def debug():
 
 def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_scheme):
     loss_distill = 0
+    # Ws[0]: weight of teacher -> student.
+    # Ws[1]: weight of student -> teacher.
+    # Two directions could take different weights.
+    Ws = [1, 1]
+
     for i in range(2):
         # distill_mask indicates where the warped images according to student's prediction 
         # is worse than that of the teacher.
@@ -66,14 +71,15 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
         # If at some points, the warped image of the teacher is better than the student,
         # then regard the flow at these points are more accurate, and use them to teach the student.
         # loss_distill is the sum of the distillation losses at 3 different scales.
-        loss_distill += ((flow_tea.detach() - flow_stud).abs() * distill_mask).mean()
+        loss_distill += Ws[i] * ((flow_tea.detach() - flow_stud).abs() * distill_mask).mean()
 
         # swap student and teacher, and calculate the distillation loss again.
         img_stud, flow_stud, img_tea, flow_tea = \
             img_tea, flow_tea, img_stud, flow_stud
-
+        # The distillation loss from the student to the teacher has a smaller weight.
+        
     return loss_distill
-    
+
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
     @staticmethod
