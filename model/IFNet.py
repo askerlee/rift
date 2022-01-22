@@ -296,23 +296,23 @@ class IFNet(nn.Module):
             merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
                                  warped_imgs_list[i][1] * (1 - mask_list[i])
                                  
-            if gt.shape[1] == 3:
-                # distil_mask indicates where the warped images according to student's prediction 
+            if is_training:
+                # distill_mask indicates where the warped images according to student's prediction 
                 # is worse than that of the teacher.
                 student_residual = (merged_img_list[i] - gt).abs().mean(1, True)
                 teacher_residual = (merged_tea - gt).abs().mean(1, True)
                 if self.distill_scheme == 'hard':
-                    distil_mask = (student_residual > teacher_residual + 0.01).float().detach()
+                    distill_mask = (student_residual > teacher_residual + 0.01).float().detach()
                 else:
-                    distil_mask = (student_residual - teacher_residual).sigmoid().detach()
-                    # / (1 - self.distill_soft_min_weight) to normalize distil_mask to be within (0, 1).
-                    # * 2 to make the mean of distil_mask to be 1, same as the 'hard' scheme.
-                    distil_mask = 2 * (distil_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
+                    distill_mask = (student_residual - teacher_residual).sigmoid().detach()
+                    # / (1 - self.distill_soft_min_weight) to normalize distill_mask to be within (0, 1).
+                    # * 2 to make the mean of distill_mask to be 1, same as the 'hard' scheme.
+                    distill_mask = 2 * (distill_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
 
                 # If at some points, the warped image of the teacher is better than the student,
                 # then regard the flow at these points are more accurate, and use them to teach the student.
                 # loss_distill is the sum of the distillation losses at 3 different scales.
-                loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distil_mask).mean()
+                loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distill_mask).mean()
 
         if self.ctx_use_merged_flow:
             # contextnet generates warped features of the input image. 
