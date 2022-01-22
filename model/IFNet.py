@@ -72,6 +72,8 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
         img_stud, flow_stud, img_tea, flow_tea = \
             img_tea, flow_tea, img_stud, flow_stud
 
+    return loss_distill
+    
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
     @staticmethod
