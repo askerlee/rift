@@ -55,7 +55,9 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     if M == 1:
         return img0_warped_list[0], img1_warped_list[0]
 
-    # multimask_score: 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow attention scores, 
+    # multimask_score: 2*M+1 channels. 2*M for M groups of L/R flow attention scores, 
+    # L: 0 -> 0.5, R: 1 -> 0.5.
+    # LR_0, LR_1, ..., LR_M, RL_0, ..., RL_M, LR-RL weight
     # 1: mask, for the warp0-warp1 combination weight.
     assert multimask_score.shape[1] == 2*M+1
 

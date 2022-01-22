@@ -169,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
-    parser.add_argument('--lr', dest='base_lr', default=2.5e-4, type=float)
+    parser.add_argument('--lr', dest='base_lr', default=3e-4, type=float)
 
     parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
                         help='Weight of the mask score residual connection')

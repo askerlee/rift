@@ -47,6 +47,31 @@ def debug():
     else:
         dist.barrier()
 
+def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_scheme):
+    loss_distill = 0
+    for i in range(2):
+        # distill_mask indicates where the warped images according to student's prediction 
+        # is worse than that of the teacher.
+        student_error = (img_stud - gt).abs().mean(1, True)
+        teacher_error = (img_tea  - gt).abs().mean(1, True)
+        if distill_scheme == 'hard':
+            distill_mask = (student_error > teacher_error + 0.01).float().detach()
+        else:
+            distill_soft_min_weight = 0.5
+            distill_mask = (student_error - teacher_error).sigmoid().detach()
+            # / (1 - self.distill_soft_min_weight) to normalize distill_mask to be within (0, 1).
+            # * 2 to make the mean of distill_mask to be 1, same as the 'hard' scheme.
+            distill_mask = 2 * (distill_mask - distill_soft_min_weight).clamp(min=0) / (1 - distill_soft_min_weight)
+
+        # If at some points, the warped image of the teacher is better than the student,
+        # then regard the flow at these points are more accurate, and use them to teach the student.
+        # loss_distill is the sum of the distillation losses at 3 different scales.
+        loss_distill += ((flow_tea.detach() - flow_stud).abs() * distill_mask).mean()
+
+        # swap student and teacher, and calculate the distillation loss again.
+        img_stud, flow_stud, img_tea, flow_tea = \
+            img_tea, flow_tea, img_stud, flow_stud
+
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
     @staticmethod
@@ -59,7 +84,7 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, in_planes, c=64, img_chans=3, multi=1, is_teacher=False):
+    def __init__(self, name, c=64, img_chans=6, nonimg_chans=0, multi=1, reuse_feat01=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.img_chans   = img_chans
@@ -76,11 +101,11 @@ class IFBlock(nn.Module):
 
         conv = conv_gen(do_BN=False)
 
-        self.nonimg_chans = in_planes - 2 * self.img_chans
+        self.nonimg_chans = nonimg_chans
 
-        self.is_teacher = is_teacher
+        self.reuse_feat01 = reuse_feat01
         # block_tea uses block1's conv feat directly. so block_tea has no conv_img.
-        if not self.is_teacher:
+        if not self.reuse_feat01:
             # conv_img downscales input image to 1/4 size.
             self.conv_img = nn.Sequential(
                                 conv(self.img_chans, c//2, 3, 2, 1),
@@ -101,27 +126,27 @@ class IFBlock(nn.Module):
             # No non-img channels. Just to bridge the channel number difference.
             self.conv_bridge = conv(c, c, 3, 1, 1)
 
-        # Moved 3 conv layers from convblock to conv_img and conv_nonimg.
-        self.convblock = nn.Sequential(
+        # Moved 3 conv layers from mixconv in RIFE to conv_img.
+        self.mixconv = nn.Sequential(
                             conv(c, c),
                             conv(c, c),
                             conv(c, c),
                             conv(c, c),
                             conv(c, c),
-                            )
+                        )
 
     def forward(self, img01, nonimg, flow, scale):
         # Downscale img01 by scale.
-        if scale != 1:
-            img01  = F.interpolate(img01,  scale_factor = 1. / scale, mode="bilinear", align_corners=False)
-            if self.nonimg_chans > 0:
-                nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
-        if flow != None:
+        img01  = F.interpolate(img01,  scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+        if self.nonimg_chans > 0:
+            nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+        if flow is not None:
+            assert self.nonimg_chans > 0
             # the size and magnitudes of the flow is scaled to the size of this layer. 
             flow   = F.interpolate(flow,   scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
             nonimg = torch.cat([nonimg, flow], dim=1)
             
-        if not self.is_teacher:
+        if not self.reuse_feat01:
             # Pack the channels of the two images into the batch dimension,
             # so that the channel number is the same as one image.
             # This makes the feature extraction of the two images slightly faster (hopefully).
@@ -134,8 +159,8 @@ class IFBlock(nn.Module):
             x01_bunpack_shape[0:2] = [ x01_bunpack_shape[0]//2, x01_bunpack_shape[1]*2 ]
             x01_feat = x01_feat.reshape(x01_bunpack_shape)
         else:
-            # img01 is already the features of img0 and img1. Simply downscale it to 1/4 size.
-            x01_feat = img01 # F.interpolate(img01, scale_factor = 0.25, mode="bilinear", align_corners=False)
+            # img01 is already the features of img0 and img1.
+            x01_feat = img01
 
         if self.nonimg_chans > 0:
             x_nonimg = self.conv_nonimg(nonimg)
@@ -147,8 +172,8 @@ class IFBlock(nn.Module):
         #    [1, 150, 28, 28] in 'block1'.
         #    [1, 90,  56, 56] in 'block2'.
         # That is, input size / scale / 4. 
-        # convblock: 8 layers of conv, kernel size 3.
-        x = self.convblock(x) + x
+        # mixconv: 5 layers of conv, kernel size 3.
+        x = self.mixconv(x) + x
         # unscaled_output size = input size / scale / 2.
         unscaled_output = self.lastconv(x)
 
@@ -165,34 +190,29 @@ class IFBlock(nn.Module):
         return multiflow, multimask_score, x01_feat
     
 class IFNet(nn.Module):
-    def __init__(self, mask_score_res_weight=-1,
-                 multi=(8,8,4), ctx_use_merged_flow=False):
+    def __init__(self, multi=(8,8,4), ctx_use_merged_flow=False):
         super(IFNet, self).__init__()
 
-        block_widths = [240, 144, 144]
-        if mask_score_res_weight >= 0:
-            self.mask_score_res_weight = mask_score_res_weight
-        else:
-            self.mask_score_res_weight = 0
+        block_widths = [240, 144, 80]
+        self.mask_score_skip_weight = 0
+
+        self.tea_reuse_stu_feat = False
+        if self.tea_reuse_stu_feat and local_rank == 0:
+            print("Tie the conv feats of block_tea and block1.")
 
         self.Ms = multi
-        self.block0 =   IFBlock('block0',    6,    c=block_widths[0], img_chans=3, 
+        self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=0, 
                                 multi=self.Ms[0])
-        self.block1 =   IFBlock('block1',    13+4, c=block_widths[1], img_chans=6,  
+        self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
                                 multi=self.Ms[1])
-        self.block2 =   IFBlock('block2',    13+4, c=block_widths[2], img_chans=6, 
+        self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
                                 multi=self.Ms[2])
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
-        self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.Ms[2], is_teacher=True)
+        self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
+                                 multi=self.Ms[2], reuse_feat01=self.tea_reuse_stu_feat)
         
-        self.tie_tea_stu_feat = True
-        if self.tie_tea_stu_feat == True:
-            if local_rank == 0:
-                print("Tie the conv feats of block_tea and block1.")
-
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -227,7 +247,6 @@ class IFNet(nn.Module):
         img0_warped = img0
         img1_warped = img1
         multiflow = None 
-        loss_distill = 0
         stu_blocks = [self.block0, self.block1, self.block2]
         for i in range(3):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
@@ -239,19 +258,26 @@ class IFNet(nn.Module):
                 multiflow_d, multimask_score_d, x01_feat = stu_blocks[i](img01, mask_score, flow, scale=scale_list[i])
 
                 if self.Ms[i-1] == self.Ms[i]:
-                    multiflow_res       = multiflow
-                    multimask_score_res = multimask_score
+                    multiflow_skip       = multiflow
+                    multimask_score_skip = multimask_score
                 else:
-                    # If multiflow from the previous iteration has more channels than the current iteration,
-                    # then only take the first Ms[i] channels (of each direction) as the residual.
+                    # If multiflow from the previous iteration has more channels than the current iteration.
                     # Mp: M of the previous iteration. Mc: M of the current iteration.
                     Mp, Mc = self.Ms[i-1], self.Ms[i]
-                    multiflow_res       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
-                    multimask_score_res = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
-                                                      multimask_score[:, [-1]] ], 1)
+                    if False and Mp == 2 * Mc:
+                        # Split the Mp groups of multiflow into 2 sets, each with Mc groups.
+                        # Randomly choose one set. Similar to dropout.
+                        multiflow_skip       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
+                        multimask_score_skip = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
+                                                          multimask_score[:, [-1]] ], 1)
+                    else:
+                        # Only take the first Ms[i] channels (of each direction) as the residual.
+                        multiflow_skip       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
+                        multimask_score_skip = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
+                                                          multimask_score[:, [-1]] ], 1)
 
-                multiflow = multiflow_res + multiflow_d
-                multimask_score = multimask_score_d + multimask_score_res * self.mask_score_res_weight
+                multiflow = multiflow_skip + multiflow_d
+                multimask_score = multimask_score_d + multimask_score_skip * self.mask_score_skip_weight
             else:
                 img01 = torch.cat((img0, img1), 1)
                 multiflow,   multimask_score, x01_feat   = stu_blocks[i](img01, None, None, scale=scale_list[i])
@@ -268,21 +294,27 @@ class IFNet(nn.Module):
             warped_imgs_list.append(warped_imgs)
 
         if is_training:
+            # multiflow and multimask_score are from block2, 
+            # which always have the same M as the teacher.
+            multiflow_skip       = multiflow
+            multimask_score_skip = multimask_score
+
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
-            # flow_d: flow difference between the teacher and the student. 
-            # (or residual of the teacher). The teacher only predicts the residual.
+            # multiflow_d / multimask_score_d: flow / mask score difference 
+            # between the teacher and the student (or residual of the teacher). 
+            # The teacher only predicts the residual.
+            if self.tea_reuse_stu_feat:
+                img01 = x01_feat
+            else:
+                img01 = torch.cat((img0, img0_warped, img1, img1_warped), 1)
             nonimg = torch.cat((mask_score, gt), 1)    
-            multiflow_d, multimask_score_d, _ = self.block_tea(x01_feat, nonimg, flow, scale=1)
+            multiflow_d, multimask_score_d, _ = self.block_tea(img01, nonimg, flow, scale=1)
 
-            # multiflow and multimask_score are from block2, 
-            # which always have the same M as the teacher.
-            multiflow_res       = multiflow
-            multimask_score_res = multimask_score
             # Removing this residual connection makes the teacher perform much worse.                      
-            multiflow_tea = multiflow_res + multiflow_d
-            multimask_score_tea = multimask_score_d + multimask_score_res * self.mask_score_res_weight
+            multiflow_tea = multiflow_skip + multiflow_d
+            multimask_score_tea = multimask_score_d + multimask_score_skip * self.mask_score_skip_weight
             warped_img0_tea, warped_img1_tea = \
                 multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.Ms[2])
             mask_score_tea = multimask_score_tea[:, [-1]]
@@ -293,6 +325,7 @@ class IFNet(nn.Module):
             flow_tea = None
             merged_tea = None
 
+        loss_distill = 0
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
             # merged_img_list[i]: average of 1->2 and 2->1 warped images.
@@ -300,22 +333,10 @@ class IFNet(nn.Module):
                                  warped_imgs_list[i][1] * (1 - mask_list[i])
                                  
             if is_training:
-                # distill_mask indicates where the warped images according to student's prediction 
-                # is worse than that of the teacher.
-                student_residual = (merged_img_list[i] - gt).abs().mean(1, True)
-                teacher_residual = (merged_tea - gt).abs().mean(1, True)
-                if self.distill_scheme == 'hard':
-                    distill_mask = (student_residual > teacher_residual + 0.01).float().detach()
-                else:
-                    distill_mask = (student_residual - teacher_residual).sigmoid().detach()
-                    # / (1 - self.distill_soft_min_weight) to normalize distill_mask to be within (0, 1).
-                    # * 2 to make the mean of distill_mask to be 1, same as the 'hard' scheme.
-                    distill_mask = 2 * (distill_mask - self.distill_soft_min_weight).clamp(min=0) / (1 - self.distill_soft_min_weight)
-
-                # If at some points, the warped image of the teacher is better than the student,
-                # then regard the flow at these points are more accurate, and use them to teach the student.
-                # loss_distill is the sum of the distillation losses at 3 different scales.
-                loss_distill += ((flow_tea.detach() - flow_list[i]).abs() * distill_mask).mean()
+                # dual_teaching_loss: the student can also teach the teacher, 
+                # when the student is more accurate.
+                loss_distill += dual_teaching_loss(gt, merged_img_list[i], flow_list[i], 
+                                                   merged_tea, flow_tea, self.distill_scheme)
 
         if self.ctx_use_merged_flow:
             # contextnet generates warped features of the input image. 
