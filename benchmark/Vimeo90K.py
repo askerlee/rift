@@ -18,8 +18,6 @@ parser.add_argument('--oldmodel', dest='use_old_model', action='store_true',
 parser.add_argument('--hd', action='store_true', help='Use newer HD model')
 parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
-parser.add_argument('--maskresweight', dest='mask_score_res_weight', default=-1, type=float, 
-                    help='Weight of the mask score residual connection')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                 
 parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
@@ -42,8 +40,7 @@ elif args.hd:
     model.load_model('rife_hd_checkpoint/flownet.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(mask_score_res_weight=args.mask_score_res_weight,
-                  multi=args.multi, 
+    model = Model(multi=args.multi, 
                   ctx_use_merged_flow=args.ctx_use_merged_flow)
     model.load_model(args.cp)
 
