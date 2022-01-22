@@ -113,11 +113,14 @@ class IFBlock(nn.Module):
     def forward(self, img01, nonimg, flow, scale):
         # Downscale img01 by scale.
         if scale != 1:
-            img01 = F.interpolate(img01, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+            img01  = F.interpolate(img01,  scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+            if self.nonimg_chans > 0:
+                nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         if flow != None:
             # the size and magnitudes of the flow is scaled to the size of this layer. 
-            flow = F.interpolate(flow, scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
-
+            flow   = F.interpolate(flow,   scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
+            nonimg = torch.cat([nonimg, flow], dim=1)
+            
         if not self.is_teacher:
             # Pack the channels of the two images into the batch dimension,
             # so that the channel number is the same as one image.
@@ -132,14 +135,14 @@ class IFBlock(nn.Module):
             x01_feat = x01_feat.reshape(x01_bunpack_shape)
         else:
             # img01 is already the features of img0 and img1. Simply downscale it to 1/4 size.
-            x01_feat = F.interpolate(img01, scale_factor = 0.25, mode="bilinear", align_corners=False)
+            x01_feat = img01 # F.interpolate(img01, scale_factor = 0.25, mode="bilinear", align_corners=False)
 
         if self.nonimg_chans > 0:
             x_nonimg = self.conv_nonimg(nonimg)
             x  = self.conv_bridge(torch.cat((x01_feat, x_nonimg), 1))
         else:
             x  = self.conv_bridge(x01_feat)
-                
+
         # x: [1, 240, 14, 14] in 'block0'.
         #    [1, 150, 28, 28] in 'block1'.
         #    [1, 90,  56, 56] in 'block2'.
@@ -183,7 +186,7 @@ class IFNet(nn.Module):
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.
         self.block_tea = IFBlock('block_tea', 16+4, c=block_widths[2],  img_chans=6, 
-                                 multi=self.Ms[2])
+                                 multi=self.Ms[2], is_teacher=True)
         
         self.tie_tea_stu_feat = True
         if self.tie_tea_stu_feat == True:
