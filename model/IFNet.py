@@ -83,10 +83,10 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
 
 # Modified from drop_path() in 
 # pytorch-image-models/blob/master/timm/models/layers/drop.py
-def group_drop(multiflow, multimask, num_groups, drop_prob, 
+def group_drop(multiflow, multimask_score, num_groups, drop_prob, 
                training=False):
     if drop_prob == 0. or not training:
-        return multiflow, multimask
+        return multiflow, multimask_score
     keep_prob = 1 - drop_prob
     # The group channel is the second channel, i.e., channel 1.
     # So the first two channels of group_rands are filled with random binary numbers.
@@ -97,8 +97,10 @@ def group_drop(multiflow, multimask, num_groups, drop_prob,
     flow_rands  = group_rands.repeat_interleave(2, 1)
     # Append a channel of 1 into mask_rands.
     mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
-
-    return multiflow * flow_rands, multimask * mask_rands
+    # Dropped group is subtracted by a big number, so that after softmax
+    # the mask weight -> 0.
+    mask_rands =  -100000 * (1 - mask_rands)
+    return multiflow * flow_rands, multimask_score + mask_rands
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
