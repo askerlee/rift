@@ -105,3 +105,26 @@ def multimerge_flow(multiflow, multimask_score, M):
     # Returned multiflow01, multiflow10 are not combined with attention. 
     # They will be used in contextnet.
     return flow, multiflow01, multiflow10, flow01, flow10
+
+# group_drop brings slight degradation.
+# Modified from drop_path() in 
+# pytorch-image-models/blob/master/timm/models/layers/drop.py
+def group_drop(multimask_score, num_groups, drop_prob, training=False):
+    if drop_prob == 0. or not training:
+        return multimask_score
+
+    keep_prob = 1 - drop_prob
+    # The group channel is the second channel, i.e., channel 1.
+    # So the first two channels of group_rands are filled with random binary numbers.
+    # L->R, R->L are treated as different groups. So num_groups*2.
+    # Generate 1 random number for each group.
+    shape = (multimask_score.shape[0], num_groups*2, 1, 1)
+    group_rands = multimask_score.new_empty(shape).bernoulli_(keep_prob)
+    # Append a channel of 1 into mask_rands.
+    mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
+    # Dropped group is subtracted by a big number, so that after softmax
+    # the mask weight -> 0. 
+    # Kept group scores and LR~RL scores are unchanged.
+    mask_rands =  -1e9 * (1.0 - mask_rands)
+    return multimask_score + mask_rands
+    

@@ -47,13 +47,14 @@ def debug():
     else:
         dist.barrier()
 
+# Dual teaching helps slightly.
 def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_scheme):
     loss_distill = 0
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
     # Two directions could take different weights.
     # Set Ws[1] to 0 to disable student -> teacher.
-    Ws = [1, 0.3]
+    Ws = [1, 0.5]
 
     for i in range(2):
         # distill_mask indicates where the warped images according to student's prediction 
@@ -81,27 +82,6 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
         
     return loss_distill
 
-# Modified from drop_path() in 
-# pytorch-image-models/blob/master/timm/models/layers/drop.py
-def group_drop(multimask_score, num_groups, drop_prob, training=False):
-    if drop_prob == 0. or not training:
-        return multimask_score
-
-    keep_prob = 1 - drop_prob
-    # The group channel is the second channel, i.e., channel 1.
-    # So the first two channels of group_rands are filled with random binary numbers.
-    # L->R, R->L are treated as different groups. So num_groups*2.
-    # Generate 1 random number for each group.
-    shape = (multimask_score.shape[0], num_groups*2, 1, 1)
-    group_rands = multimask_score.new_empty(shape).bernoulli_(keep_prob)
-    # Append a channel of 1 into mask_rands.
-    mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
-    # Dropped group is subtracted by a big number, so that after softmax
-    # the mask weight -> 0. 
-    # Kept group scores and LR~RL scores are unchanged.
-    mask_rands =  -1e9 * (1.0 - mask_rands)
-    return multimask_score + mask_rands
-
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
     @staticmethod
@@ -115,13 +95,12 @@ class Clamp01(torch.autograd.Function):
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
     def __init__(self, name, c=64, img_chans=6, nonimg_chans=0, multi=1, 
-                 multi_dropout_rate=0, reuse_feat01=False):
+                 reuse_feat01=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.img_chans   = img_chans
         # M, multi: How many copies of flow/mask are generated?
         self.M = multi
-        self.multi_dropout_rate = multi_dropout_rate
         if self.M == 1:
             # originally, lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
             out_chan_num = 5
@@ -221,14 +200,10 @@ class IFBlock(nn.Module):
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]
 
-        # Randomly dropout some groups by setting corresponding channels in multimask_score
-        # to be -1e9, so that after softmax the group attention becomes 0.
-        multimask_score = group_drop(multimask_score, self.M, 
-                                     self.multi_dropout_rate, self.training)
         return multiflow, multimask_score, x01_feat
     
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), ctx_use_merged_flow=False):
+    def __init__(self, multi=(4,4,4), ctx_use_merged_flow=False):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -238,19 +213,19 @@ class IFNet(nn.Module):
             print("Tie the conv feats of block_tea and block1.")
 
         self.Ms = multi
-        self.multi_dropout_rate = 0.2
+        self.loop = 2
+        self.multi_dropout_rate = 0 #0.2. Disabled, as it causes slight degradation.
         self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=0, 
-                                multi=self.Ms[0], multi_dropout_rate=self.multi_dropout_rate)
+                                multi=self.Ms[0])
         self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
-                                multi=self.Ms[1], multi_dropout_rate=self.multi_dropout_rate)
+                                multi=self.Ms[1])
         self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                multi=self.Ms[2], multi_dropout_rate=self.multi_dropout_rate)
+                                multi=self.Ms[2])
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea doesn't do group dropout so that it converges faster
         # and guides students better.
         self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
-                                 multi=self.Ms[2], multi_dropout_rate=0,
-                                 reuse_feat01=self.tea_reuse_stu_feat)
+                                 multi=self.Ms[2], reuse_feat01=self.tea_reuse_stu_feat)
         
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
