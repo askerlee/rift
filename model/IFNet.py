@@ -90,10 +90,11 @@ def group_drop(multiflow, multimask_score, num_groups, drop_prob,
     keep_prob = 1 - drop_prob
     # The group channel is the second channel, i.e., channel 1.
     # So the first two channels of group_rands are filled with random binary numbers.
-    # Only generate 1 random number for each group.
     # L->R, R->L are treated as different groups. So num_groups*2.
+    # Generate 1 random number for each group.
     shape = (multiflow.shape[0], num_groups*2, 1, 1)
     group_rands = multiflow.new_empty(shape).bernoulli_(keep_prob)
+    # Each group of flow has 2 channels, so repeat 2 times.
     flow_rands  = group_rands.repeat_interleave(2, 1)
     # Append a channel of 1 into mask_rands.
     mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
