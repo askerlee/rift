@@ -166,10 +166,10 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
-    parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.01)
+    parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.015)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
-    parser.add_argument('--lr', dest='base_lr', default=3e-4, type=float)
+    parser.add_argument('--lr', dest='base_lr', default=3.5e-4, type=float)
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 

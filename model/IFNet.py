@@ -52,7 +52,8 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
     # Two directions could take different weights.
-    Ws = [1, 1]
+    # Set Ws[1] to 0 to disable student -> teacher.
+    Ws = [1, 0.3]
 
     for i in range(2):
         # distill_mask indicates where the warped images according to student's prediction 
@@ -80,6 +81,25 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
         
     return loss_distill
 
+# Modified from drop_path() in 
+# pytorch-image-models/blob/master/timm/models/layers/drop.py
+def group_drop(multiflow, multimask, num_groups, drop_prob, 
+               training=False):
+    if drop_prob == 0. or not training:
+        return multiflow, multimask
+    keep_prob = 1 - drop_prob
+    # The group channel is the second channel, i.e., channel 1.
+    # So the first two channels of group_rands are filled with random binary numbers.
+    # Only generate 1 random number for each group.
+    # L->R, R->L are treated as different groups. So num_groups*2.
+    shape = (multiflow.shape[0], num_groups*2, 1, 1)
+    group_rands = multiflow.new_empty(shape).bernoulli_(keep_prob)
+    flow_rands  = group_rands.repeat_interleave(2, 1)
+    # Append a channel of 1 into mask_rands.
+    mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
+
+    return multiflow * flow_rands, multimask * mask_rands
+
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
     @staticmethod
@@ -92,12 +112,14 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, c=64, img_chans=6, nonimg_chans=0, multi=1, reuse_feat01=False):
+    def __init__(self, name, c=64, img_chans=6, nonimg_chans=0, multi=1, 
+                 multi_dropout_rate=0, reuse_feat01=False):
         super(IFBlock, self).__init__()
         self.name = name
         self.img_chans   = img_chans
         # M, multi: How many copies of flow/mask are generated?
         self.M = multi
+        self.multi_dropout_rate = multi_dropout_rate
         if self.M == 1:
             # originally, lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
             out_chan_num = 5
@@ -187,7 +209,8 @@ class IFBlock(nn.Module):
 
         scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
         # tmp/flow/mask_score size = input size.
-        # flow has 4 channels. 2 for one direction, 2 for the other direction
+        # each group of flow has 4 channels. 2 for one direction, 2 for the other direction
+        # multiflow has 4*M channels.
         multiflow = scaled_output[:, : 4*self.M] * scale * 2
         # multimask_score: 
         # if M == 1, multimask_score has one channel, just as the original scheme.
@@ -195,6 +218,10 @@ class IFBlock(nn.Module):
         # 1 for the warp0-warp1 combination weight.
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]
+
+        multiflow, multimask_score = \
+                        group_drop(multiflow, multimask_score, self.M, 
+                                   self.multi_dropout_rate, self.training)
         return multiflow, multimask_score, x01_feat
     
 class IFNet(nn.Module):
@@ -209,12 +236,13 @@ class IFNet(nn.Module):
             print("Tie the conv feats of block_tea and block1.")
 
         self.Ms = multi
+        self.multi_dropout_rate = 0.3
         self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=0, 
-                                multi=self.Ms[0])
+                                multi=self.Ms[0], multi_dropout_rate=self.multi_dropout_rate)
         self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
-                                multi=self.Ms[1])
+                                multi=self.Ms[1], multi_dropout_rate=self.multi_dropout_rate)
         self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                multi=self.Ms[2])
+                                multi=self.Ms[2], multi_dropout_rate=self.multi_dropout_rate)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea only outputs one group of flow, as it takes extra info and the single group of 
         # output flow is already quite accurate.

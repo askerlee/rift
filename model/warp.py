@@ -32,6 +32,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     multimask10_score_list = []
     # multiflow at dim=1: 
     # flow01_1, flow01_2, ..., flow01_M, flow10_1, flow10_2, ..., flow10_M
+    # 01 means flow from img0 to middle, 10 means flow from img1 to middle.
     # Each block has 2 channels.
     for i in range(M):
         img0_warped = warp(img0, multiflow[:, i*2 : i*2+2])
@@ -57,7 +58,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
 
     # multimask_score: 2*M+1 channels. 2*M for M groups of L/R flow attention scores, 
     # L: 0 -> 0.5, R: 1 -> 0.5.
-    # LR_0, LR_1, ..., LR_M, RL_0, ..., RL_M, LR-RL weight
+    # LR_0, LR_1, ..., LR_M, RL_0, ..., RL_M, LR~RL weight
     # 1: mask, for the warp0-warp1 combination weight.
     assert multimask_score.shape[1] == 2*M+1
 
