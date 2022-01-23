@@ -83,26 +83,24 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
 
 # Modified from drop_path() in 
 # pytorch-image-models/blob/master/timm/models/layers/drop.py
-def group_drop(multiflow, multimask_score, num_groups, drop_prob, 
-               training=False):
+def group_drop(multimask_score, num_groups, drop_prob, training=False):
     if drop_prob == 0. or not training:
-        return multiflow, multimask_score
+        return multimask_score
+
     keep_prob = 1 - drop_prob
     # The group channel is the second channel, i.e., channel 1.
     # So the first two channels of group_rands are filled with random binary numbers.
     # L->R, R->L are treated as different groups. So num_groups*2.
     # Generate 1 random number for each group.
-    shape = (multiflow.shape[0], num_groups*2, 1, 1)
-    group_rands = multiflow.new_empty(shape).bernoulli_(keep_prob)
-    # Each group of flow has 2 channels, so repeat 2 times.
-    flow_rands  = group_rands.repeat_interleave(2, 1)
+    shape = (multimask_score.shape[0], num_groups*2, 1, 1)
+    group_rands = multimask_score.new_empty(shape).bernoulli_(keep_prob)
     # Append a channel of 1 into mask_rands.
     mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
     # Dropped group is subtracted by a big number, so that after softmax
     # the mask weight -> 0. 
     # Kept group scores and LR~RL scores are unchanged.
     mask_rands =  -1e9 * (1.0 - mask_rands)
-    return multiflow * flow_rands, multimask_score + mask_rands
+    return multimask_score + mask_rands
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
@@ -212,7 +210,7 @@ class IFBlock(nn.Module):
         unscaled_output = self.lastconv(x)
 
         scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
-        # tmp/flow/mask_score size = input size.
+        # multiflow/multimask_score: same size as original images.
         # each group of flow has 4 channels. 2 for one direction, 2 for the other direction
         # multiflow has 4*M channels.
         multiflow = scaled_output[:, : 4*self.M] * scale * 2
@@ -223,9 +221,10 @@ class IFBlock(nn.Module):
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]
 
-        multiflow, multimask_score = \
-                        group_drop(multiflow, multimask_score, self.M, 
-                                   self.multi_dropout_rate, self.training)
+        # Randomly dropout some groups by setting corresponding channels in multimask_score
+        # to be -1e9, so that after softmax the group attention becomes 0.
+        multimask_score = group_drop(multimask_score, self.M, 
+                                     self.multi_dropout_rate, self.training)
         return multiflow, multimask_score, x01_feat
     
 class IFNet(nn.Module):
@@ -233,7 +232,6 @@ class IFNet(nn.Module):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
-        self.mask_score_skip_weight = 0
 
         self.tea_reuse_stu_feat = False
         if self.tea_reuse_stu_feat and local_rank == 0:
@@ -293,38 +291,33 @@ class IFNet(nn.Module):
             # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
             if multiflow != None:
                 img01 = torch.cat((img0, img0_warped, img1, img1_warped), 1)
+                nonimg = global_mask_score
+                # flow: merged flow from multiflow of the previous iteration.
                 # multiflow, multiflow_d: [16, 4*M, 224, 224]
                 # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
                 # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
-                multiflow_d, multimask_score_d, x01_feat = stu_blocks[i](img01, mask_score, flow, scale=scale_list[i])
+                multiflow_d, multimask_score_d, x01_feat = stu_blocks[i](img01, nonimg, flow, scale=scale_list[i])
 
                 if self.Ms[i-1] == self.Ms[i]:
-                    multiflow_skip       = multiflow
-                    multimask_score_skip = multimask_score
+                    multiflow_skip  = multiflow
                 else:
                     # If multiflow from the previous iteration has more channels than the current iteration.
                     # Mp: M of the previous iteration. Mc: M of the current iteration.
                     Mp, Mc = self.Ms[i-1], self.Ms[i]
-                    if False and Mp == 2 * Mc:
-                        # Split the Mp groups of multiflow into 2 sets, each with Mc groups.
-                        # Randomly choose one set. Similar to dropout.
-                        multiflow_skip       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
-                        multimask_score_skip = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
-                                                          multimask_score[:, [-1]] ], 1)
-                    else:
-                        # Only take the first Ms[i] channels (of each direction) as the residual.
-                        multiflow_skip       = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
-                        multimask_score_skip = torch.cat([ multimask_score[:, :Mc], multimask_score[:, Mp:Mp+Mc], 
-                                                          multimask_score[:, [-1]] ], 1)
+                    # Only take the first Ms[i] channels (of each direction) as the residual.
+                    multiflow_skip  = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
 
-                multiflow = multiflow_skip + multiflow_d
-                multimask_score = multimask_score_d + multimask_score_skip * self.mask_score_skip_weight
+                multiflow       = multiflow_skip + multiflow_d
+                # multimask_score of different layers have little correlations. 
+                # No need to have residual connections.
+                multimask_score = multimask_score_d
             else:
                 img01 = torch.cat((img0, img1), 1)
                 multiflow,   multimask_score, x01_feat   = stu_blocks[i](img01, None, None, scale=scale_list[i])
 
-            mask_score = multimask_score[:, [-1]]
-            mask_list.append(torch.sigmoid(mask_score))
+            # global_mask_score is never affected by dropout.
+            global_mask_score = multimask_score[:, [-1]]
+            mask_list.append(torch.sigmoid(global_mask_score))
             multiflow_list.append(multiflow)
             flow, multiflow01, multiflow10, flow01, flow10 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
@@ -338,7 +331,6 @@ class IFNet(nn.Module):
             # multiflow and multimask_score are from block2, 
             # which always have the same M as the teacher.
             multiflow_skip       = multiflow
-            multimask_score_skip = multimask_score
 
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
@@ -350,12 +342,11 @@ class IFNet(nn.Module):
                 img01 = x01_feat
             else:
                 img01 = torch.cat((img0, img0_warped, img1, img1_warped), 1)
-            nonimg = torch.cat((mask_score, gt), 1)    
-            multiflow_d, multimask_score_d, _ = self.block_tea(img01, nonimg, flow, scale=1)
+            nonimg = torch.cat((global_mask_score, gt), 1)    
+            multiflow_tea_d, multimask_score_tea, _ = self.block_tea(img01, nonimg, flow, scale=1)
 
             # Removing this residual connection makes the teacher perform much worse.                      
-            multiflow_tea = multiflow_skip + multiflow_d
-            multimask_score_tea = multimask_score_d + multimask_score_skip * self.mask_score_skip_weight
+            multiflow_tea = multiflow_skip + multiflow_tea_d
             warped_img0_tea, warped_img1_tea = \
                 multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.Ms[2])
             mask_score_tea = multimask_score_tea[:, [-1]]
@@ -390,7 +381,8 @@ class IFNet(nn.Module):
             c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
             c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
 
-        tmp = self.unet(img0, img1, img0_warped, img1_warped, mask_score, flow, c0, c1)
+        # flow: merged flow from multiflow of the previous iteration.
+        tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
 
