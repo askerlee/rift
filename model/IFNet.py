@@ -126,9 +126,6 @@ class IFBlock(nn.Module):
         self.conv_nonimg = nn.Sequential(
                                 conv(self.nonimg_chans, c//2, 3, 2, 1),
                                 conv(c//2, c//2, 3, 2, 1),
-                                conv(c//2, c//2),
-                                conv(c//2, c//2),
-                                conv(c//2, c//2),  
                             )
         if has_gt:
             all_feat_chan = 2 * c
@@ -235,11 +232,6 @@ class IFNet(nn.Module):
         # gt is provided, i.e., in the training stage.
         is_training = gt.shape[1] == 3
 
-        multiflow_list = []
-        flow_list = []
-        warped_imgs_list = []
-        merged_img_list  = [None, None, None]
-        mask_list = []
         img0_warped = img0
         img1_warped = img1
         flow_shape = list(img0.shape)
@@ -247,107 +239,130 @@ class IFNet(nn.Module):
         flow = torch.zeros(flow_shape, device=img0.device)
         multiflow_shape = list(img0.shape)
         multiflow_shape[1] = 4*self.Ms[0]
-        multiflow = torch.zeros(multiflow_shape, device=img0.device)
+        multiflow = multiflow_init = torch.zeros(multiflow_shape, device=img0.device)
         global_mask_score_shape = list(img0.shape)
         global_mask_score_shape[1] = 1
         global_mask_score = torch.zeros(global_mask_score_shape, device=img0.device)
 
         stu_blocks = [self.block0, self.block1, self.block2]
-
-        for i in range(3):
-            # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
-            imgs = torch.cat((img0, img0_warped, img1, img1_warped), 1)
-            # flow: merged flow from multiflow of the previous iteration.
-            # multiflow, multiflow_d: [16, 4*M, 224, 224]
-            # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
-            # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
-            multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
-
-            if self.Ms[i-1] == self.Ms[i]:
-                multiflow_skip  = multiflow
-            else:
-                # If multiflow from the previous iteration has more channels than the current iteration.
-                # Mp: M of the previous iteration. Mc: M of the current iteration.
-                Mp, Mc = self.Ms[i-1], self.Ms[i]
-                # Only take the first Ms[i] channels (of each direction) as the residual.
-                multiflow_skip  = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
-
-            multiflow       = multiflow_skip + multiflow_d
-            # multimask_score of different layers have little correlations. 
-            # No need to have residual connections.
-            multimask_score = multimask_score_d
-
-            # global_mask_score is never affected by dropout.
-            global_mask_score = multimask_score[:, [-1]]
-            mask_list.append(torch.sigmoid(global_mask_score))
-            multiflow_list.append(multiflow)
-            flow, multiflow01, multiflow10, flow01, flow10 = \
-                multimerge_flow(multiflow, multimask_score, self.Ms[i])
-            flow_list.append(flow)
-            img0_warped, img1_warped = \
-                multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
-            warped_imgs = (img0_warped, img1_warped)
-            warped_imgs_list.append(warped_imgs)
-
-        if is_training:
-            # multiflow and multimask_score are from block2, 
-            # which always have the same M as the teacher.
-            multiflow_skip       = multiflow
-
-            # teacher only works at the last scale, i.e., the full image.
-            # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
-            # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
-            # multiflow_d / multimask_score_d: flow / mask score difference 
-            # between the teacher and the student (or residual of the teacher). 
-            # The teacher only predicts the residual.
-            imgs  = torch.cat((img0, img0_warped, img1, img1_warped, gt, gt), 1)
-            multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, global_mask_score, flow, scale=1)
-
-            # Removing this residual connection makes the teacher perform much worse.                      
-            multiflow_tea = multiflow_skip + multiflow_tea_d
-            warped_img0_tea, warped_img1_tea = \
-                multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.Ms[2])
-            mask_score_tea = multimask_score_tea[:, [-1]]
-            mask_tea = torch.sigmoid(mask_score_tea)
-            merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
-            flow_tea, _, _, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
-        else:
-            flow_tea = None
-            merged_tea = None
-
         loss_distill = 0
-        for i in range(3):
-            # mask_list[i]: *soft* mask (weights) at the i-th scale.
-            # merged_img_list[i]: average of 1->2 and 2->1 warped images.
-            merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
-                                 warped_imgs_list[i][1] * (1 - mask_list[i])
-                                 
+        loops_merged_img_list = []
+
+        for L in range(self.loop):
+            multiflow_list = []
+            flow_list = []
+            warped_imgs_list = []
+            merged_img_list  = [None, None, None]
+            mask_list = []
+
+            for i in range(3):
+                # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
+                imgs = torch.cat((img0, img0_warped, img1, img1_warped), 1)
+                # flow: merged flow from multiflow of the previous iteration.
+                # multiflow, multiflow_d: [16, 4*M, 224, 224]
+                # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
+                # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
+                multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
+
+                if L == 0 and i == 0:
+                    multiflow_skip = multiflow_init
+                else:
+                    if i > 0:
+                        Mp = self.Ms[i-1]
+                    else:
+                        Mp = self.Ms[2]
+                    Mc = self.Ms[i]
+                    if Mp == Mc:
+                        multiflow_skip  = multiflow
+                    elif Mp > Mc:
+                        # If multiflow from the previous iteration has more channels than the current iteration.
+                        # Mp: M of the previous iteration. Mc: M of the current iteration.
+                        Mp, Mc = self.Ms[i-1], self.Ms[i]
+                        # Only take the first Ms[i] channels (of each direction) as the residual.
+                        multiflow_skip  = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
+                    # Mp < Mc. This happens in the beginning of the next loop.
+                    else:
+                        multiflow_skip = multiflow_init
+                        multiflow_skip[:, :2*Mp] = multiflow[:, :2*Mp]
+                        multiflow_skip[:, 2*Mc:2*Mc+2*Mp] = multiflow[:, 2*Mp:]
+
+                multiflow       = multiflow_skip + multiflow_d
+                # multimask_score of different layers have little correlations. 
+                # No need to have residual connections.
+                multimask_score = multimask_score_d
+
+                # global_mask_score is never affected by dropout.
+                global_mask_score = multimask_score[:, [-1]]
+                mask_list.append(torch.sigmoid(global_mask_score))
+                multiflow_list.append(multiflow)
+                flow, multiflow01, multiflow10, flow01, flow10 = \
+                    multimerge_flow(multiflow, multimask_score, self.Ms[i])
+                flow_list.append(flow)
+                img0_warped, img1_warped = \
+                    multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
+                warped_imgs = (img0_warped, img1_warped)
+                warped_imgs_list.append(warped_imgs)
+
             if is_training:
-                # dual_teaching_loss: the student can also teach the teacher, 
-                # when the student is more accurate.
-                loss_distill += dual_teaching_loss(gt, merged_img_list[i], flow_list[i], 
-                                                   merged_tea, flow_tea, self.distill_scheme)
+                # multiflow and multimask_score are from block2, 
+                # which always have the same M as the teacher.
+                multiflow_skip       = multiflow
 
-        if self.ctx_use_merged_flow:
-            # contextnet generates warped features of the input image. 
-            # flow01/flow10 is not used as input to generate the features, but to warp the features.
-            # Setting M=1 makes multiwarp fall back to warp. So it's equivalent to the traditional RIFE scheme.
-            # Using merged flow seems to perform slightly worse.
-            c0 = self.contextnet(img0, flow01, multimask_score, 1)
-            c1 = self.contextnet(img1, flow10, multimask_score, 1)
-        else:
-            c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
-            c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
+                # teacher only works at the last scale, i.e., the full image.
+                # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
+                # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
+                # multiflow_d / multimask_score_d: flow / mask score difference 
+                # between the teacher and the student (or residual of the teacher). 
+                # The teacher only predicts the residual.
+                imgs  = torch.cat((img0, img0_warped, img1, img1_warped, gt, gt), 1)
+                multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, global_mask_score, flow, scale=1)
 
-        # flow: merged flow from multiflow of the previous iteration.
-        tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)
-        # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        img_residual = tmp[:, :3] * 2 - 1
+                # Removing this residual connection makes the teacher perform much worse.                      
+                multiflow_tea = multiflow_skip + multiflow_tea_d
+                warped_img0_tea, warped_img1_tea = \
+                    multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.Ms[2])
+                mask_score_tea = multimask_score_tea[:, [-1]]
+                mask_tea = torch.sigmoid(mask_score_tea)
+                merged_tea = warped_img0_tea * mask_tea + warped_img1_tea * (1 - mask_tea)
+                flow_tea, _, _, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
+            else:
+                flow_tea = None
+                merged_tea = None
 
-        if self.use_grad_clamp:
-            merged_img_list[2] = self.clamp01(merged_img_list[2] + img_residual)
-        else:
-            merged_img_list[2] = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
+            for i in range(3):
+                # mask_list[i]: *soft* mask (weights) at the i-th scale.
+                # merged_img_list[i]: average of 1->2 and 2->1 warped images.
+                merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
+                                     warped_imgs_list[i][1] * (1 - mask_list[i])
+                                    
+                if is_training:
+                    # dual_teaching_loss: the student can also teach the teacher, 
+                    # when the student is more accurate.
+                    loss_distill += dual_teaching_loss(gt, merged_img_list[i], flow_list[i], 
+                                                       merged_tea, flow_tea, self.distill_scheme)
+
+            if self.ctx_use_merged_flow:
+                # contextnet generates warped features of the input image. 
+                # flow01/flow10 is not used as input to generate the features, but to warp the features.
+                # Setting M=1 makes multiwarp fall back to warp. So it's equivalent to the traditional RIFE scheme.
+                # Using merged flow seems to perform slightly worse.
+                c0 = self.contextnet(img0, flow01, multimask_score, 1)
+                c1 = self.contextnet(img1, flow10, multimask_score, 1)
+            else:
+                c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
+                c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
+
+            # flow: merged flow from multiflow of the previous iteration.
+            tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)
+            # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
+            img_residual = tmp[:, :3] * 2 - 1
+
+            if self.use_grad_clamp:
+                merged_img = self.clamp01(merged_img_list[2] + img_residual)
+            else:
+                merged_img = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
+
+            loops_merged_img_list.append(merged_img)
 
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
+        return flow_list, mask_list[2], loops_merged_img_list, flow_tea, merged_tea, loss_distill
