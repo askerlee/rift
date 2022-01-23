@@ -18,8 +18,8 @@ device = torch.device("cuda")
     
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
-                 distill_loss_weight=0.01, 
-                 multi=(8,8,4), 
+                 distill_loss_weight=0.015, 
+                 multi=(4,4,2), 
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3):
         #if arbitrary == True:

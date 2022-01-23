@@ -170,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
     parser.add_argument('--lr', dest='base_lr', default=3.5e-4, type=float)
-    parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
+    parser.add_argument('--multi', dest='multi', default="4,4,2", type=str, metavar='M', 
                         help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
