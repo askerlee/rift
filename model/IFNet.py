@@ -94,7 +94,7 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, c=64, multi=1):
+    def __init__(self, name, c, multi, has_gt):
         super(IFBlock, self).__init__()
         self.name = name
         self.img_chans   = 6    # Each image: concat of (original image, warped image).
@@ -111,7 +111,7 @@ class IFBlock(nn.Module):
 
         conv = conv_gen(do_BN=False)
 
-        self.nonimg_chans = 1   # non-image: global_mask. Flow is provided in another argument.
+        self.nonimg_chans = 5   # non-image: 1 channel of global_mask & 4 channels of flow.
 
         # conv_img downscales input image to 1/4 size.
         self.conv_img = nn.Sequential(
@@ -122,17 +122,20 @@ class IFBlock(nn.Module):
                             conv(c//2, c//2),                
                         )
 
-        if self.nonimg_chans > 0:
-            # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
-            self.conv_nonimg = nn.Sequential(
-                                    conv(self.nonimg_chans, c//2, 3, 2, 1),
-                                    conv(c//2, c//2, 3, 2, 1)
-                                )
-            self.conv_bridge = conv(3 * (c//2), c, 3, 1, 1)
+        # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
+        self.conv_nonimg = nn.Sequential(
+                                conv(self.nonimg_chans, c//2, 3, 2, 1),
+                                conv(c//2, c//2, 3, 2, 1),
+                                conv(c//2, c//2),
+                                conv(c//2, c//2),
+                                conv(c//2, c//2),  
+                            )
+        if has_gt:
+            all_feat_chan = 2 * c
         else:
-            # No non-img channels. Just to bridge the channel number difference.
-            self.conv_bridge = conv(c, c, 3, 1, 1)
+            all_feat_chan = 3 * (c//2)
 
+        self.conv_bridge = conv(all_feat_chan, c, 3, 1, 1)        
         # Moved 3 conv layers from mixconv in RIFE to conv_img.
         self.mixconv = nn.Sequential(
                             conv(c, c),
@@ -198,13 +201,13 @@ class IFNet(nn.Module):
 
         self.Ms = multi
         self.loop = 2
-        self.block0 =   IFBlock('block0',     c=block_widths[0], multi=self.Ms[0])
-        self.block1 =   IFBlock('block1',     c=block_widths[1], multi=self.Ms[1])
-        self.block2 =   IFBlock('block2',     c=block_widths[2], multi=self.Ms[2])
+        self.block0 =   IFBlock('block0',     c=block_widths[0], multi=self.Ms[0], has_gt=False)
+        self.block1 =   IFBlock('block1',     c=block_widths[1], multi=self.Ms[1], has_gt=False)
+        self.block2 =   IFBlock('block2',     c=block_widths[2], multi=self.Ms[2], has_gt=False)
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea doesn't do group dropout so that it converges faster
         # and guides students better.
-        self.block_tea = IFBlock('block_tea', c=block_widths[2], multi=self.Ms[2])
+        self.block_tea = IFBlock('block_tea', c=block_widths[2], multi=self.Ms[2], has_gt=True)
         
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
@@ -239,13 +242,16 @@ class IFNet(nn.Module):
         mask_list = []
         img0_warped = img0
         img1_warped = img1
+        flow_shape = list(img0.shape)
+        flow_shape[1] = 4
+        flow = torch.zeros(flow_shape, device=img0.device)
         multiflow_shape = list(img0.shape)
         multiflow_shape[1] = 4*self.Ms[0]
         multiflow = torch.zeros(multiflow_shape, device=img0.device)
         global_mask_score_shape = list(img0.shape)
         global_mask_score_shape[1] = 1
         global_mask_score = torch.zeros(global_mask_score_shape, device=img0.device)
-        
+
         stu_blocks = [self.block0, self.block1, self.block2]
 
         for i in range(3):
