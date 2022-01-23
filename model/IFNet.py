@@ -98,7 +98,8 @@ def group_drop(multiflow, multimask_score, num_groups, drop_prob,
     # Append a channel of 1 into mask_rands.
     mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
     # Dropped group is subtracted by a big number, so that after softmax
-    # the mask weight -> 0.
+    # the mask weight -> 0. 
+    # Kept group is unchanged.
     mask_rands =  -100000 * (1 - mask_rands)
     return multiflow * flow_rands, multimask_score + mask_rands
 
@@ -246,10 +247,11 @@ class IFNet(nn.Module):
         self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
                                 multi=self.Ms[2], multi_dropout_rate=self.multi_dropout_rate)
         # block_tea takes gt (the middle frame) as extra input. 
-        # block_tea only outputs one group of flow, as it takes extra info and the single group of 
-        # output flow is already quite accurate.
+        # block_tea doesn't do group dropout so that it converges faster
+        # and guides students better.
         self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
-                                 multi=self.Ms[2], reuse_feat01=self.tea_reuse_stu_feat)
+                                 multi=self.Ms[2], multi_dropout_rate=0,
+                                 reuse_feat01=self.tea_reuse_stu_feat)
         
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
