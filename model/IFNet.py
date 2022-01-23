@@ -99,8 +99,8 @@ def group_drop(multiflow, multimask_score, num_groups, drop_prob,
     mask_rands = torch.cat([group_rands, torch.ones_like(group_rands[:, [0]])], dim=1)
     # Dropped group is subtracted by a big number, so that after softmax
     # the mask weight -> 0. 
-    # Kept group is unchanged.
-    mask_rands =  -100000 * (1 - mask_rands)
+    # Kept group scores and LR~RL scores are unchanged.
+    mask_rands =  -1e9 * (1.0 - mask_rands)
     return multiflow * flow_rands, multimask_score + mask_rands
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
@@ -239,7 +239,7 @@ class IFNet(nn.Module):
             print("Tie the conv feats of block_tea and block1.")
 
         self.Ms = multi
-        self.multi_dropout_rate = 0.3
+        self.multi_dropout_rate = 0.2
         self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=0, 
                                 multi=self.Ms[0], multi_dropout_rate=self.multi_dropout_rate)
         self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
