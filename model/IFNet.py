@@ -197,7 +197,7 @@ class IFNet(nn.Module):
         block_widths = [240, 144, 80]
 
         self.Ms = multi
-        self.loop = 2
+        self.loop_num = 2
         self.block0 =   IFBlock('block0',     c=block_widths[0], multi=self.Ms[0], has_gt=False)
         self.block1 =   IFBlock('block1',     c=block_widths[1], multi=self.Ms[1], has_gt=False)
         self.block2 =   IFBlock('block2',     c=block_widths[2], multi=self.Ms[2], has_gt=False)
@@ -248,7 +248,7 @@ class IFNet(nn.Module):
         loss_distill = 0
         loops_merged_img_list = []
 
-        for L in range(self.loop):
+        for L in range(self.loop_num):
             multiflow_list = []
             flow_list = []
             warped_imgs_list = []
@@ -364,5 +364,6 @@ class IFNet(nn.Module):
 
             loops_merged_img_list.append(merged_img)
 
+        loss_distill /= self.loop_num
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], loops_merged_img_list, flow_tea, merged_tea, loss_distill
