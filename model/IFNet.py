@@ -177,9 +177,12 @@ class IFBlock(nn.Module):
         xs_bunpack_shape[0:2] = [ imgs.shape[0], -1 ]
         xs_feat = xs_feat.reshape(xs_bunpack_shape)
 
-        nonimg_feat = self.conv_nonimg(nonimg)
-        x  = self.conv_bridge(torch.cat((xs_feat, nonimg_feat), 1))
-
+        if nonimg is not None:
+            nonimg_feat = self.conv_nonimg(nonimg)
+            x  = self.conv_bridge(torch.cat((xs_feat, nonimg_feat), 1))
+        else:
+            x  = self.conv_bridge(xs_feat)
+            
         # x: [1, 240, 14, 14] in 'block0'.
         #    [1, 150, 28, 28] in 'block1'.
         #    [1, 90,  56, 56] in 'block2'.
