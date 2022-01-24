@@ -359,4 +359,4 @@ class IFNet(nn.Module):
         merged_img_list[2] = merged_img
 
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged_img, flow_tea, merged_tea, loss_distill
+        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill

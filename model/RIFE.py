@@ -96,11 +96,17 @@ class Model:
         else:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
-        loss_stu = 0
-        for stu_pred in merged_img_list:
-            # lap: laplacian pyramid loss.
-            loss_stu += (self.lap(stu_pred, gt)).mean()
-        loss_stu = loss_stu / len(merged_img_list)
+        
+        only_calc_final_loss = True
+        if only_calc_final_loss:
+            stu_pred = merged_img_list[2]
+            loss_stu = (self.lap(stu_pred, gt)).mean()
+        else:
+            loss_stu = 0
+            for stu_pred in merged_img_list:
+                # lap: laplacian pyramid loss.
+                loss_stu += (self.lap(stu_pred, gt)).mean()
+            loss_stu = loss_stu / len(merged_img_list)
 
         # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
         loss_tea = (self.lap(merged_teacher, gt)).mean()
