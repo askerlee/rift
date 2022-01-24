@@ -240,7 +240,7 @@ class IFNet(nn.Module):
         is_training = gt.shape[1] == 3
 
         img0_warped, img1_warped = None, None
-        global_mask_score = torch.zeros_like(img0[:, 0])
+        global_mask_score = torch.zeros_like(img0[:, [0]])
         flow = None
 
         stu_blocks = [self.block0, self.block1, self.block2]
