@@ -232,8 +232,8 @@ class IFNet(nn.Module):
         # gt is provided, i.e., in the training stage.
         is_training = gt.shape[1] == 3
 
-        img0_warped = img0
-        img1_warped = img1
+        img0_warped = torch.zeros_like(img0)
+        img1_warped = torch.zeros_like(img1)
         flow_shape = list(img0.shape)
         flow_shape[1] = 4
         flow = torch.zeros(flow_shape, device=img0.device)
@@ -314,7 +314,7 @@ class IFNet(nn.Module):
                 # multiflow_d / multimask_score_d: flow / mask score difference 
                 # between the teacher and the student (or residual of the teacher). 
                 # The teacher only predicts the residual.
-                imgs  = torch.cat((img0, img0_warped, img1, img1_warped, gt, gt), 1)
+                imgs  = torch.cat((img0, img0_warped, img1, img1_warped, gt, torch.zeros_like(gt)), 1)
                 multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, global_mask_score, flow, scale=1)
 
                 # Removing this residual connection makes the teacher perform much worse.                      
