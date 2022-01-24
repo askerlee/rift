@@ -1,3 +1,7 @@
+epoch:0, iter:1523, psnr:31.93, psnr_tea:34.06, loss_dist:0.87
+epoch:1, iter:3046, psnr:33.24, psnr_tea:36.34, loss_dist:0.58
+epoch:2, iter:4569, psnr:33.74, psnr_tea:37.09, loss_dist:0.47
+
 shaohua@MEHDI182 ~/rift (main) [1]> torchrun --nproc_per_node 2 train.py
 WARNING:torch.distributed.run:
 *****************************************

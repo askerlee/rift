@@ -364,6 +364,6 @@ class IFNet(nn.Module):
 
             loops_merged_img_list.append(merged_img)
 
-        # loss_distill /= self.loop_num
+        loss_distill /= self.loop_num
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], loops_merged_img_list, flow_tea, merged_tea, loss_distill
