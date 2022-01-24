@@ -172,6 +172,9 @@ if __name__ == "__main__":
     parser.add_argument('--lr', dest='base_lr', default=3.5e-4, type=float)
     parser.add_argument('--multi', dest='multi', default="4,4,2", type=str, metavar='M', 
                         help='Output M groups of flow')
+    parser.add_argument('--loop', dest='loop_num', default=1, type=int, metavar='L', 
+                        help='Loop L times')
+
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
 
@@ -193,6 +196,7 @@ if __name__ == "__main__":
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
                   multi=args.multi,
+                  loop_num=args.loop_num,
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay)
 

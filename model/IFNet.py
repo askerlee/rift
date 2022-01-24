@@ -191,13 +191,13 @@ class IFBlock(nn.Module):
         return multiflow, multimask_score
     
 class IFNet(nn.Module):
-    def __init__(self, multi=(4,4,2), ctx_use_merged_flow=False):
+    def __init__(self, multi=(4,4,2), loop_num=1, ctx_use_merged_flow=False):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
 
         self.Ms = multi
-        self.loop_num = 2
+        self.loop_num = loop_num
         self.block0 =   IFBlock('block0',     c=block_widths[0], multi=self.Ms[0], has_gt=False)
         self.block1 =   IFBlock('block1',     c=block_widths[1], multi=self.Ms[1], has_gt=False)
         self.block2 =   IFBlock('block2',     c=block_widths[2], multi=self.Ms[2], has_gt=False)
