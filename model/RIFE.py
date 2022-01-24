@@ -19,7 +19,7 @@ device = torch.device("cuda")
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
                  distill_loss_weight=0.015, 
-                 multi=(4,4,2), loop_num=1,
+                 multi=(4,4,2), 
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3):
         #if arbitrary == True:
@@ -27,7 +27,7 @@ class Model:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, loop_num, ctx_use_merged_flow)
+            self.flownet = IFNet(multi, ctx_use_merged_flow)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
