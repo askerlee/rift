@@ -49,8 +49,8 @@ def debug():
 
 # Dual teaching helps slightly.
 def dual_teaching_loss(distill_scheme, gt, 
-                       img_stu, flow_stu, gmask_score_stu, 
-                       img_tea, flow_tea, gmask_score_tea):
+                       img_stu, flow_stu, 
+                       img_tea, flow_tea):
     loss_distill = 0
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
@@ -76,11 +76,10 @@ def dual_teaching_loss(distill_scheme, gt,
         # then regard the flow at these points are more accurate, and use them to teach the student.
         # loss_distill is the sum of the distillation losses at 3 different scales.
         loss_distill += Ws[i] * ((flow_tea.detach() - flow_stu).abs() * distill_mask).mean()
-        loss_distill += Ws[i] * ((gmask_score_tea.detach() - gmask_score_stu).abs() * distill_mask).mean()
 
         # Swap student and teacher, and calculate the distillation loss again.
-        img_stu, flow_stu, gmask_score_stu, img_tea, flow_tea, gmask_score_tea = \
-            img_tea, flow_tea, gmask_score_tea, img_stu, flow_stu, gmask_score_stu
+        img_stu, flow_stu, img_tea, flow_tea = \
+            img_tea, flow_tea, img_stu, flow_stu
         # The distillation loss from the student to the teacher is given a smaller weight.
         
     return loss_distill
@@ -246,9 +245,7 @@ class IFNet(nn.Module):
         stu_blocks = [self.block0, self.block1, self.block2]
         loss_distill = 0
 
-        multiflow_list = []
         flow_list = []
-        gmask_score_list = []
         warped_imgs_list = []
         merged_img_list  = [None, None, None]
         mask_list = []
@@ -293,8 +290,6 @@ class IFNet(nn.Module):
             # global_mask_score is never affected by dropout.
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
-            multiflow_list.append(multiflow)
-            gmask_score_list.append(global_mask_score)
             flow, multiflow01, multiflow10, flow01, flow10 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
@@ -339,9 +334,10 @@ class IFNet(nn.Module):
             if is_training:
                 # dual_teaching_loss: the student can also teach the teacher, 
                 # when the student is more accurate.
+                # Distilling both merged flow and global mask score leads to slightly worse performance.
                 loss_distill += dual_teaching_loss(self.distill_scheme, gt, 
-                                                   merged_img_list[i], flow_list[i], gmask_score_list[i],
-                                                   merged_tea,         flow_tea,     global_mask_score_tea, 
+                                                   merged_img_list[i], flow_list[i], 
+                                                   merged_tea,         flow_tea,     
                                                   )
 
         if self.ctx_use_merged_flow:
