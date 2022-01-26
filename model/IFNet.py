@@ -48,7 +48,9 @@ def debug():
         dist.barrier()
 
 # Dual teaching helps slightly.
-def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_scheme):
+def dual_teaching_loss(distill_scheme, gt, 
+                       img_stu, flow_stu, gmask_score_stu, 
+                       img_tea, flow_tea, gmask_score_tea):
     loss_distill = 0
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
@@ -59,7 +61,7 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
     for i in range(2):
         # distill_mask indicates where the warped images according to student's prediction 
         # is worse than that of the teacher.
-        student_error = (img_stud - gt).abs().mean(1, True)
+        student_error = (img_stu - gt).abs().mean(1, True)
         teacher_error = (img_tea  - gt).abs().mean(1, True)
         if distill_scheme == 'hard':
             distill_mask = (student_error > teacher_error + 0.01).float().detach()
@@ -73,12 +75,13 @@ def dual_teaching_loss(gt, img_stud, flow_stud, img_tea, flow_tea, distill_schem
         # If at some points, the warped image of the teacher is better than the student,
         # then regard the flow at these points are more accurate, and use them to teach the student.
         # loss_distill is the sum of the distillation losses at 3 different scales.
-        loss_distill += Ws[i] * ((flow_tea.detach() - flow_stud).abs() * distill_mask).mean()
+        loss_distill += Ws[i] * ((flow_tea.detach() - flow_stu).abs() * distill_mask).mean()
+        loss_distill += Ws[i] * ((gmask_score_tea.detach() - gmask_score_stu).abs() * distill_mask).mean()
 
-        # swap student and teacher, and calculate the distillation loss again.
-        img_stud, flow_stud, img_tea, flow_tea = \
-            img_tea, flow_tea, img_stud, flow_stud
-        # The distillation loss from the student to the teacher has a smaller weight.
+        # Swap student and teacher, and calculate the distillation loss again.
+        img_stu, flow_stu, gmask_score_stu, img_tea, flow_tea, gmask_score_tea = \
+            img_tea, flow_tea, gmask_score_tea, img_stu, flow_stu, gmask_score_stu
+        # The distillation loss from the student to the teacher is given a smaller weight.
         
     return loss_distill
 
@@ -94,7 +97,7 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, c, img_chans, nonimg_chans, multi, has_gt):
+    def __init__(self, name, c, img_chans, nonimg_chans, multi):
         super(IFBlock, self).__init__()
         self.name = name
         # Each image: concat of (original image, warped image).
@@ -114,7 +117,7 @@ class IFBlock(nn.Module):
 
         # At first scale, flow is absent. So nonimg_chans = 1.
         # At other scales, nonimg_chans = 5: 1 channel of global_mask & 4 channels of flow.
-        self.nonimg_chans = 5   
+        self.nonimg_chans = nonimg_chans   
 
         # conv_img downscales input image to 1/4 size.
         self.conv_img = nn.Sequential(
@@ -125,19 +128,15 @@ class IFBlock(nn.Module):
                             conv(c//2, c//2),                
                         )
 
-        imgs_feat_chan = c
-        nonimg_feat_chan = (self.nonimg_chans > 0) * (c//2)
-        all_feat_chan = imgs_feat_chan + nonimg_feat_chan
-
-        if self.nonimg_chans > 0:
-            # nonimg: mask + flow computed in the previous scale (only available for block1 and block2)
-            self.conv_nonimg = nn.Sequential(
-                                    conv(self.nonimg_chans, c//2, 3, 2, 1),
-                                    conv(c//2, c//2, 3, 2, 1)
-                                )
+        # nonimg: mask + flow computed in the previous scale.
+        # In scale 1, they are initialized as 0.
+        self.conv_nonimg = nn.Sequential(
+                                conv(self.nonimg_chans, c//2, 3, 2, 1),
+                                conv(c//2, c//2, 3, 2, 1)
+                            )
 
         # No non-img channels. Just to bridge the channel number difference.
-        self.conv_bridge = conv(all_feat_chan, c, 3, 1, 1)
+        self.conv_bridge = conv(3 * (c//2), c, 3, 1, 1)
 
         # Moved 3 conv layers from mixconv in RIFE to conv_img.
         self.mixconv = nn.Sequential(
@@ -204,17 +203,17 @@ class IFNet(nn.Module):
         block_widths = [240, 144, 80]
 
         self.Ms = multi
-        self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=0, 
-                                multi=self.Ms[0], has_gt=False)
+        self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
+                                multi=self.Ms[0])
         self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
-                                multi=self.Ms[1], has_gt=False)
+                                multi=self.Ms[1])
         self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                multi=self.Ms[2], has_gt=False)
+                                multi=self.Ms[2])
         # block_tea takes gt (the middle frame) as extra input. 
         # block_tea doesn't do group dropout so that it converges faster
         # and guides students better.
         self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
-                                 multi=self.Ms[2], has_gt=False)
+                                 multi=self.Ms[2])
         
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
@@ -249,6 +248,7 @@ class IFNet(nn.Module):
 
         multiflow_list = []
         flow_list = []
+        gmask_score_list = []
         warped_imgs_list = []
         merged_img_list  = [None, None, None]
         mask_list = []
@@ -256,7 +256,10 @@ class IFNet(nn.Module):
             if i == 0:
                 imgs = torch.cat((img0, img1), 1)
                 global_mask_score = torch.zeros_like(img0[:, [0]])
-                flow = None
+                flow_shape = list(img0.shape)
+                flow_shape[1] = 4
+                flow = torch.zeros(flow_shape, device=img0.device)
+                # flow = None
             else:
                 # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
                 imgs = torch.cat((img0, img0_warped, img1, img1_warped), 1)
@@ -291,6 +294,7 @@ class IFNet(nn.Module):
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
             multiflow_list.append(multiflow)
+            gmask_score_list.append(global_mask_score)
             flow, multiflow01, multiflow10, flow01, flow10 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
@@ -318,8 +322,8 @@ class IFNet(nn.Module):
             multiflow_tea = multiflow_skip + multiflow_tea_d
             img0_warped_tea, img1_warped_tea = \
                 multiwarp(img0, img1, multiflow_tea, multimask_score_tea, self.Ms[2])
-            mask_score_tea = multimask_score_tea[:, [-1]]
-            mask_tea = torch.sigmoid(mask_score_tea)
+            global_mask_score_tea = multimask_score_tea[:, [-1]]
+            mask_tea = torch.sigmoid(global_mask_score_tea)
             merged_tea = img0_warped_tea * mask_tea + img1_warped_tea * (1 - mask_tea)
             flow_tea, _, _, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
         else:
@@ -335,8 +339,10 @@ class IFNet(nn.Module):
             if is_training:
                 # dual_teaching_loss: the student can also teach the teacher, 
                 # when the student is more accurate.
-                loss_distill += dual_teaching_loss(gt, merged_img_list[i], flow_list[i], 
-                                                    merged_tea, flow_tea, self.distill_scheme)
+                loss_distill += dual_teaching_loss(self.distill_scheme, gt, 
+                                                   merged_img_list[i], flow_list[i], gmask_score_list[i],
+                                                   merged_tea,         flow_tea,     global_mask_score_tea, 
+                                                  )
 
         if self.ctx_use_merged_flow:
             # contextnet generates warped features of the input image. 
