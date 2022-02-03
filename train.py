@@ -203,5 +203,5 @@ if __name__ == "__main__":
                   conv_weight_decay=args.conv_weight_decay,
                   cons_shift_prob=args.cons_shift_prob)
 
-    train(model, args.local_rank, args.base_lr, args.shift_prob)
+    train(model, args.local_rank, args.base_lr, args.aug_shift_prob)
         
