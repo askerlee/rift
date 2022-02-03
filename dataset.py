@@ -12,7 +12,7 @@ from torchvision import transforms
 cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32):
+    def __init__(self, dataset_name, batch_size=32, shift_prob=0):
         self.batch_size = batch_size
         self.dataset_name = dataset_name        
         self.h = 256
@@ -67,8 +67,15 @@ class VimeoDataset(Dataset):
                             #iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
                         ])
                         
-
-                            
+        self.shift_prob = shift_prob
+        if self.shift_prob > 0:
+            # Shift at most 1/8 of the image, to avoid too much 
+            # loss of valid supervision.
+            # Sintel: crop_size = (368, 768).
+            # max_u_shift, max_v_shift = (96, 46)
+            self.max_u_shift = self.w  // 8
+            self.max_v_shift = self.h  // 8
+                        
     def __len__(self):
         return len(self.meta_data)
 
@@ -90,6 +97,40 @@ class VimeoDataset(Dataset):
         img1 = img1[x:x+h, y:y+w, :]
         gt = gt[x:x+h, y:y+w, :]
         return img0, gt, img1
+
+    # img1 and gt are 3D np array of (H, W, 3). gt is the middle frame.
+    def random_shift(self, img, gt):
+        x_shift = np.random.randint(-self.max_u_shift, self.max_u_shift)
+        y_shift = np.random.randint(-self.max_v_shift, self.max_v_shift)
+        # Make sure x_shift and y_shift are even numbers.
+        x_shift = (x_shift // 2) * 2
+        y_shift = (y_shift // 2) * 2
+        # Shift gt by half of (y_shift, x_shift).
+        x_shift2 = x_shift // 2
+        y_shift2 = y_shift // 2
+
+        # Do not bother to make a special case to handle 0 offsets. 
+        # Just discard such shift params.
+        if x_shift == 0 or y_shift == 0:
+            return img, gt
+
+        img2    = np.zeros_like(img)
+        gt2     = np.zeros_like(gt)
+            
+        if x_shift > 0 and y_shift > 0:
+            img2[y_shift:, x_shift:]    = img[:-y_shift, :-x_shift]
+            gt2[y_shift2:, x_shift2:]   = gt[:-y_shift2, :-x_shift2]
+        if x_shift > 0 and y_shift < 0:
+            img2[:y_shift, x_shift:]    = img[-y_shift:,  :-x_shift]
+            gt2[:y_shift2, x_shift2:]   = gt[-y_shift2:, :-x_shift2]
+        if x_shift < 0 and y_shift > 0:
+            img2[y_shift:, :x_shift]    = img[:-y_shift, -x_shift:]
+            gt2[y_shift2:, :x_shift2]   = gt[:-y_shift2, -x_shift2:]
+        if x_shift < 0 and y_shift < 0:
+            img2[:y_shift, :x_shift]    = img[-y_shift:, -x_shift:]
+            gt2[:y_shift2, :x_shift2]   = gt[-y_shift2:, -x_shift2:]
+
+        return img2, gt2
 
     def getimg(self, index):
         imgpath = os.path.join(self.image_root, self.meta_data[index])
@@ -139,6 +180,9 @@ class VimeoDataset(Dataset):
                 # swap img0 and img1
                 if random.uniform(0, 1) < 0.5:
                     img0, img1 = img1, img0
+
+        if self.shift_prob > 0:
+            img1, gt = self.random_shift(img1, gt)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)

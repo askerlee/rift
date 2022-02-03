@@ -45,7 +45,7 @@ def flow2rgb(flow_map_np):
     rgb_map[:, :, 2] += normalized_flow_map[:, :, 1]
     return rgb_map.clip(0, 1)
 
-def train(model, local_rank, base_lr):
+def train(model, local_rank, base_lr, shift_prob):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -55,7 +55,7 @@ def train(model, local_rank, base_lr):
 
     step = 0
     nr_eval = 0
-    dataset = VimeoDataset('train')
+    dataset = VimeoDataset('train', shift_prob=shift_prob)
     sampler = DistributedSampler(dataset)
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
@@ -170,10 +170,12 @@ if __name__ == "__main__":
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
     parser.add_argument('--lr', dest='base_lr', default=3.5e-4, type=float)
-    parser.add_argument('--multi', dest='multi', default="4,4,2", type=str, metavar='M', 
+    parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
+    parser.add_argument('--shiftprob', dest='shift_prob', default=0, type=float,
+                        help='Probability of shifting augmentation')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -196,5 +198,5 @@ if __name__ == "__main__":
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay)
 
-    train(model, args.local_rank, args.base_lr)
+    train(model, args.local_rank, args.base_lr, args.shift_prob)
         
