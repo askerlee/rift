@@ -12,7 +12,7 @@ from torchvision import transforms
 cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32, shift_prob=0):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0):
         self.batch_size = batch_size
         self.dataset_name = dataset_name        
         self.h = 256
@@ -67,8 +67,8 @@ class VimeoDataset(Dataset):
                             #iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
                         ])
                         
-        self.shift_prob = shift_prob
-        if self.shift_prob > 0:
+        self.aug_shift_prob = aug_shift_prob
+        if self.aug_shift_prob > 0:
             # Shift at most 1/16 of the image, to avoid too much 
             # loss of valid supervision.
             # Vimeo: (256, 448).
@@ -181,7 +181,7 @@ class VimeoDataset(Dataset):
                 if random.uniform(0, 1) < 0.5:
                     img0, img1 = img1, img0
 
-        if self.shift_prob > 0:
+        if self.aug_shift_prob > 0:
             img1, gt = self.random_shift(img1, gt)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)

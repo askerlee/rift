@@ -57,7 +57,7 @@ def train(model, local_rank, base_lr, aug_shift_prob):
 
     step = 0
     nr_eval = 0
-    dataset = VimeoDataset('train', shift_prob=aug_shift_prob)
+    dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob)
     sampler = DistributedSampler(dataset)
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
