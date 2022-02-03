@@ -52,8 +52,11 @@ def random_shift(img, gt):
         img2[:, :, :y_shift, :x_shift]    = img[:, :, -y_shift:,  -x_shift:]
         gt2[ :, :, :y_shift2, :x_shift2]  = gt[ :, :, -y_shift2:, -x_shift2:]
 
-    xy_shift = torch.tensor([x_shift, y_shift], dtype=float, device=img.device)
-    xy_shift = xy_shift.view(1, 2, 1, 1)
+    # For the flow of two directions.
+    # From 0 -> 0.5: positive offsets
+    # From 1 -> 0.5: negative offsets
+    xy_shift = torch.tensor([x_shift, y_shift, -x_shift, -y_shift], dtype=float, device=img.device)
+    xy_shift = xy_shift.view(1, 4, 1, 1)
     return img2, gt2, xy_shift
 
 class Model:
