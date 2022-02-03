@@ -143,7 +143,7 @@ class Model:
             imgs2, gt2, xy_shift = random_shift(imgs, gt)
             if xy_shift is not None:
                 flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
-                consist_loss_stu = torch.abs(flow2 + xy_shift - flow).mean()
+                consist_loss_stu = torch.abs(flow2[-1] + xy_shift - flow[-1]).mean()
                 consist_loss_tea = torch.abs(flow_teacher2 + xy_shift - flow_teacher).mean()
                 consist_loss = (consist_loss_stu + consist_loss_tea) / 2
             else:
