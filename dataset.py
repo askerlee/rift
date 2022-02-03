@@ -98,7 +98,7 @@ class VimeoDataset(Dataset):
         gt = gt[x:x+h, y:y+w, :]
         return img0, gt, img1
 
-    # img1 and gt are 3D np array of (H, W, 3). gt is the middle frame.
+    # img1 and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
     def random_shift(self, img, gt):
         x_shift = np.random.randint(-self.max_u_shift, self.max_u_shift)
         y_shift = np.random.randint(-self.max_v_shift, self.max_v_shift)

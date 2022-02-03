@@ -13,15 +13,56 @@ import torch.nn.functional as F
 from model.loss import *
 from model.laplacian import *
 from model.refine import *
+import random
 
 device = torch.device("cuda")
-    
+
+# img1 and gt are 4D tensors of (B, 3, H, W). gt are the middle frames.
+def random_shift(img, gt):
+    B, C, H, W = img.shape
+    max_u_shift = W // 16
+    max_v_shift = H // 16
+    x_shift = np.random.randint(-max_u_shift, max_u_shift)
+    y_shift = np.random.randint(-max_v_shift, max_v_shift)
+    # Make sure x_shift and y_shift are even numbers.
+    x_shift = (x_shift // 2) * 2
+    y_shift = (y_shift // 2) * 2
+    # Shift gt by half of (y_shift, x_shift).
+    x_shift2 = x_shift // 2
+    y_shift2 = y_shift // 2
+
+    # Do not bother to make a special case to handle 0 offsets. 
+    # Just discard such shift params.
+    if x_shift == 0 or y_shift == 0:
+        return img, gt, None
+
+    img2    = torch.zeros_like(img)
+    gt2     = torch.zeros_like(gt)
+        
+    if x_shift > 0 and y_shift > 0:
+        img2[:, :, y_shift:, x_shift:]    = img[:, :, :-y_shift,  :-x_shift]
+        gt2[ :, :, y_shift2:, x_shift2:]  = gt[ :, :, :-y_shift2, :-x_shift2]
+    if x_shift > 0 and y_shift < 0:
+        img2[:, :, :y_shift,  x_shift:]   = img[:, :, -y_shift:,  :-x_shift]
+        gt2[ :, :, :y_shift2, x_shift2:]  = gt[ :, :, -y_shift2:, :-x_shift2]
+    if x_shift < 0 and y_shift > 0:
+        img2[:, :, y_shift:, :x_shift]    = img[:, :, :-y_shift,  -x_shift:]
+        gt2[ :, :, y_shift2:, :x_shift2]  = gt[ :, :, :-y_shift2, -x_shift2:]
+    if x_shift < 0 and y_shift < 0:
+        img2[:, :, :y_shift, :x_shift]    = img[:, :, -y_shift:,  -x_shift:]
+        gt2[ :, :, :y_shift2, :x_shift2]  = gt[ :, :, -y_shift2:, -x_shift2:]
+
+    xy_shift = torch.array([x_shift, y_shift], dtype=float, device=img.device)
+    xy_shift = xy_shift.view(1, 2, 1, 1)
+    return img2, gt2, xy_shift
+
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
                  distill_loss_weight=0.015, 
-                 multi=(4,4,2), 
+                 multi=(8,8,4), 
                  ctx_use_merged_flow=False,
-                 conv_weight_decay=1e-3):
+                 conv_weight_decay=1e-3,
+                 cons_shift_prob=0):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -51,6 +92,8 @@ class Model:
                                find_unused_parameters=True)
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
+        self.cons_shift_prob = cons_shift_prob
+        self.consist_loss_weight = 0.1
 
     def train(self):
         self.flownet.train()
@@ -96,7 +139,18 @@ class Model:
         else:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
-        
+        if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
+            imgs2, gt2, xy_shift = random_shift(imgs, gt)
+            if xy_shift is not None:
+                flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
+                consist_loss_stu = torch.abs(flow2 + xy_shift - flow).mean()
+                consist_loss_tea = torch.abs(flow_teacher2 + xy_shift - flow_teacher).mean()
+                consist_loss = (consist_loss_stu + consist_loss_tea) / 2
+            else:
+                consist_loss = 0
+        else:
+            consist_loss = 0
+
         only_calc_final_loss = True
         if only_calc_final_loss:
             stu_pred = merged_img_list[2]
@@ -113,7 +167,8 @@ class Model:
         if training:
             self.optimG.zero_grad()
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            loss_G = loss_stu + loss_tea + loss_distill * self.distill_loss_weight
+            loss_G = loss_stu + loss_tea + loss_distill * self.distill_loss_weight \
+                     + consist_loss * self.consist_loss_weight
             loss_G.backward()
             if self.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(self.flownet.parameters(), self.grad_clip)

@@ -45,7 +45,9 @@ def flow2rgb(flow_map_np):
     rgb_map[:, :, 2] += normalized_flow_map[:, :, 1]
     return rgb_map.clip(0, 1)
 
-def train(model, local_rank, base_lr, shift_prob):
+# aug_shift_prob:  image shifting probability in the augmentation.
+# cons_shift_prob: image shifting probability in the consistency loss computation.
+def train(model, local_rank, base_lr, aug_shift_prob):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -55,7 +57,7 @@ def train(model, local_rank, base_lr, shift_prob):
 
     step = 0
     nr_eval = 0
-    dataset = VimeoDataset('train', shift_prob=shift_prob)
+    dataset = VimeoDataset('train', shift_prob=aug_shift_prob)
     sampler = DistributedSampler(dataset)
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
@@ -174,7 +176,9 @@ if __name__ == "__main__":
                         help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
-    parser.add_argument('--shiftprob', dest='shift_prob', default=0, type=float,
+    parser.add_argument('--augshift', dest='aug_shift_prob', default=0, type=float,
+                        help='Probability of shifting augmentation')
+    parser.add_argument('--consshift', dest='cons_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
 
     args = parser.parse_args()
@@ -196,7 +200,8 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   multi=args.multi,
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
-                  conv_weight_decay=args.conv_weight_decay)
+                  conv_weight_decay=args.conv_weight_decay,
+                  cons_shift_prob=args.cons_shift_prob)
 
     train(model, args.local_rank, args.base_lr, args.shift_prob)
         
