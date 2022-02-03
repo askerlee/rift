@@ -69,12 +69,12 @@ class VimeoDataset(Dataset):
                         
         self.shift_prob = shift_prob
         if self.shift_prob > 0:
-            # Shift at most 1/8 of the image, to avoid too much 
+            # Shift at most 1/16 of the image, to avoid too much 
             # loss of valid supervision.
-            # Sintel: crop_size = (368, 768).
-            # max_u_shift, max_v_shift = (96, 46)
-            self.max_u_shift = self.w  // 8
-            self.max_v_shift = self.h  // 8
+            # Vimeo: (256, 448).
+            # max_u_shift, max_v_shift = (28, 16)
+            self.max_u_shift = self.w  // 16
+            self.max_v_shift = self.h  // 16
                         
     def __len__(self):
         return len(self.meta_data)

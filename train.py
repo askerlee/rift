@@ -156,7 +156,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}, loss_dist:{:.2f}'.format( \
+    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}, loss_distill:{:.2f}'.format( \
            epoch, nr_eval, psnr, psnr_teacher, loss_distill), 
            flush=True)
 
