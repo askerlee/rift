@@ -98,7 +98,7 @@ def train(model, local_rank, base_lr, aug_shift_prob):
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4f} loss_cons:{:.2f}/{:.2f}'.format(
+                print('epoch {} {}/{} time {:.2f}+{:.2f} loss_stu {:.4f} loss_cons {:.2f}/{:.2f}'.format(
                        epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, 
                        info['loss_stu'], info['loss_consist'], info['mean_shift']), 
                        flush=True)
@@ -159,7 +159,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch:{}, iter:{}, psnr:{:.2f}, psnr_tea:{:.2f}, loss_distill:{:.2f}'.format( \
+    print('epoch {}, iter {}, psnr {:.2f}, psnr_tea {:.2f}, loss_distill {:.2f}'.format( \
            epoch, nr_eval, psnr, psnr_teacher, loss_distill), 
            flush=True)
 
