@@ -174,7 +174,7 @@ class Model:
                     loss_consist_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
                 loss_consist_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
                 loss_consist = (loss_consist_stu / len(flow) + loss_consist_tea) / 2
-                mean_shift = xy_shift.mean().item()
+                mean_shift = xy_shift.abs().mean().item()
             else:
                 loss_consist = 0
                 mean_shift = 0
