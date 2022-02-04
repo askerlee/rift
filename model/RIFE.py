@@ -35,7 +35,7 @@ def random_shift(img, gt, t_img):
     # Do not bother to make a special case to handle 0 offsets. 
     # Just discard such shift params.
     if x_shift == 0 or y_shift == 0:
-        return img, gt, None
+        return img, gt, None, None
 
     img2    = torch.zeros_like(img)
     gt2     = torch.zeros_like(gt)
@@ -156,25 +156,24 @@ class Model:
         else:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
-        if self.cons_shift_prob > 0:
-            rand = random.random()
-            if rand < self.cons_shift_prob:
-                if rand < self.cons_shift_prob / 2:
-                    img0a, gt2, mask, xy_shift = random_shift(img0, gt, 0)
-                    img1a = img1
-                elif rand >= self.cons_shift_prob / 2:
-                    img1a, gt2, mask, xy_shift = random_shift(img1, gt, 1)
-                    img0a = img0
+        rand = random.random()
+        if self.cons_shift_prob > 0 and rand < self.cons_shift_prob:
+            if rand < self.cons_shift_prob / 2:
+                img0a, gt2, mask, xy_shift = random_shift(img0, gt, 0)
+                img1a = img1
+            elif rand >= self.cons_shift_prob / 2:
+                img1a, gt2, mask, xy_shift = random_shift(img1, gt, 1)
+                img0a = img0
 
-                imgs2 = torch.cat((img0a, img1a), 1)
-                if xy_shift is not None:
-                    flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
-                    consist_loss_stu = 0
-                    # s enumerates all scales.
-                    for s in range(len(flow)):
-                        consist_loss_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
-                    consist_loss_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
-                    consist_loss = (consist_loss_stu / len(flow) + consist_loss_tea) / 2
+            imgs2 = torch.cat((img0a, img1a), 1)
+            if xy_shift is not None:
+                flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
+                consist_loss_stu = 0
+                # s enumerates all scales.
+                for s in range(len(flow)):
+                    consist_loss_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
+                consist_loss_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
+                consist_loss = (consist_loss_stu / len(flow) + consist_loss_tea) / 2
             else:
                 consist_loss = 0
         else:
