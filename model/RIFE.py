@@ -43,7 +43,7 @@ def random_shift(img, gt, t_img):
     img2    = torch.zeros_like(img)
     gt2     = torch.zeros_like(gt)
     mask_shape = list(img.shape)
-    mask_shape[1] = 4   # For 4 flow channels.
+    mask_shape[1] = 2   # For 2 flow channels (one of the two directions).
     # mask for img
     # mask2 for the other img.
     mask    = torch.zeros(mask_shape, device=img.device, dtype=bool)
