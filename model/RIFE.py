@@ -110,7 +110,7 @@ class Model:
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
-        self.consist_loss_weight = 0.1
+        self.consist_loss_weight = 0.5
 
     def train(self):
         self.flownet.train()
