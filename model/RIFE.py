@@ -21,16 +21,17 @@ device = torch.device("cuda")
 # t_img: 0 or 1, indicating which img to shift.
 def random_shift(img, gt, t_img):
     B, C, H, W = img.shape
-    u_shift_sigma = W // 64     # 7
-    v_shift_sigma = H // 64     # 4
-    # 95% of delta_x and delta_y are within [-7, 7] and [-4, 4].
+    u_shift_sigma = W // 32     # 14
+    v_shift_sigma = H // 32     # 8
+    # 95% of delta_x and delta_y are within [-14, 14] and [-8, 8].
     delta_x = np.random.randn() * u_shift_sigma
     delta_y = np.random.randn() * v_shift_sigma
     delta_x, delta_y = int(delta_x), int(delta_y)
     # Make sure delta_x and delta_y are even numbers.
     delta_x = (delta_x // 2) * 2
     delta_y = (delta_y // 2) * 2
-    # Shift gt by half of (delta_y, delta_x).
+    # Shift gt (middle frame) by half of (delta_y, delta_x).
+    # 95% of gt shift are within [-7, 7] and [-4, 4].
     delta_x2 = delta_x // 2
     delta_y2 = delta_y // 2
 
