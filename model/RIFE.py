@@ -64,13 +64,14 @@ def random_shift(img, gt, t_img):
 
     if t_img == 0:
         # Offsets (from old to new flow) for two directions.
+        # Take half of delta_x, delta_y as this is the shift for the middle frame.
         # From 0 -> 0.5: negative delta (relative to old flow). old 0->0.5 flow - (dx, dy) = new 0->0.5 flow.
         # From 1 -> 0.5: negative delta (relative to old flow). old 1->0.5 flow - (dx, dy) = new 1->0.5 flow.
-        delta_xy = torch.tensor([-delta_x, -delta_y, -delta_x, -delta_y], dtype=float, device=img.device)
+        delta_xy = torch.tensor([-delta_x2, -delta_y2, -delta_x2, -delta_y2], dtype=float, device=img.device)
     else:
         # From 0 -> 0.5: positive delta (relative to old flow). old 0->0.5 flow + (dx, dy) = new 0->0.5 flow.
         # From 1 -> 0.5: positive delta (relative to old flow). old 1->0.5 flow + (dx, dy) = new 1->0.5 flow.
-        delta_xy = torch.tensor([ delta_x,  delta_y,  delta_x,  delta_y], dtype=float, device=img.device)
+        delta_xy = torch.tensor([ delta_x2,  delta_y2,  delta_x2,  delta_y2], dtype=float, device=img.device)
 
     delta_xy = delta_xy.view(1, 4, 1, 1)
     return img2, gt2, mask, delta_xy
