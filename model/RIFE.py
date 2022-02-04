@@ -17,8 +17,9 @@ import random
 
 device = torch.device("cuda")
 
-# img1 and gt are 4D tensors of (B, 3, H, W). gt are the middle frames.
-def random_shift(img, gt):
+# img (img0 or img1) and gt are 4D tensors of (B, 3, H, W). gt are the middle frames.
+# t_img: 0 or 1, indicating which img to shift.
+def random_shift(img, gt, t_img):
     B, C, H, W = img.shape
     max_u_shift = W // 16
     max_v_shift = H // 16
@@ -38,26 +39,39 @@ def random_shift(img, gt):
 
     img2    = torch.zeros_like(img)
     gt2     = torch.zeros_like(gt)
-        
+    mask_shape = list(img.shape)
+    mask_shape[1] = 4   # For 4 flow channels.
+    mask    = torch.zeros(mask_shape, device=img.device, dtype=bool)
+
     if x_shift > 0 and y_shift > 0:
         img2[:, :, y_shift:, x_shift:]    = img[:, :, :-y_shift,  :-x_shift]
         gt2[ :, :, y_shift2:, x_shift2:]  = gt[ :, :, :-y_shift2, :-x_shift2]
+        mask[:, :, y_shift2:, x_shift2:]  = 1
     if x_shift > 0 and y_shift < 0:
         img2[:, :, :y_shift,  x_shift:]   = img[:, :, -y_shift:,  :-x_shift]
         gt2[ :, :, :y_shift2, x_shift2:]  = gt[ :, :, -y_shift2:, :-x_shift2]
+        mask[:, :, :y_shift2, x_shift2:]  = 1
     if x_shift < 0 and y_shift > 0:
         img2[:, :, y_shift:, :x_shift]    = img[:, :, :-y_shift,  -x_shift:]
         gt2[ :, :, y_shift2:, :x_shift2]  = gt[ :, :, :-y_shift2, -x_shift2:]
+        mask[:, :, y_shift2:, :x_shift2]  = 1
     if x_shift < 0 and y_shift < 0:
         img2[:, :, :y_shift, :x_shift]    = img[:, :, -y_shift:,  -x_shift:]
         gt2[ :, :, :y_shift2, :x_shift2]  = gt[ :, :, -y_shift2:, -x_shift2:]
+        mask[:, :, :y_shift2, :x_shift2]  = 1
 
-    # For the flow of two directions.
-    # From 0 -> 0.5: positive offsets
-    # From 1 -> 0.5: negative offsets
-    xy_shift = torch.tensor([x_shift, y_shift, -x_shift, -y_shift], dtype=float, device=img.device)
+    if t_img == 0:
+        # Offsets (from old to new flow) for two directions.
+        # From 0 -> 0.5: negative delta (relative to old flow). old 0->0.5 flow - (dx, dy) = new 0->0.5 flow.
+        # From 1 -> 0.5: negative delta (relative to old flow). old 1->0.5 flow - (dx, dy) = new 1->0.5 flow.
+        xy_shift = torch.tensor([-x_shift, -y_shift, -x_shift, -y_shift], dtype=float, device=img.device)
+    else:
+        # From 0 -> 0.5: positive delta (relative to old flow). old 0->0.5 flow + (dx, dy) = new 0->0.5 flow.
+        # From 1 -> 0.5: positive delta (relative to old flow). old 1->0.5 flow + (dx, dy) = new 1->0.5 flow.
+        xy_shift = torch.tensor([ x_shift,  y_shift,  x_shift,  y_shift], dtype=float, device=img.device)
+
     xy_shift = xy_shift.view(1, 4, 1, 1)
-    return img2, gt2, xy_shift
+    return img2, gt2, mask, xy_shift
 
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
@@ -142,14 +156,22 @@ class Model:
         else:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
-        if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
-            imgs2, gt2, xy_shift = random_shift(imgs, gt)
+        if self.cons_shift_prob > 0:
+            rand = random.random()
+            if rand < self.cons_shift_prob / 2:
+                img0a, gt2, mask, xy_shift = random_shift(img0, gt, 0)
+                img1a = img1
+            elif rand >= self.cons_shift_prob / 2 and rand < self.cons_shift_prob:
+                img1a, gt2, mask, xy_shift = random_shift(img1, gt, 1)
+                img0a = img0
+            imgs2 = torch.cat((img0a, img1a), 1)
             if xy_shift is not None:
                 flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
                 consist_loss_stu = 0
+                # s enumerates all scales.
                 for s in range(len(flow)):
-                    consist_loss_stu += torch.abs(flow2[s] + xy_shift - flow[s]).mean()
-                consist_loss_tea = torch.abs(flow_teacher2 + xy_shift - flow_teacher).mean()
+                    consist_loss_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
+                consist_loss_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
                 consist_loss = (consist_loss_stu / len(flow) + consist_loss_tea) / 2
             else:
                 consist_loss = 0

@@ -98,7 +98,7 @@ class VimeoDataset(Dataset):
         gt = gt[x:x+h, y:y+w, :]
         return img0, gt, img1
 
-    # img1 and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
+    # img (img0 or img1) and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
     def random_shift(self, img, gt):
         x_shift = np.random.randint(-self.max_u_shift, self.max_u_shift)
         y_shift = np.random.randint(-self.max_v_shift, self.max_v_shift)
@@ -182,7 +182,11 @@ class VimeoDataset(Dataset):
                     img0, img1 = img1, img0
 
         if self.aug_shift_prob > 0:
-            img1, gt = self.random_shift(img1, gt)
+            rand = random.random()
+            if rand < self.aug_shift_prob / 2:
+                img0, gt = self.random_shift(img0, gt)
+            elif rand >= self.aug_shift_prob / 2 and rand < self.aug_shift_prob:
+                img1, gt = self.random_shift(img1, gt)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
