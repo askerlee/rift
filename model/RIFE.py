@@ -49,19 +49,19 @@ def random_shift(img, gt, t_img):
     if delta_x > 0 and delta_y > 0:
         img2[:, :, delta_y:, delta_x:]    = img[:, :, :-delta_y,  :-delta_x]
         gt2[ :, :, delta_y2:, delta_x2:]  = gt[ :, :, :-delta_y2, :-delta_x2]
-        mask[:, :, delta_y2:, delta_x2:]  = 1
+        mask[:, :, delta_y:, delta_x:]  = 1
     if delta_x > 0 and delta_y < 0:
         img2[:, :, :delta_y,  delta_x:]   = img[:, :, -delta_y:,  :-delta_x]
         gt2[ :, :, :delta_y2, delta_x2:]  = gt[ :, :, -delta_y2:, :-delta_x2]
-        mask[:, :, :delta_y2, delta_x2:]  = 1
+        mask[:, :, :delta_y, delta_x:]  = 1
     if delta_x < 0 and delta_y > 0:
         img2[:, :, delta_y:, :delta_x]    = img[:, :, :-delta_y,  -delta_x:]
         gt2[ :, :, delta_y2:, :delta_x2]  = gt[ :, :, :-delta_y2, -delta_x2:]
-        mask[:, :, delta_y2:, :delta_x2]  = 1
+        mask[:, :, delta_y:, :delta_x]  = 1
     if delta_x < 0 and delta_y < 0:
         img2[:, :, :delta_y, :delta_x]    = img[:, :, -delta_y:,  -delta_x:]
         gt2[ :, :, :delta_y2, :delta_x2]  = gt[ :, :, -delta_y2:, -delta_x2:]
-        mask[:, :, :delta_y2, :delta_x2]  = 1
+        mask[:, :, :delta_y, :delta_x]  = 1
 
     if t_img == 0:
         # Offsets (from old to new flow) for two directions.
