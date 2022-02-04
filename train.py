@@ -98,8 +98,9 @@ def train(model, local_rank, base_lr, aug_shift_prob):
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4f}'.format(
-                       epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, info['loss_stu']), 
+                print('epoch:{} {}/{} time:{:.2f}+{:.2f} loss_stu:{:.4f} loss_cons:{:.4f}'.format(
+                       epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, 
+                       info['loss_stu'], info['loss_consist']), 
                        flush=True)
 
             step += 1

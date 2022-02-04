@@ -168,16 +168,16 @@ class Model:
             imgs2 = torch.cat((img0a, img1a), 1)
             if xy_shift is not None:
                 flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
-                consist_loss_stu = 0
+                loss_consist_stu = 0
                 # s enumerates all scales.
                 for s in range(len(flow)):
-                    consist_loss_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
-                consist_loss_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
-                consist_loss = (consist_loss_stu / len(flow) + consist_loss_tea) / 2
+                    loss_consist_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
+                loss_consist_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
+                loss_consist = (loss_consist_stu / len(flow) + loss_consist_tea) / 2
             else:
-                consist_loss = 0
+                loss_consist = 0
         else:
-            consist_loss = 0
+            loss_consist = 0
 
         only_calc_final_loss = True
         if only_calc_final_loss:
@@ -196,7 +196,7 @@ class Model:
             self.optimG.zero_grad()
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
             loss_G = loss_stu + loss_tea + loss_distill * self.distill_loss_weight \
-                     + consist_loss * self.consist_loss_weight
+                     + loss_consist * self.consist_loss_weight
             loss_G.backward()
             if self.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(self.flownet.parameters(), self.grad_clip)
@@ -214,4 +214,5 @@ class Model:
             'loss_stu': loss_stu,
             'loss_tea': loss_tea,
             'loss_distill': loss_distill,
+            'loss_consist': loss_consist,
             }
