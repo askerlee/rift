@@ -159,10 +159,10 @@ class Model:
         rand = random.random()
         if self.cons_shift_prob > 0 and rand < self.cons_shift_prob:
             if rand < self.cons_shift_prob / 2:
-                img0a, gt2, mask, xy_shift = random_shift(img0, gt, 0)
+                img0a, gt2, shift_mask, xy_shift = random_shift(img0, gt, 0)
                 img1a = img1
             elif rand >= self.cons_shift_prob / 2:
-                img1a, gt2, mask, xy_shift = random_shift(img1, gt, 1)
+                img1a, gt2, shift_mask, xy_shift = random_shift(img1, gt, 1)
                 img0a = img0
 
             imgs2 = torch.cat((img0a, img1a), 1)
@@ -171,8 +171,8 @@ class Model:
                 loss_consist_stu = 0
                 # s enumerates all scales.
                 for s in range(len(flow)):
-                    loss_consist_stu += torch.abs(flow[s] + xy_shift - flow2[s])[mask].mean()
-                loss_consist_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[mask].mean()
+                    loss_consist_stu += torch.abs(flow[s] + xy_shift - flow2[s])[shift_mask].mean()
+                loss_consist_tea = torch.abs(flow_teacher + xy_shift - flow_teacher2)[shift_mask].mean()
                 loss_consist = (loss_consist_stu / len(flow) + loss_consist_tea) / 2
                 mean_shift = xy_shift.abs().mean().item()
             else:
