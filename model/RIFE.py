@@ -42,10 +42,12 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(10,6)):
         return img0, img1, gt, None, None, None
 
     # Not to initialize as zeros. Otherwise the model can figure out the shift offsets easily.
-    # Use torch.rand instead of torch.randn, as input images are normalized to [0, 1].
-    img0a   = torch.rand(img0.shape, device=img0.device)
-    img1a   = torch.rand(img0.shape, device=img0.device)
-    gta     = torch.rand(img0.shape, device=img0.device)
+    # Using torch.rand (as input images are normalized to [0, 1]) also makes it 
+    # easy to figure out the shift offsets.
+    # Overlaying the shifted images on the original images is harder. Therefore we clone and then copy.
+    img0a   = torch.clone(img0)
+    img1a   = torch.clone(img1)
+    gta     = torch.clone(gt)
     mask_shape = list(img0.shape)
     mask_shape[1] = 2   # For 2 flow channels (one of the two directions).
     # mask for the middle frame. Both directions have the same mask.
