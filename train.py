@@ -181,7 +181,7 @@ if __name__ == "__main__":
                         help='Probability of shifting augmentation')
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0, type=float,
                         help='Probability of shifting consistency loss')
-    parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="10,6", type=str,
+    parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--conslastscale', dest='consist_loss_on_all_scales', action='store_false', 
                         help='Compute consistency loss on the last scale only (default: on all scales).')
