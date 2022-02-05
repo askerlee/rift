@@ -106,7 +106,8 @@ class Model:
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
-                 cons_shift_sigmas=(14,8)):
+                 cons_shift_sigmas=(10,6),
+                 consist_loss_on_all_scales=False):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -139,7 +140,7 @@ class Model:
         self.cons_shift_prob = cons_shift_prob
         self.consist_loss_weight = 0.5
         self.cons_shift_sigmas = cons_shift_sigmas
-        self.consist_loss_on_all_scales = False #True
+        self.consist_loss_on_all_scales = consist_loss_on_all_scales
 
     def train(self):
         self.flownet.train()

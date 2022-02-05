@@ -183,6 +183,8 @@ if __name__ == "__main__":
                         help='Probability of shifting consistency loss')
     parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="10,6", type=str,
                         help='Stds of shifts for shifting consistency loss')
+    parser.add_argument('--consallscales', dest='consist_loss_on_all_scales', action='store_true', 
+                        help='Compute consistency loss on all scales (default: only the last scale).')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -206,7 +208,8 @@ if __name__ == "__main__":
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
-                  cons_shift_sigmas=args.cons_shift_sigmas
+                  cons_shift_sigmas=args.cons_shift_sigmas,
+                  consist_loss_on_all_scales=args.consist_loss_on_all_scales
                   )
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob)
