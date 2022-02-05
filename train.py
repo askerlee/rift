@@ -183,8 +183,8 @@ if __name__ == "__main__":
                         help='Probability of shifting consistency loss')
     parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="10,6", type=str,
                         help='Stds of shifts for shifting consistency loss')
-    parser.add_argument('--consallscales', dest='consist_loss_on_all_scales', action='store_true', 
-                        help='Compute consistency loss on all scales (default: only the last scale).')
+    parser.add_argument('--conslastscale', dest='consist_loss_on_all_scales', action='store_false', 
+                        help='Compute consistency loss on the last scale only (default: on all scales).')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]

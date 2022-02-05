@@ -1,0 +1,7 @@
+Gaussian shift (14, 8), loss on all scales:
+epoch 0, iter 1523, psnr 32.02, psnr_tea 32.66, loss_distill 0.76
+epoch 1, iter 3046, psnr 33.37, psnr_tea 35.72, loss_distill 0.55
+epoch 2, iter 4569, psnr 34.02, psnr_tea 36.54, loss_distill 0.35
+epoch 3, iter 6092, psnr 34.20, psnr_tea 36.87, loss_distill 0.37
+epoch 4, iter 7615, psnr 34.37, psnr_tea 37.14, loss_distill 0.39
+epoch 5, iter 9138, psnr 34.50, psnr_tea 37.46, loss_distill 0.33

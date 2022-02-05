@@ -107,7 +107,7 @@ class Model:
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
                  cons_shift_sigmas=(10,6),
-                 consist_loss_on_all_scales=False):
+                 consist_loss_on_all_scales=True):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
