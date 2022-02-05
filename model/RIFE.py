@@ -41,9 +41,10 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(10,6)):
     if dx == 0 or dy == 0:
         return img0, img1, gt, None, None, None
 
-    img0a   = torch.zeros_like(img0)
-    img1a   = torch.zeros_like(img1)
-    gta     = torch.zeros_like(gt)
+    # Not to initialize as zeros. Otherwise the model can figure out the shift offsets easily.
+    img0a   = torch.randn(img0.shape, device=img0.device)
+    img1a   = torch.randn(img0.shape, device=img0.device)
+    gta     = torch.randn(img0.shape, device=img0.device)
     mask_shape = list(img0.shape)
     mask_shape[1] = 2   # For 2 flow channels (one of the two directions).
     # mask for the middle frame. Both directions have the same mask.
