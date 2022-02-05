@@ -215,7 +215,7 @@ class Model:
                 consist_0m_tea = torch.abs(flow_teacher[:, :2] + dxy0 - flow_teacher2[:, :2])[smask0].mean()
                 consist_1m_tea = torch.abs(flow_teacher[:, 2:] + dxy1 - flow_teacher2[:, 2:])[smask1].mean()
                 loss_consist_tea = (consist_0m_tea + consist_1m_tea) / 2
-                loss_consist = (loss_consist_stu / len(flow) + loss_consist_tea) / 2
+                loss_consist = (loss_consist_stu / len(scales) + loss_consist_tea) / 2
                 mean_shift = dxy0.abs().mean().item()
             else:
                 loss_consist = 0
