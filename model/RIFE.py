@@ -19,18 +19,20 @@ device = torch.device("cuda")
 
 # img (img0 or img1) and gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
 # t_img: 0 or 1, indicating which img to shift.
-def random_shift(img, gt, t_img, shift_sigmas=(14,8)):
+def random_shift(img, gt, t_img, shift_sigmas=(10,6)):
     B, C, H, W = img.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
-    # 95% of delta_x and delta_y are within [-14, 14] and [-8, 8].
-    delta_x = np.random.randn() * u_shift_sigma
-    delta_y = np.random.randn() * v_shift_sigma
+    # 90% of delta_x and delta_y are within [-2*u_shift_sigma, 2*u_shift_sigma] 
+    # and [-2*v_shift_sigma, 2*v_shift_sigma].
+    delta_x = np.random.laplace(0, u_shift_sigma)
+    delta_y = np.random.laplace(0, v_shift_sigma)
     delta_x, delta_y = int(delta_x), int(delta_y)
     # Make sure delta_x and delta_y are even numbers.
     delta_x = (delta_x // 2) * 2
     delta_y = (delta_y // 2) * 2
     # Shift gt (middle frame) by half of (delta_y, delta_x).
-    # 95% of gt shift are within [-7, 7] and [-4, 4].
+    # 90% of gt shift are within [-u_shift_sigma, u_shift_sigma] 
+    # and [-v_shift_sigma, v_shift_sigma].
     delta_x2 = delta_x // 2
     delta_y2 = delta_y // 2
 
