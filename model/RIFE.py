@@ -139,6 +139,7 @@ class Model:
         self.cons_shift_prob = cons_shift_prob
         self.consist_loss_weight = 0.5
         self.cons_shift_sigmas = cons_shift_sigmas
+        self.consist_loss_on_all_scales = False #True
 
     def train(self):
         self.flownet.train()
@@ -199,8 +200,14 @@ class Model:
                 imgs2 = torch.cat((img0a, img1a), 1)
                 flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgs2, gt2), 1), scale_list=[4, 2, 1])
                 loss_consist_stu = 0
-                # s enumerates all scales.
-                for s in range(len(flow)):
+                if self.consist_loss_on_all_scales:
+                    # s enumerates all scales.
+                    scales = np.arange(len(flow))
+                else:
+                    # only computes the consistency loss at the last scale.
+                    scales = (-1,)
+
+                for s in scales:
                     consist_0m = torch.abs(flow[s][:, :2] + dxy0 - flow2[s][:, :2])[smask0].mean()
                     consist_1m = torch.abs(flow[s][:, 2:] + dxy1 - flow2[s][:, 2:])[smask1].mean()
                     loss_consist_stu += (consist_0m + consist_1m) / 2
