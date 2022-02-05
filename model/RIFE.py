@@ -19,10 +19,9 @@ device = torch.device("cuda")
 
 # img (img0 or img1) and gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
 # t_img: 0 or 1, indicating which img to shift.
-def random_shift(img, gt, t_img):
+def random_shift(img, gt, t_img, shift_sigmas=(14,8)):
     B, C, H, W = img.shape
-    u_shift_sigma = W // 32     # 14
-    v_shift_sigma = H // 32     # 8
+    u_shift_sigma, v_shift_sigma = shift_sigmas
     # 95% of delta_x and delta_y are within [-14, 14] and [-8, 8].
     delta_x = np.random.randn() * u_shift_sigma
     delta_y = np.random.randn() * v_shift_sigma
@@ -104,7 +103,8 @@ class Model:
                  multi=(8,8,4), 
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
-                 cons_shift_prob=0):
+                 cons_shift_prob=0,
+                 cons_shift_sigmas=(14,8)):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -136,6 +136,7 @@ class Model:
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
         self.consist_loss_weight = 0.5
+        self.cons_shift_sigmas = cons_shift_sigmas
 
     def train(self):
         self.flownet.train()
@@ -186,10 +187,10 @@ class Model:
             if rand < self.cons_shift_prob / 2:
                 # smask: shift mask. dxy: (delta_x, delta_y).
                 # *_0: for img0. *_1: for img1.
-                img0a, gt2, smask0, smask1, dxy0, dxy1 = random_shift(img0, gt, 0)
+                img0a, gt2, smask0, smask1, dxy0, dxy1 = random_shift(img0, gt, 0, self.cons_shift_sigmas)
                 img1a = img1
             elif rand >= self.cons_shift_prob / 2:
-                img1a, gt2, smask0, smask1, dxy0, dxy1 = random_shift(img1, gt, 1)
+                img1a, gt2, smask0, smask1, dxy0, dxy1 = random_shift(img1, gt, 1, self.cons_shift_sigmas)
                 img0a = img0
 
             if dxy0 is not None:

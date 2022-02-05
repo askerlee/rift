@@ -179,11 +179,14 @@ if __name__ == "__main__":
                         help='Use merged flow for contextnet.')
     parser.add_argument('--augshift', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
-    parser.add_argument('--consshift', dest='cons_shift_prob', default=0, type=float,
-                        help='Probability of shifting augmentation')
+    parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0, type=float,
+                        help='Probability of shifting consistency loss')
+    parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="14,8", type=str,
+                        help='Stds of shifts for shifting consistency loss')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
+    args.cons_shift_sigmas = [ int(s) for s in args.cons_shift_sigmas.split(",") ]
 
     args.local_rank = local_rank
     if args.local_rank == 0:
@@ -202,7 +205,9 @@ if __name__ == "__main__":
                   multi=args.multi,
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay,
-                  cons_shift_prob=args.cons_shift_prob)
+                  cons_shift_prob=args.cons_shift_prob, 
+                  cons_shift_sigmas=args.cons_shift_sigmas
+                  )
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob)
         
