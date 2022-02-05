@@ -52,45 +52,46 @@ def random_shift(img, gt, t_img):
     if delta_x > 0 and delta_y > 0:
         img2[:, :, delta_y:, delta_x:]    = img[:, :, :-delta_y,  :-delta_x]
         gt2[ :, :, delta_y2:, delta_x2:]  = gt[ :, :, :-delta_y2, :-delta_x2]
-        # The mask is for img -> middle (gt).
-        # If img=img1, then for img0 -> middle, the mask is the opposite 
+        # mask is for img -> middle (gt).
+        # If img=img1, then for img0 -> middle, mask2 is the opposite 
         # block of the mask for img1 -> middle 
         # (continuing the shift from img1 -> middle until reaching the opposite edge).
-        # If img=img0, then for img1 -> middle, the mask is the opposite 
+        # If img=img0, then for img1 -> middle, mask2 is the opposite 
         # block of the mask for img0 -> middle.
         # (continuing the shift from img0 -> middle until reaching the opposite edge).
         mask[:, :,  delta_y:,  delta_x:]  = 1
         mask2[:, :, :-delta_y, :-delta_x] = 1
     if delta_x > 0 and delta_y < 0:
-        img2[:, :, :delta_y,  delta_x:]   = img[:, :, -delta_y:,  :-delta_x]
-        gt2[ :, :, :delta_y2, delta_x2:]  = gt[ :, :, -delta_y2:, :-delta_x2]
-        mask[:, :,  :delta_y,  delta_x:]  = 1
-        mask2[:, :, -delta_y:, :-delta_x] = 1
+        img2[:,  :, :delta_y,  delta_x:]   = img[:, :, -delta_y:,  :-delta_x]
+        gt2[ :,  :, :delta_y2, delta_x2:]  = gt[ :, :, -delta_y2:, :-delta_x2]
+        mask[:,  :,  :delta_y,  delta_x:]  = 1
+        mask2[:, :, -delta_y:, :-delta_x]  = 1
     if delta_x < 0 and delta_y > 0:
-        img2[:, :, delta_y:, :delta_x]    = img[:, :, :-delta_y,  -delta_x:]
-        gt2[ :, :, delta_y2:, :delta_x2]  = gt[ :, :, :-delta_y2, -delta_x2:]
-        mask[:, :,  delta_y:,  :delta_x]  = 1
-        mask2[:, :, :-delta_y, -delta_x:] = 1
+        img2[:,  :, delta_y:, :delta_x]    = img[:, :, :-delta_y,  -delta_x:]
+        gt2[ :,  :, delta_y2:, :delta_x2]  = gt[ :, :, :-delta_y2, -delta_x2:]
+        mask[:,  :,  delta_y:,  :delta_x]  = 1
+        mask2[:, :, :-delta_y, -delta_x:]  = 1
     if delta_x < 0 and delta_y < 0:
-        # Remember delta_y and delta_x are negative. 
-        # :delta_y includes all pixels except the last few.
-        img2[:, :, :delta_y, :delta_x]    = img[:, :, -delta_y:,  -delta_x:]
-        gt2[ :, :, :delta_y2, :delta_x2]  = gt[ :, :, -delta_y2:, -delta_x2:]
-        mask[:, :,  :delta_y,  :delta_x]  = 1
-        mask2[:, :, -delta_y:, -delta_x:] = 1
+        # Note delta_y and delta_x are negative. 
+        # So :delta_y / :delta_x removes the last few rows/columns of pixels.
+        img2[:,  :, :delta_y, :delta_x]    = img[:, :, -delta_y:,  -delta_x:]
+        gt2[ :,  :, :delta_y2, :delta_x2]  = gt[ :, :, -delta_y2:, -delta_x2:]
+        mask[:,  :,  :delta_y,  :delta_x]  = 1
+        mask2[:, :, -delta_y:, -delta_x:]  = 1
     if t_img == 0:
-        # Offsets (from old to new flow) for two directions.
+        # delta_xy0， delta_xy1: offsets (from old to new flow) for two directions.
         # Take half of delta_x, delta_y as this is the shift for the middle frame.
-        # From 0 -> 0.5: negative delta (relative to old flow). old 0->0.5 flow - (dx, dy) = new 0->0.5 flow.
-        # From 1 -> 0.5: positive delta (relative to old flow). old 1->0.5 flow + (dx, dy) = new 1->0.5 flow.
-        delta_xy0 = torch.tensor([-delta_x2, -delta_y2], dtype=float, device=img.device)
-        delta_xy1 = torch.tensor([delta_x2, delta_y2], dtype=float, device=img.device)
-        mask0, mask1 = mask, mask2
-    else:
-        # From 0 -> 0.5: positive delta (relative to old flow). old 0->0.5 flow + (dx, dy) = new 0->0.5 flow.
-        # From 1 -> 0.5: negative delta (relative to old flow). old 1->0.5 flow - (dx, dy) = new 1->0.5 flow.
+        # Note the flows are for backward warping (from middle from to 0/1).
+        # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
+        # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
         delta_xy0 = torch.tensor([ delta_x2,  delta_y2], dtype=float, device=img.device)
         delta_xy1 = torch.tensor([-delta_x2, -delta_y2], dtype=float, device=img.device)
+        mask0, mask1 = mask, mask2
+    else:
+        # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
+        # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
+        delta_xy0 = torch.tensor([-delta_x2, -delta_y2], dtype=float, device=img.device)
+        delta_xy1 = torch.tensor([ delta_x2,  delta_y2], dtype=float, device=img.device)
         mask0, mask1 = mask2, mask
 
     delta_xy0 = delta_xy0.view(1, 2, 1, 1)

@@ -147,7 +147,7 @@ class IFBlock(nn.Module):
                         )
 
     def forward(self, imgs, nonimg, flow, scale):
-        # Downscale img01 by scale.
+        # Downscale img0/img1 by scale.
         imgs   = F.interpolate(imgs,  scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         if flow is not None:
@@ -188,7 +188,7 @@ class IFBlock(nn.Module):
         multiflow = scaled_output[:, : 4*self.M] * scale * 2
         # multimask_score: 
         # if M == 1, multimask_score has one channel, just as the original scheme.
-        # if M > 1, 2*M+1 channels. 2*M for M groups of (0->0.5, 1->0.5) flow group attention scores, 
+        # if M > 1, 2*M+1 channels. 2*M for M groups of (0.5->0, 0.5->1) flow group attention scores, 
         # 1 for the warp0-warp1 combination weight.
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]
@@ -290,7 +290,7 @@ class IFNet(nn.Module):
             # global_mask_score is never affected by dropout.
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
-            flow, multiflow01, multiflow10, flow01, flow10 = \
+            flow, multiflowm0, multiflowm1, flowm0, flowm1 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
             img0_warped, img1_warped = \
@@ -327,9 +327,9 @@ class IFNet(nn.Module):
 
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
-            # merged_img_list[i]: average of 1->2 and 2->1 warped images.
+            # merged_img_list[i]: average of 0.5->0 and 0.5->1 warped images.
             merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
-                                    warped_imgs_list[i][1] * (1 - mask_list[i])
+                                 warped_imgs_list[i][1] * (1 - mask_list[i])
                                 
             if is_training:
                 # dual_teaching_loss: the student can also teach the teacher, 
@@ -342,14 +342,14 @@ class IFNet(nn.Module):
 
         if self.ctx_use_merged_flow:
             # contextnet generates warped features of the input image. 
-            # flow01/flow10 is not used as input to generate the features, but to warp the features.
+            # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
             # Setting M=1 makes multiwarp fall back to warp. So it's equivalent to the traditional RIFE scheme.
             # Using merged flow seems to perform slightly worse.
-            c0 = self.contextnet(img0, flow01, multimask_score, 1)
-            c1 = self.contextnet(img1, flow10, multimask_score, 1)
+            c0 = self.contextnet(img0, flowm0, multimask_score, 1)
+            c1 = self.contextnet(img1, flowm1, multimask_score, 1)
         else:
-            c0 = self.contextnet(img0, multiflow01, multimask_score, self.Ms[2])
-            c1 = self.contextnet(img1, multiflow10, multimask_score, self.Ms[2])
+            c0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
+            c1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
 
         # flow: merged flow from multiflow of the previous iteration.
         tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)
