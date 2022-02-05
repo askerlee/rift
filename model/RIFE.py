@@ -20,7 +20,7 @@ device = torch.device("cuda")
 # img (img0 or img1) and gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
 # if reversed_01 = False, (img0, img1) = original (img0, img1)
 # if reversed_01 = True,  (img0, img1) = original (img1, img0), to increase diversity of shifting.
-def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(10,6)):
+def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
@@ -55,36 +55,48 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(10,6)):
 
     if dx > 0 and dy > 0:
         # img0 is shifted by (dx, dy) to the right and down.
-        img0a[:, :, dy:,  dx:]           = img0[:, :, :-dy, :-dx]
+        img0a[:, :, dy:,  dx:]           += img0[:, :, :-dy, :-dx]
+        img0a[:, :, dy:,  dx:]           /= 2.0
         # img1 doesn't shift, and is only cropped at the bottom-right corner.
-        img1a[:, :, :-dy, :-dx]          = img1[:, :, :-dy, :-dx]
+        img1a[:, :, :-dy, :-dx]          += img1[:, :, :-dy, :-dx]
+        img1a[:, :, :-dy, :-dx]          /= 2.0
         # gt is shifted by (dx2, dy2) to the right and down, and is also cropped at the bottom-right corner.
-        gta[  :, :, dy2:-dy2, dx2:-dx2]  = gt[  :, :, :-dy, :-dx]
+        gta[  :, :, dy2:-dy2, dx2:-dx2]  += gt[  :, :, :-dy, :-dx]
+        gta[  :, :, dy2:-dy2, dx2:-dx2]  /= 2.0
         # mask is both for middle (gt) -> img0 and for middle -> img1. They are the same.
         mask[ :, :, dy2:-dy2, dx2:-dx2]  = 1
     if dx > 0 and dy < 0:
         # img0 is shifted by (dx, dy) to the right and up.
-        img0a[:,  :, :dy,  dx:]          = img0[:, :, -dy:, :-dx]
+        img0a[:,  :, :dy,  dx:]          += img0[:, :, -dy:, :-dx]
+        img0a[:,  :, :dy,  dx:]          /= 2.0
         # img1 doesn't shift, and is only cropped at the top-right corner.
-        img1a[:,  :, -dy:, :-dx]         = img1[:, :, -dy:, :-dx]
+        img1a[:,  :, -dy:, :-dx]         += img1[:, :, -dy:, :-dx]
+        img1a[:,  :, -dy:, :-dx]         /= 2.0
         # gt is shifted by (dx2, dy2) to the right and up, and is also cropped at the top-right corner.
-        gta[  :,  :, -dy2:dy2, dx2:-dx2] = gt[  :, :, -dy:, :-dx]
+        gta[  :,  :, -dy2:dy2, dx2:-dx2] += gt[  :, :, -dy:, :-dx]
+        gta[  :,  :, -dy2:dy2, dx2:-dx2] /= 2.0
         mask[ :,  :, -dy2:dy2, dx2:-dx2] = 1
     if dx < 0 and dy > 0:
         # img0 is shifted by (dx, dy) to the left and down.
-        img0a[:,  :, dy:,  :dx]          = img0[:, :, :-dy, -dx:]
+        img0a[:,  :, dy:,  :dx]          += img0[:, :, :-dy, -dx:]
+        img0a[:,  :, dy:,  :dx]          /= 2.0
         # img1 doesn't shift, and is only cropped at the bottom-left corner.
-        img1a[:,  :, :-dy, -dx:]         = img1[:, :, :-dy, -dx:]
+        img1a[:,  :, :-dy, -dx:]         += img1[:, :, :-dy, -dx:]
+        img1a[:,  :, :-dy, -dx:]         /= 2.0
         # gt is shifted by (dx2, dy2) to the left and down, and is also cropped at the bottom-left corner.
-        gta[  :, :, dy2:-dy2, -dx2:dx2]  = gt[  :, :, :-dy, -dx:]
+        gta[  :, :, dy2:-dy2, -dx2:dx2]  += gt[  :, :, :-dy, -dx:]
+        gta[  :, :, dy2:-dy2, -dx2:dx2]  /= 2.0
         mask[ :, :, dy2:-dy2, -dx2:dx2]  = 1
     if dx < 0 and dy < 0:
         # img0 is shifted by (dx, dy) to the left and up.
-        img0a[:, :, :dy, :dx]            = img0[:, :, -dy:, -dx:]
+        img0a[:, :, :dy, :dx]            += img0[:, :, -dy:, -dx:]
+        img0a[:, :, :dy, :dx]            /= 2.0
         # img1 doesn't shift, and is only cropped at the top-left corner.
-        img1a[:, :, -dy:, -dx:]          = img1[:, :, -dy:, -dx:]
+        img1a[:, :, -dy:, -dx:]          += img1[:, :, -dy:, -dx:]
+        img1a[:, :, -dy:, -dx:]          /= 2.0
         # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the top-left corner.
-        gta[  :, :, -dy2:dy2, -dx2:dx2]  = gt[  :, :, -dy:, -dx:]
+        gta[  :, :, -dy2:dy2, -dx2:dx2]  += gt[  :, :, -dy:, -dx:]
+        gta[  :, :, -dy2:dy2, -dx2:dx2]  /= 2.0
         mask[ :, :, -dy2:dy2, -dx2:dx2]  = 1
     if not reversed_01:
         # delta_xy0， delta_xy1: offsets (from old to new flow) for two directions.
