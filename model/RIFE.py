@@ -200,7 +200,7 @@ class Model:
                 # *_0: for img0. *_1: for img1.
                 img0a, img1a, gta, smask, dxy = random_shift(img0, img1, gt, False, self.cons_shift_sigmas)
             elif rand >= self.cons_shift_prob / 2:
-                img0a, img1a, gta, smask, dxy = random_shift(img1, img0, gt, True,  self.cons_shift_sigmas)
+                img1a, img0a, gta, smask, dxy = random_shift(img1, img0, gt, True,  self.cons_shift_sigmas)
 
             if dxy is not None:
                 imgsa = torch.cat((img0a, img1a), 1)

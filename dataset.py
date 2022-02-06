@@ -99,36 +99,70 @@ class VimeoDataset(Dataset):
         return img0, gt, img1
 
     # img (img0 or img1) and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
-    def random_shift(self, img, gt):
-        x_shift = np.random.randint(-self.max_u_shift, self.max_u_shift)
-        y_shift = np.random.randint(-self.max_v_shift, self.max_v_shift)
-        # Make sure x_shift and y_shift are even numbers.
-        x_shift = (x_shift // 2) * 2
-        y_shift = (y_shift // 2) * 2
-        # Shift gt by half of (y_shift, x_shift).
-        x_shift2 = x_shift // 2
-        y_shift2 = y_shift // 2
+    def random_shift(self, img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
+        dx = np.random.randint(-self.max_u_shift, self.max_u_shift)
+        dy = np.random.randint(-self.max_v_shift, self.max_v_shift)
+        # Make sure dx and dy are even numbers.
+        dx = (dx // 2) * 2
+        dy = (dy // 2) * 2
+        # Shift gt by half of (dy, dx).
+        dx2 = dx // 2
+        dy2 = dy // 2
 
         # Do not bother to make a special case to handle 0 offsets. 
         # Just discard such shift params.
-        if x_shift == 0 or y_shift == 0:
-            return img, gt
+        if dx == 0 or dy == 0:
+            return img0, img1, gt
 
-        img2    = np.zeros_like(img)
-        gt2     = np.zeros_like(gt)
+        if dx > 0 and dy > 0:
+            # img0 is cropped at the bottom-right corner. 
+            img0a   = img0[:, :, :-dy, :-dx]
+            # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
+            img1a   = img1[:, :, dy:,  dx:]
+            # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
+            gta     = gt[  :, :, dy2:-dy2, dx2:-dx2]
+            # mask is both for middle (gt) -> img0 and for middle -> img1. They are the same.
+            mask[ :, :, dy2:-dy2, dx2:-dx2]  = 1
+        if dx > 0 and dy < 0:
+            # img0 is cropped at the right side, and shifted to the up.
+            img0a   = img0[:, :, -dy:, :-dx]
+            # img1 is shifted to the left and cropped at the bottom.
+            img1a   = img1[:, :, :dy,  dx:]
+            # gt is shifted by (dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
+            gta     = gt[  :, :, -dy2:dy2, dx2:-dx2]
+            mask[ :,  :, -dy2:dy2, dx2:-dx2] = 1
+        if dx < 0 and dy > 0:
+            # img0 is shifted to the left, and cropped at the bottom.
+            img0a   = img0[:, :, :-dy, -dx:]
+            # img1 is cropped at the right side, and shifted to the up.
+            img1a   = img1[:, :, dy:,  :dx]
+            # gt is shifted by (-dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
+            gta     = gt[  :, :, dy2:-dy2, -dx2:dx2]
+            mask[ :, :, dy2:-dy2, -dx2:dx2]  = 1
+        if dx < 0 and dy < 0:
+            # img0 is shifted by (-dx, -dy) to the left and up.
+            img0a   = img0[:, :, -dy:, -dx:]
+            # img1 is cropped at the bottom-right corner.
+            img1a   = img1[:, :, :dy,  :dx]
+            # gt is shifted by (-dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
+            gta     = gt[  :, :, -dy2:dy2, -dx2:dx2]
+            mask[ :, :, -dy2:dy2, -dx2:dx2]  = 1
+
+            img2    = np.zeros_like(img)
+            gt2     = np.zeros_like(gt)
             
-        if x_shift > 0 and y_shift > 0:
-            img2[y_shift:, x_shift:]    = img[:-y_shift, :-x_shift]
-            gt2[y_shift2:, x_shift2:]   = gt[:-y_shift2, :-x_shift2]
-        if x_shift > 0 and y_shift < 0:
-            img2[:y_shift, x_shift:]    = img[-y_shift:,  :-x_shift]
-            gt2[:y_shift2, x_shift2:]   = gt[-y_shift2:, :-x_shift2]
-        if x_shift < 0 and y_shift > 0:
-            img2[y_shift:, :x_shift]    = img[:-y_shift, -x_shift:]
-            gt2[y_shift2:, :x_shift2]   = gt[:-y_shift2, -x_shift2:]
-        if x_shift < 0 and y_shift < 0:
-            img2[:y_shift, :x_shift]    = img[-y_shift:, -x_shift:]
-            gt2[:y_shift2, :x_shift2]   = gt[-y_shift2:, -x_shift2:]
+        if dx > 0 and dy > 0:
+            img2[dy:, dx:]    = img[:-dy, :-dx]
+            gt2[dy2:, dx2:]   = gt[:-dy2, :-dx2]
+        if dx > 0 and dy < 0:
+            img2[:dy, dx:]    = img[-dy:,  :-dx]
+            gt2[:dy2, dx2:]   = gt[-dy2:, :-dx2]
+        if dx < 0 and dy > 0:
+            img2[dy:, :dx]    = img[:-dy, -dx:]
+            gt2[dy2:, :dx2]   = gt[:-dy2, -dx2:]
+        if dx < 0 and dy < 0:
+            img2[:dy, :dx]    = img[-dy:, -dx:]
+            gt2[:dy2, :dx2]   = gt[-dy2:, -dx2:]
 
         return img2, gt2
 
