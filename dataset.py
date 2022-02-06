@@ -100,8 +100,8 @@ class VimeoDataset(Dataset):
         dx = np.random.laplace(0, u_shift_sigma)
         dy = np.random.laplace(0, v_shift_sigma)
         # Make sure dx and dy are even numbers.
-        dx = (dx // 2) * 2
-        dy = (dy // 2) * 2
+        dx = (int(dx) // 2) * 2
+        dy = (int(dy) // 2) * 2
         # Shift gt by half of (dy, dx).
         dx2 = dx // 2
         dy2 = dy // 2
