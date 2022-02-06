@@ -12,7 +12,7 @@ from torchvision import transforms
 cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(16,10)):
         self.batch_size = batch_size
         self.dataset_name = dataset_name        
         self.h = 256
@@ -68,13 +68,7 @@ class VimeoDataset(Dataset):
                         ])
                         
         self.aug_shift_prob = aug_shift_prob
-        if self.aug_shift_prob > 0:
-            # Shift at most 1/16 of the image, to avoid too much 
-            # loss of valid supervision.
-            # Vimeo: (256, 448).
-            # max_u_shift, max_v_shift = (28, 16)
-            self.max_u_shift = self.w  // 16
-            self.max_v_shift = self.h  // 16
+        self.shift_sigmas = shift_sigmas
                         
     def __len__(self):
         return len(self.meta_data)
@@ -98,10 +92,13 @@ class VimeoDataset(Dataset):
         gt = gt[x:x+h, y:y+w, :]
         return img0, gt, img1
 
-    # img (img0 or img1) and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
+    # img0, img1 and gt are 3D np arrays of (H, W, 3). gt is the middle frame.
     def random_shift(self, img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
-        dx = np.random.randint(-self.max_u_shift, self.max_u_shift)
-        dy = np.random.randint(-self.max_v_shift, self.max_v_shift)
+        u_shift_sigma, v_shift_sigma = shift_sigmas
+        # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
+        # and [-2*v_shift_sigma, 2*v_shift_sigma].
+        dx = np.random.laplace(0, u_shift_sigma)
+        dy = np.random.laplace(0, v_shift_sigma)
         # Make sure dx and dy are even numbers.
         dx = (dx // 2) * 2
         dy = (dy // 2) * 2
@@ -116,55 +113,41 @@ class VimeoDataset(Dataset):
 
         if dx > 0 and dy > 0:
             # img0 is cropped at the bottom-right corner. 
-            img0a   = img0[:, :, :-dy, :-dx]
+            img0a   = img0[:-dy, :-dx]
             # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
-            img1a   = img1[:, :, dy:,  dx:]
+            img1a   = img1[dy:,  dx:]
             # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
-            gta     = gt[  :, :, dy2:-dy2, dx2:-dx2]
-            # mask is both for middle (gt) -> img0 and for middle -> img1. They are the same.
-            mask[ :, :, dy2:-dy2, dx2:-dx2]  = 1
+            gta     = gt[  dy2:-dy2, dx2:-dx2]
         if dx > 0 and dy < 0:
             # img0 is cropped at the right side, and shifted to the up.
-            img0a   = img0[:, :, -dy:, :-dx]
+            img0a   = img0[-dy:, :-dx]
             # img1 is shifted to the left and cropped at the bottom.
-            img1a   = img1[:, :, :dy,  dx:]
+            img1a   = img1[:dy,  dx:]
             # gt is shifted by (dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
-            gta     = gt[  :, :, -dy2:dy2, dx2:-dx2]
-            mask[ :,  :, -dy2:dy2, dx2:-dx2] = 1
+            gta     = gt[  -dy2:dy2, dx2:-dx2]
         if dx < 0 and dy > 0:
             # img0 is shifted to the left, and cropped at the bottom.
-            img0a   = img0[:, :, :-dy, -dx:]
+            img0a   = img0[:-dy, -dx:]
             # img1 is cropped at the right side, and shifted to the up.
-            img1a   = img1[:, :, dy:,  :dx]
+            img1a   = img1[dy:,  :dx]
             # gt is shifted by (-dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
-            gta     = gt[  :, :, dy2:-dy2, -dx2:dx2]
-            mask[ :, :, dy2:-dy2, -dx2:dx2]  = 1
+            gta     = gt[  dy2:-dy2, -dx2:dx2]
         if dx < 0 and dy < 0:
             # img0 is shifted by (-dx, -dy) to the left and up.
-            img0a   = img0[:, :, -dy:, -dx:]
+            img0a   = img0[-dy:, -dx:]
             # img1 is cropped at the bottom-right corner.
-            img1a   = img1[:, :, :dy,  :dx]
+            img1a   = img1[:dy,  :dx]
             # gt is shifted by (-dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
-            gta     = gt[  :, :, -dy2:dy2, -dx2:dx2]
-            mask[ :, :, -dy2:dy2, -dx2:dx2]  = 1
+            gta     = gt[  -dy2:dy2, -dx2:dx2]
 
-            img2    = np.zeros_like(img)
-            gt2     = np.zeros_like(gt)
-            
-        if dx > 0 and dy > 0:
-            img2[dy:, dx:]    = img[:-dy, :-dx]
-            gt2[dy2:, dx2:]   = gt[:-dy2, :-dx2]
-        if dx > 0 and dy < 0:
-            img2[:dy, dx:]    = img[-dy:,  :-dx]
-            gt2[:dy2, dx2:]   = gt[-dy2:, :-dx2]
-        if dx < 0 and dy > 0:
-            img2[dy:, :dx]    = img[:-dy, -dx:]
-            gt2[dy2:, :dx2]   = gt[:-dy2, -dx2:]
-        if dx < 0 and dy < 0:
-            img2[:dy, :dx]    = img[-dy:, -dx:]
-            gt2[:dy2, :dx2]   = gt[-dy2:, -dx2:]
+        dx2, dy2 = abs(dx2), abs(dy2)
+        img0a = np.pad(img0a, ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
+        img1a = np.pad(img1a, ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
+        gta   = np.pad(gta,   ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
 
-        return img2, gt2
+        if reversed_01:
+            img0a, img1a = img1a, img0a
+        return img0a, img1a, gta
 
     def getimg(self, index):
         imgpath = os.path.join(self.image_root, self.meta_data[index])
@@ -218,9 +201,9 @@ class VimeoDataset(Dataset):
         if self.aug_shift_prob > 0:
             rand = random.random()
             if rand < self.aug_shift_prob / 2:
-                img0, gt = self.random_shift(img0, gt)
+                img0, img1, gt = self.random_shift(img0, img1, gt, False, self.shift_sigmas)
             elif rand >= self.aug_shift_prob / 2 and rand < self.aug_shift_prob:
-                img1, gt = self.random_shift(img1, gt)
+                img0, img1, gt = self.random_shift(img1, img0, gt, True,  self.shift_sigmas)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)

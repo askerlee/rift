@@ -47,7 +47,7 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, aug_shift_prob):
+def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -57,7 +57,7 @@ def train(model, local_rank, base_lr, aug_shift_prob):
 
     step = 0
     nr_eval = 0
-    dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob)
+    dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas)
     sampler = DistributedSampler(dataset)
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     args.step_per_epoch = train_data.__len__()
@@ -181,14 +181,14 @@ if __name__ == "__main__":
                         help='Probability of shifting augmentation')
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0, type=float,
                         help='Probability of shifting consistency loss')
-    parser.add_argument('--consshiftsigmas', dest='cons_shift_sigmas', default="16,10", type=str,
+    parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--conslastscale', dest='consist_loss_on_all_scales', action='store_false', 
                         help='Compute consistency loss on the last scale only (default: on all scales).')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
-    args.cons_shift_sigmas = [ int(s) for s in args.cons_shift_sigmas.split(",") ]
+    args.shift_sigmas = [ int(s) for s in args.shift_sigmas.split(",") ]
 
     args.local_rank = local_rank
     if args.local_rank == 0:
@@ -208,9 +208,9 @@ if __name__ == "__main__":
                   ctx_use_merged_flow=args.ctx_use_merged_flow,
                   conv_weight_decay=args.conv_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
-                  cons_shift_sigmas=args.cons_shift_sigmas,
+                  shift_sigmas=args.shift_sigmas,
                   consist_loss_on_all_scales=args.consist_loss_on_all_scales
                   )
 
-    train(model, args.local_rank, args.base_lr, args.aug_shift_prob)
+    train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)
         

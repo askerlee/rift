@@ -113,7 +113,7 @@ class Model:
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
-                 cons_shift_sigmas=(10,6),
+                 shift_sigmas=(10,6),
                  consist_loss_on_all_scales=True):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
@@ -146,7 +146,7 @@ class Model:
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
         self.consist_loss_weight = 0.5
-        self.cons_shift_sigmas = cons_shift_sigmas
+        self.shift_sigmas = shift_sigmas
         self.consist_loss_on_all_scales = consist_loss_on_all_scales
 
     def train(self):
@@ -198,9 +198,9 @@ class Model:
             if rand < self.cons_shift_prob / 2:
                 # smask: shift mask. dxy: (dx, dy).
                 # *_0: for img0. *_1: for img1.
-                img0a, img1a, gta, smask, dxy = random_shift(img0, img1, gt, False, self.cons_shift_sigmas)
+                img0a, img1a, gta, smask, dxy = random_shift(img0, img1, gt, False, self.shift_sigmas)
             elif rand >= self.cons_shift_prob / 2:
-                img0a, img1a, gta, smask, dxy = random_shift(img1, img0, gt, True,  self.cons_shift_sigmas)
+                img0a, img1a, gta, smask, dxy = random_shift(img1, img0, gt, True,  self.shift_sigmas)
 
             if dxy is not None:
                 imgsa = torch.cat((img0a, img1a), 1)
