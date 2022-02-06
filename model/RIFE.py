@@ -41,62 +41,45 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
     if dx == 0 or dy == 0:
         return img0, img1, gt, None, None
 
-    # Not to initialize as zeros. Otherwise the model can figure out the shift offsets easily.
-    # Using torch.rand (as input images are normalized to [0, 1]) also makes it 
-    # easy to figure out the shift offsets.
-    # Overlaying the shifted images on the original images is harder. Therefore we clone and then copy.
-    img0a   = torch.clone(img0)
-    img1a   = torch.clone(img1)
-    gta     = torch.clone(gt)
+    new_imgsize = (B, C, H - dy, W - dx)
+
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     # mask for the middle frame. Both directions have the same mask.
     mask    = torch.zeros(mask_shape, device=img0.device, dtype=bool)
 
     if dx > 0 and dy > 0:
-        # img0 is shifted by (dx, dy) to the right and down.
-        img0a[:, :, dy:,  dx:]           += 2* img0[:, :, :-dy, :-dx]
-        img0a[:, :, dy:,  dx:]           /= 3.0
-        # img1 doesn't shift, and is only cropped at the bottom-right corner.
-        img1a[:, :, :-dy, :-dx]          += 2* img1[:, :, :-dy, :-dx]
-        img1a[:, :, :-dy, :-dx]          /= 3.0
-        # gt is shifted by (dx2, dy2) to the right and down, and is also cropped at the bottom-right corner.
-        gta[  :, :, dy2:-dy2, dx2:-dx2]  += 2* gt[  :, :, :-dy, :-dx]
-        gta[  :, :, dy2:-dy2, dx2:-dx2]  /= 3.0
+        # img0 is cropped at the bottom-right corner. 
+        img0a   = img0[:, :, :-dy, :-dx]
+        # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
+        img1a   = img1[:, :, dy:,  dx:]
+        # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
+        gta     = gt[  :, :, dy2:-dy2, dx2:-dx2]
         # mask is both for middle (gt) -> img0 and for middle -> img1. They are the same.
         mask[ :, :, dy2:-dy2, dx2:-dx2]  = 1
     if dx > 0 and dy < 0:
-        # img0 is shifted by (dx, dy) to the right and up.
-        img0a[:,  :, :dy,  dx:]          += 2* img0[:, :, -dy:, :-dx]
-        img0a[:,  :, :dy,  dx:]          /= 3.0
-        # img1 doesn't shift, and is only cropped at the top-right corner.
-        img1a[:,  :, -dy:, :-dx]         += 2* img1[:, :, -dy:, :-dx]
-        img1a[:,  :, -dy:, :-dx]         /= 3.0
-        # gt is shifted by (dx2, dy2) to the right and up, and is also cropped at the top-right corner.
-        gta[  :,  :, -dy2:dy2, dx2:-dx2] += 2* gt[  :, :, -dy:, :-dx]
-        gta[  :,  :, -dy2:dy2, dx2:-dx2] /= 3.0
+        # img0 is cropped at the right side, and shifted to the up.
+        img0a   = img0[:, :, -dy:, :-dx]
+        # img1 is shifted to the left and cropped at the bottom.
+        img1a   = img1[:, :, :dy,  dx:]
+        # gt is shifted by (dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
+        gta     = gt[  :, :, -dy2:dy2, dx2:-dx2]
         mask[ :,  :, -dy2:dy2, dx2:-dx2] = 1
     if dx < 0 and dy > 0:
-        # img0 is shifted by (dx, dy) to the left and down.
-        img0a[:,  :, dy:,  :dx]          += 2* img0[:, :, :-dy, -dx:]
-        img0a[:,  :, dy:,  :dx]          /= 3.0
-        # img1 doesn't shift, and is only cropped at the bottom-left corner.
-        img1a[:,  :, :-dy, -dx:]         += 2* img1[:, :, :-dy, -dx:]
-        img1a[:,  :, :-dy, -dx:]         /= 3.0
-        # gt is shifted by (dx2, dy2) to the left and down, and is also cropped at the bottom-left corner.
-        gta[  :, :, dy2:-dy2, -dx2:dx2]  += 2* gt[  :, :, :-dy, -dx:]
-        gta[  :, :, dy2:-dy2, -dx2:dx2]  /= 3.0
+        # img0 is shifted to the left, and cropped at the bottom.
+        img0a   = img0[:, :, :-dy, -dx:]
+        # img1 is cropped at the right side, and shifted to the up.
+        img1a   = img1[:, :, dy:,  :dx]
+        # gt is shifted by (-dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
+        gta     = gt[  :, :, dy2:-dy2, -dx2:dx2]
         mask[ :, :, dy2:-dy2, -dx2:dx2]  = 1
     if dx < 0 and dy < 0:
-        # img0 is shifted by (dx, dy) to the left and up.
-        img0a[:, :, :dy, :dx]            += 2* img0[:, :, -dy:, -dx:]
-        img0a[:, :, :dy, :dx]            /= 3.0
-        # img1 doesn't shift, and is only cropped at the top-left corner.
-        img1a[:, :, -dy:, -dx:]          += 2* img1[:, :, -dy:, -dx:]
-        img1a[:, :, -dy:, -dx:]          /= 3.0
-        # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the top-left corner.
-        gta[  :, :, -dy2:dy2, -dx2:dx2]  += 2* gt[  :, :, -dy:, -dx:]
-        gta[  :, :, -dy2:dy2, -dx2:dx2]  /= 3.0
+        # img0 is shifted by (-dx, -dy) to the left and up.
+        img0a   = img0[:, :, -dy:, -dx:]
+        # img1 is cropped at the bottom-right corner.
+        img1a   = img1[:, :, :dy,  :dx]
+        # gt is shifted by (-dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
+        gta     = gt[  :, :, -dy2:dy2, -dx2:dx2]
         mask[ :, :, -dy2:dy2, -dx2:dx2]  = 1
     if not reversed_01:
         # delta_xy0， delta_xy1: offsets (from old to new flow) for two directions.
@@ -109,10 +92,16 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
         # (img0, img1) are actually original (img1, img0).
         # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
-        dxy = torch.tensor([-dx2, -dy2, dx2, dy2], dtype=float, device=img0.device)
+        dxy = torch.tensor([-dx2, -dy2,  dx2,  dy2], dtype=float, device=img0.device)
         # As input img0, img1 are swapped, swap the shifted images to make them 
         # correspond to the original img0 and img1.
         img0a, img1a = img1a, img0a
+
+    dx2, dy2 = abs(dx2), abs(dy2)
+    # pad img0a, img1a, gta to the original size.
+    img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
+    img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
+    gta   = F.pad(gta,   (dx2, dx2, dy2, dy2))
 
     dxy = dxy.view(1, 4, 1, 1)
     return img0a, img1a, gta, mask, dxy
