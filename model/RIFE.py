@@ -145,7 +145,7 @@ class Model:
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
-        self.consist_loss_weight = 0.5
+        self.consist_loss_weight = 0.2
         self.shift_sigmas = shift_sigmas
         self.consist_loss_on_all_scales = consist_loss_on_all_scales
 
