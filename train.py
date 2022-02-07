@@ -169,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
-    parser.add_argument('--distill', dest='distill_loss_weight', type=float, default=0.015)
+    parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.015)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
     parser.add_argument('--lr', dest='base_lr', default=3.5e-4, type=float)
@@ -183,8 +183,8 @@ if __name__ == "__main__":
                         help='Probability of shifting consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
-    parser.add_argument('--conslastscale', dest='consist_loss_on_all_scales', action='store_false', 
-                        help='Compute consistency loss on the last scale only (default: on all scales).')
+    parser.add_argument('--consweight', dest='consist_loss_weight', default=0.1, type=float, 
+                        help='Consistency loss weight.')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -209,7 +209,7 @@ if __name__ == "__main__":
                   conv_weight_decay=args.conv_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
-                  consist_loss_on_all_scales=args.consist_loss_on_all_scales
+                  consist_loss_weight=args.consist_loss_weight
                   )
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)

@@ -114,7 +114,7 @@ class Model:
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(10,6),
-                 consist_loss_on_all_scales=True):
+                 consist_loss_weight=0.1):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -145,9 +145,8 @@ class Model:
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
-        self.consist_loss_weight = 0.2
         self.shift_sigmas = shift_sigmas
-        self.consist_loss_on_all_scales = consist_loss_on_all_scales
+        self.consist_loss_weight = consist_loss_weight
 
     def train(self):
         self.flownet.train()
@@ -206,13 +205,8 @@ class Model:
                 imgsa = torch.cat((img0a, img1a), 1)
                 flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
                 loss_consist_stu = 0
-                if self.consist_loss_on_all_scales:
-                    # s enumerates all scales.
-                    loss_on_scales = np.arange(len(flow))
-                else:
-                    # only computes the consistency loss on the last scale.
-                    loss_on_scales = (-1,)
-
+                # s enumerates all scales.
+                loss_on_scales = np.arange(len(flow))
                 for s in loss_on_scales:
                     loss_consist_stu += torch.abs(flow[s] + dxy - flow2[s])[smask].mean()
 
