@@ -94,7 +94,6 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     # mask for the middle frame. Both directions have the same mask.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
-    print(img0a.shape, img1a.shape, gta.shape, mask.shape)
     return img0a, img1a, gta, mask, dxy
 
 class Model:
