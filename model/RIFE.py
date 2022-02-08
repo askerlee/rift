@@ -82,7 +82,6 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     img1a = img1[:, :, T2:B2, L2:R2]
     gta   = gt[:, :, TM:BM, LM:RM]
 
-    debug()
     # pad img0a, img1a, gta to the original size.
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
