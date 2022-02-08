@@ -109,7 +109,10 @@ class VimeoDataset(Dataset):
         # Do not bother to make a special case to handle 0 offsets. 
         # Just discard such shift params.
         if dx == 0 or dy == 0:
-            return img0, img1, gt
+            if reversed_01:
+                return img1, img0, gt, None
+            else:
+                return img0, img1, gt, None
 
         if dx > 0 and dy > 0:
             # img0 is cropped at the bottom-right corner. 

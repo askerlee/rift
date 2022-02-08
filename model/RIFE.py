@@ -39,7 +39,10 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
     # Do not bother to make a special case to handle 0 offsets. 
     # Just discard such shift params.
     if dx == 0 or dy == 0:
-        return img0, img1, gt, None, None
+        if reversed_01:
+            return img1, img0, gt, None
+        else:
+            return img0, img1, gt, None
 
     new_imgsize = (B, C, H - dy, W - dx)
 
@@ -114,7 +117,7 @@ class Model:
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(10,6),
-                 consist_loss_weight=0.1):
+                 consist_loss_weight=0.05):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
