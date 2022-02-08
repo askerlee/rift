@@ -17,10 +17,8 @@ import random
 
 device = torch.device("cuda")
 
-# img (img0 or img1) and gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-# if reversed_01 = False, (img0, img1) = original (img0, img1)
-# if reversed_01 = True,  (img0, img1) = original (img1, img0), to increase diversity of shifting.
-def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
+# img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
+def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
@@ -30,83 +28,72 @@ def random_shift(img0, img1, gt, reversed_01=False, shift_sigmas=(16,10)):
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
-    # Shift gt (middle frame) by half of (dy, dx).
-    # 90% of gt shift are within [-u_shift_sigma, u_shift_sigma] 
-    # and [-v_shift_sigma, v_shift_sigma].
-    dx2 = dx // 2
-    dy2 = dy // 2
 
     # Do not bother to make a special case to handle 0 offsets. 
     # Just discard such shift params.
     if dx == 0 or dy == 0:
-        if reversed_01:
-            return img1, img0, gt, None
-        else:
-            return img0, img1, gt, None
-
-    new_imgsize = (B, C, H - dy, W - dx)
-
-    mask_shape = list(img0.shape)
-    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
-    # mask for the middle frame. Both directions have the same mask.
-    mask    = torch.zeros(mask_shape, device=img0.device, dtype=bool)
+        return img0, img1, gt, None, None
 
     if dx > 0 and dy > 0:
-        # img0 is cropped at the bottom-right corner. 
-        img0a   = img0[:, :, :-dy, :-dx]
+        # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
+        img0_bound = (0,  img0.shape[0] - dy,  0,  img0.shape[1] - dx)
         # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
-        img1a   = img1[:, :, dy:,  dx:]
-        # gt is shifted by (dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
-        gta     = gt[  :, :, dy2:-dy2, dx2:-dx2]
-        # mask is both for middle (gt) -> img0 and for middle -> img1. They are the same.
-        mask[ :, :, dy2:-dy2, dx2:-dx2]  = 1
+        #                                                           img1[dy:,  dx:]
+        img1_bound = (dy, img0.shape[0],       dx, img0.shape[1])
     if dx > 0 and dy < 0:
-        # img0 is cropped at the right side, and shifted to the up.
-        img0a   = img0[:, :, -dy:, :-dx]
-        # img1 is shifted to the left and cropped at the bottom.
-        img1a   = img1[:, :, :dy,  dx:]
-        # gt is shifted by (dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
-        gta     = gt[  :, :, -dy2:dy2, dx2:-dx2]
-        mask[ :,  :, -dy2:dy2, dx2:-dx2] = 1
+        # img0 is cropped at the right side, and shifted to the up. img0[-dy:, :-dx]
+        img0_bound = (-dy, img0.shape[0],      0,  img0.shape[1] - dx)
+        # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
+        img1_bound = (0,   img0.shape[0] + dy, dx, img0.shape[1])
     if dx < 0 and dy > 0:
-        # img0 is shifted to the left, and cropped at the bottom.
-        img0a   = img0[:, :, :-dy, -dx:]
-        # img1 is cropped at the right side, and shifted to the up.
-        img1a   = img1[:, :, dy:,  :dx]
-        # gt is shifted by (-dx2, dy2) to the left and up, and is also cropped at the bottom-right corner.
-        gta     = gt[  :, :, dy2:-dy2, -dx2:dx2]
-        mask[ :, :, dy2:-dy2, -dx2:dx2]  = 1
+        # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
+        img0_bound = (0,   img0.shape[0] - dy, -dx, img0.shape[1])
+        # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
+        img1_bound = (dy,  img0.shape[0],      0,   img0.shape[1] + dx)
     if dx < 0 and dy < 0:
-        # img0 is shifted by (-dx, -dy) to the left and up.
-        img0a   = img0[:, :, -dy:, -dx:]
-        # img1 is cropped at the bottom-right corner.
-        img1a   = img1[:, :, :dy,  :dx]
-        # gt is shifted by (-dx2, -dy2) to the left and up, and is also cropped at the bottom-right corner.
-        gta     = gt[  :, :, -dy2:dy2, -dx2:dx2]
-        mask[ :, :, -dy2:dy2, -dx2:dx2]  = 1
-    if not reversed_01:
-        # delta_xy0， delta_xy1: offsets (from old to new flow) for two directions.
+        # img0 is shifted by (-dx, -dy) to the left and up. img0[-dy:, -dx:]
+        img0_bound = (-dy, img0.shape[0],      -dx, img0.shape[1])
+        # img1 is cropped at the bottom-right corner.       img1[:dy,  :dx]
+        img1_bound = (0,   img0.shape[0] + dy, 0,   img0.shape[1] + dx)
+
+    # Swapping the shifts to img0 and img1, to increase diversity.
+    reversed_01 = random.random() > 0.5
+    # Shift gt (middle frame) by half of (dy, dx).
+    dx2, dy2 = abs(dx) // 2, abs(dy) // 2
+
+    if reversed_01:
+        img0_bound, img1_bound = img1_bound, img0_bound
+        # Shifting to img0 & img1 are swapped.
+        # dxy: offsets (from old to new flow) for two directions.
         # Take half of dx, dy as this is the shift for the middle frame.
-        # Note the flows are for backward warping (from middle from to 0/1).
-        # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
-        # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
-        dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
-    else:
-        # (img0, img1) are actually original (img1, img0).
+        # Note the flows are for backward warping (from middle to 0/1).
         # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([-dx2, -dy2,  dx2,  dy2], dtype=float, device=img0.device)
-        # As input img0, img1 are swapped, swap the shifted images to make them 
-        # correspond to the original img0 and img1.
-        img0a, img1a = img1a, img0a
+    else:
+        # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
+        # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
+        dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
-    dx2, dy2 = abs(dx2), abs(dy2)
+    T1, B1, L1, R1 = img0_bound
+    T2, B2, L2, R2 = img1_bound
+    TM, BM, LM, RM = dy2, img0.shape[0] - dy2, dx2, img0.shape[1] - dx2
+    img0a = img0[T1:B1, L1:R1]
+    img1a = img1[T2:B2, L2:R2]
+    gta   = gt[TM:BM, LM:RM]
+
     # pad img0a, img1a, gta to the original size.
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
     gta   = F.pad(gta,   (dx2, dx2, dy2, dy2))
 
     dxy = dxy.view(1, 4, 1, 1)
+
+    mask_shape = list(img0.shape)
+    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    # mask for the middle frame. Both directions have the same mask.
+    mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
+    mask[TM:BM, LM:RM] = True
     return img0a, img1a, gta, mask, dxy
 
 class Model:
@@ -195,14 +182,9 @@ class Model:
         else:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
-        rand = random.random()
-        if self.cons_shift_prob > 0 and rand < self.cons_shift_prob:
-            if rand < self.cons_shift_prob / 2:
-                # smask: shift mask. dxy: (dx, dy).
-                # *_0: for img0. *_1: for img1.
-                img0a, img1a, gta, smask, dxy = random_shift(img0, img1, gt, False, self.shift_sigmas)
-            elif rand >= self.cons_shift_prob / 2:
-                img0a, img1a, gta, smask, dxy = random_shift(img1, img0, gt, True,  self.shift_sigmas)
+        if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
+            # smask: shift mask. dxy: (dx, dy).
+            img0a, img1a, gta, smask, dxy = random_shift(img0, img1, gt, self.shift_sigmas)
 
             if dxy is not None:
                 imgsa = torch.cat((img0a, img1a), 1)
