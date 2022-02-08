@@ -78,9 +78,9 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
     TM, BM, LM, RM = dy2, img0.shape[0] - dy2, dx2, img0.shape[1] - dx2
-    img0a = img0[T1:B1, L1:R1]
-    img1a = img1[T2:B2, L2:R2]
-    gta   = gt[TM:BM, LM:RM]
+    img0a = img0[:, :, T1:B1, L1:R1]
+    img1a = img1[:, :, T2:B2, L2:R2]
+    gta   = gt[:, :, TM:BM, LM:RM]
 
     # pad img0a, img1a, gta to the original size.
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
@@ -93,7 +93,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     # mask for the middle frame. Both directions have the same mask.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
-    mask[TM:BM, LM:RM] = True
+    mask[:, :, TM:BM, LM:RM] = True
     return img0a, img1a, gta, mask, dxy
 
 class Model:
