@@ -28,7 +28,9 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
-
+    dx2 = dx // 2
+    dy2 = dy // 2
+    
     # Do not bother to make a special case to handle 0 offsets. 
     # Just discard such shift params.
     if dx == 0 or dy == 0:
@@ -59,7 +61,6 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     # Swapping the shifts to img0 and img1, to increase diversity.
     reversed_01 = random.random() > 0.5
     # Shift gt (middle frame) by half of (dy, dx).
-    dx2, dy2 = abs(dx) // 2, abs(dy) // 2
 
     if reversed_01:
         img0_bound, img1_bound = img1_bound, img0_bound
@@ -75,6 +76,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
         # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
+    dx2, dy2 = abs(dx2), abs(dy2)
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
