@@ -177,7 +177,7 @@ if __name__ == "__main__":
                         help='Output M groups of flow')
     parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
                         help='Use merged flow for contextnet.')
-    parser.add_argument('--augshift', dest='aug_shift_prob', default=0, type=float,
+    parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0, type=float,
                         help='Probability of shifting consistency loss')
