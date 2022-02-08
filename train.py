@@ -183,7 +183,7 @@ if __name__ == "__main__":
                         help='Probability of shifting consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
-    parser.add_argument('--consweight', dest='consist_loss_weight', default=0.05, type=float, 
+    parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
 
     args = parser.parse_args()
