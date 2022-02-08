@@ -64,7 +64,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     img0a = img0[T1:B1, L1:R1]
     img1a = img1[T2:B2, L2:R2]
     gta   = gt[TM:BM, LM:RM]
-    
+
     # Pad img1, img2, gt by half of (dy, dx).
     img0a   = np.pad(img0a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
     img1a   = np.pad(img1a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
@@ -203,7 +203,7 @@ class VimeoDataset(Dataset):
                     img0, img1 = img1, img0
 
         if self.aug_shift_prob > 0 and random.random() < self.aug_shift_prob:
-            img0, img1, gt = self.random_shift(img0, img1, gt, self.shift_sigmas)
+            img0, img1, gt = random_shift(img0, img1, gt, self.shift_sigmas)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
