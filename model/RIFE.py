@@ -36,25 +36,25 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
 
     if dx > 0 and dy > 0:
         # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
-        img0_bound = (0,  img0.shape[0] - dy,  0,  img0.shape[1] - dx)
+        img0_bound = (0,  H - dy,  0,  W - dx)
         # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
         #                                                           img1[dy:,  dx:]
-        img1_bound = (dy, img0.shape[0],       dx, img0.shape[1])
+        img1_bound = (dy, H,       dx, W)
     if dx > 0 and dy < 0:
         # img0 is cropped at the right side, and shifted to the up. img0[-dy:, :-dx]
-        img0_bound = (-dy, img0.shape[0],      0,  img0.shape[1] - dx)
+        img0_bound = (-dy, H,      0,  W - dx)
         # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
-        img1_bound = (0,   img0.shape[0] + dy, dx, img0.shape[1])
+        img1_bound = (0,   H + dy, dx, W)
     if dx < 0 and dy > 0:
         # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
-        img0_bound = (0,   img0.shape[0] - dy, -dx, img0.shape[1])
+        img0_bound = (0,   H - dy, -dx, W)
         # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
-        img1_bound = (dy,  img0.shape[0],      0,   img0.shape[1] + dx)
+        img1_bound = (dy,  H,      0,   W + dx)
     if dx < 0 and dy < 0:
         # img0 is shifted by (-dx, -dy) to the left and up. img0[-dy:, -dx:]
-        img0_bound = (-dy, img0.shape[0],      -dx, img0.shape[1])
+        img0_bound = (-dy, H,      -dx, W)
         # img1 is cropped at the bottom-right corner.       img1[:dy,  :dx]
-        img1_bound = (0,   img0.shape[0] + dy, 0,   img0.shape[1] + dx)
+        img1_bound = (0,   H + dy, 0,   W + dx)
 
     # Swapping the shifts to img0 and img1, to increase diversity.
     reversed_01 = random.random() > 0.5
@@ -77,11 +77,12 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
 
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
-    TM, BM, LM, RM = dy2, img0.shape[0] - dy2, dx2, img0.shape[1] - dx2
+    TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
     gta   = gt[:, :, TM:BM, LM:RM]
 
+    debug()
     # pad img0a, img1a, gta to the original size.
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
@@ -94,6 +95,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     # mask for the middle frame. Both directions have the same mask.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
+    print(img0a.shape, img1a.shape, gta.shape, mask.shape)
     return img0a, img1a, gta, mask, dxy
 
 class Model:
