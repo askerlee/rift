@@ -27,7 +27,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     # Just discard such shift params.
     # valid_mask == None: such a valid_mask will be ignored by downsteam processing.
     if dx == 0 or dy == 0:
-        return img0, img1, gt, None
+        return img0, img1, gt
 
     if dx > 0 and dy > 0:
         # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
