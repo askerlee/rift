@@ -62,7 +62,7 @@ def dual_teaching_loss(distill_scheme, gt,
         # distill_mask indicates where the warped images according to student's prediction 
         # is worse than that of the teacher.
         student_error = (img_stu - gt).abs().mean(1, True)
-        teacher_error = (img_tea  - gt).abs().mean(1, True)
+        teacher_error = (img_tea - gt).abs().mean(1, True)
         if distill_scheme == 'hard':
             distill_mask = (student_error > teacher_error + 0.01).float().detach()
         else:
@@ -81,7 +81,8 @@ def dual_teaching_loss(distill_scheme, gt,
         img_stu, flow_stu, img_tea, flow_tea = \
             img_tea, flow_tea, img_stu, flow_stu
         # The distillation loss from the student to the teacher is given a smaller weight.
-        
+
+    loss_distill = loss_distill / 2    
     return loss_distill
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
