@@ -79,6 +79,10 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     dx2, dy2 = abs(dx2), abs(dy2)
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
+    # For the middle frame, the numbers of cropped pixels at the left and right, or the up and the bottom are equal.
+    # Therefore, after padding, the middle frame doesn't shift. It's just cropped at the center and 
+    # zero-padded at the four sides.
+    # This property makes it easy to compare the flow before and after shifting.
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
@@ -225,7 +229,7 @@ class Model:
         if training:
             self.optimG.zero_grad()
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / 2) * self.distill_loss_weight \
+            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2) * self.distill_loss_weight \
                      + loss_consist * self.consist_loss_weight
             loss_G.backward()
             if self.grad_clip > 0:
