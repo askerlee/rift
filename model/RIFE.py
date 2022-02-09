@@ -199,9 +199,11 @@ class Model:
                 # s enumerates all scales.
                 loss_on_scales = np.arange(len(flow))
                 for s in loss_on_scales:
-                    loss_consist_stu += torch.abs(flow[s].data + dxy - flow2[s])[smask].mean()
+                    # flow[s].data to make the loss one-way only, i.e., the original flow as the teacher.
+                    loss_consist_stu += torch.abs(flow[s] + dxy - flow2[s])[smask].mean()
 
-                loss_consist_tea = torch.abs(flow_teacher.data + dxy - flow_teacher2)[smask].mean()
+                # flow_teacher.data to make the loss one-way only, i.e., the original flow as the teacher.
+                loss_consist_tea = torch.abs(flow_teacher + dxy - flow_teacher2)[smask].mean()
                 loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
                 mean_shift = dxy.abs().mean().item()
             else:
@@ -228,9 +230,9 @@ class Model:
         loss_tea = (self.lap(merged_teacher, gt)).mean()
         if training:
             self.optimG.zero_grad()
-            DISTILL2_DISCOUNT = 1
+            CONS_DISTILL_DISCOUNT = 2
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / DISTILL2_DISCOUNT) * self.distill_loss_weight \
+            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / CONS_DISTILL_DISCOUNT) * self.distill_loss_weight \
                      + loss_consist * self.consist_loss_weight
             loss_G.backward()
             if self.grad_clip > 0:
