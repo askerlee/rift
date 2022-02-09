@@ -229,7 +229,7 @@ class Model:
         if training:
             self.optimG.zero_grad()
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2) * self.distill_loss_weight \
+            loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / 4) * self.distill_loss_weight \
                      + loss_consist * self.consist_loss_weight
             loss_G.backward()
             if self.grad_clip > 0:
