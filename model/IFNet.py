@@ -82,7 +82,7 @@ def dual_teaching_loss(distill_scheme, gt,
             img_tea, flow_tea, img_stu, flow_stu
         # The distillation loss from the student to the teacher is given a smaller weight.
 
-    loss_distill = loss_distill / 2    
+    # loss_distill = loss_distill / 2    
     return loss_distill
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
