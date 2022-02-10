@@ -59,7 +59,7 @@ def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
     use_lap_loss = True
     # As the final evaluation uses PSNR, maybe laplacian loss is better.
     if use_lap_loss:
-        loss_fun = LapLoss(max_levels=3)
+        loss_fun = LapLoss(max_levels=3, reduction='none')
     else:
         loss_fun = nn.L1Loss(reduction='none')
 
