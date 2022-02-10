@@ -56,23 +56,23 @@ def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
     # Two directions could take different weights.
     # Set Ws[1] to 0 to disable student -> teacher.
     Ws = [1, 0.5]
-    use_lap_loss = True
-    # As the final evaluation uses PSNR, maybe laplacian loss is better.
+    use_lap_loss = False
+    # Laplacian loss performs better in earlier epochs, but worse in later epochs.
     if use_lap_loss:
         loss_fun = LapLoss(max_levels=3, reduction='none')
     else:
         loss_fun = nn.L1Loss(reduction='none')
 
     for i in range(2):
-        # distill_mask indicates where the warped images according to student's prediction 
-        # is worse than that of the teacher.
         student_error = loss_fun(img_stu, gt).mean(1, True)
         teacher_error = loss_fun(img_tea, gt).mean(1, True)
-        distill_mask = (student_error > teacher_error + 0.01).float().detach()
-
+        # distill_mask indicates where the warped images according to student's prediction 
+        # is worse than that of the teacher.
         # If at some points, the warped image of the teacher is better than the student,
         # then regard the flow at these points are more accurate, and use them to teach the student.
-        # loss_distill is the sum of the distillation losses at 3 different scales.
+        distill_mask = (student_error > teacher_error + 0.01).float().detach()
+
+        # loss_distill is the sum of the distillation losses at 2 directions.
         loss_distill += Ws[i] * ((flow_tea.detach() - flow_stu).abs() * distill_mask).mean()
 
         # Swap student and teacher, and calculate the distillation loss again.
@@ -147,7 +147,7 @@ class IFBlock(nn.Module):
 
     def forward(self, imgs, nonimg, flow, scale):
         # Downscale img0/img1 by scale.
-        imgs   = F.interpolate(imgs,  scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+        imgs   = F.interpolate(imgs,   scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
         if flow is not None:
             # the size and magnitudes of the flow is scaled to the size of this layer. 
