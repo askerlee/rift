@@ -76,19 +76,21 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
         # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
-    dx2, dy2 = abs(dx2), abs(dy2)
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
     # For the middle frame, the numbers of cropped pixels at the left and right, or the up and the bottom are equal.
     # Therefore, after padding, the middle frame doesn't shift. It's just cropped at the center and 
     # zero-padded at the four sides.
     # This property makes it easy to compare the flow before and after shifting.
+    dx2, dy2 = abs(dx2), abs(dy2)
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
     gta   = gt[:, :, TM:BM, LM:RM]
 
     # pad img0a, img1a, gta to the original size.
+    # Note the pads are ordered as (x1, x2, y1, y2) instead of (y1, y2, x1, x2). 
+    # The order is different from np.pad().
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
     gta   = F.pad(gta,   (dx2, dx2, dy2, dy2))
@@ -232,6 +234,8 @@ class Model:
             self.optimG.zero_grad()
             CONS_DISTILL_DISCOUNT = 2
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
+            # loss_distill2: the distillation loss when the input is shifted. 
+            # Discounted by 2, so the effective weight is 0.01.
             loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / CONS_DISTILL_DISCOUNT) * self.distill_loss_weight \
                      + loss_consist * self.consist_loss_weight
             loss_G.backward()

@@ -6,6 +6,7 @@ from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
 import torch.distributed as dist
+from model.laplacian import LapLoss
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
@@ -48,29 +49,26 @@ def debug():
         dist.barrier()
 
 # Dual teaching helps slightly.
-def dual_teaching_loss(distill_scheme, gt, 
-                       img_stu, flow_stu, 
-                       img_tea, flow_tea):
+def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
     loss_distill = 0
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
     # Two directions could take different weights.
     # Set Ws[1] to 0 to disable student -> teacher.
     Ws = [1, 0.5]
+    use_lap_loss = True
+    # As the final evaluation uses PSNR, maybe laplacian loss is better.
+    if use_lap_loss:
+        loss_fun = LapLoss(max_levels=3)
+    else:
+        loss_fun = nn.L1Loss(reduction='none')
 
     for i in range(2):
         # distill_mask indicates where the warped images according to student's prediction 
         # is worse than that of the teacher.
-        student_error = (img_stu - gt).abs().mean(1, True)
-        teacher_error = (img_tea - gt).abs().mean(1, True)
-        if distill_scheme == 'hard':
-            distill_mask = (student_error > teacher_error + 0.01).float().detach()
-        else:
-            distill_soft_min_weight = 0.5
-            distill_mask = (student_error - teacher_error).sigmoid().detach()
-            # / (1 - self.distill_soft_min_weight) to normalize distill_mask to be within (0, 1).
-            # * 2 to make the mean of distill_mask to be 1, same as the 'hard' scheme.
-            distill_mask = 2 * (distill_mask - distill_soft_min_weight).clamp(min=0) / (1 - distill_soft_min_weight)
+        student_error = loss_fun(img_stu, gt).mean(1, True)
+        teacher_error = loss_fun(img_tea, gt).mean(1, True)
+        distill_mask = (student_error > teacher_error + 0.01).float().detach()
 
         # If at some points, the warped image of the teacher is better than the student,
         # then regard the flow at these points are more accurate, and use them to teach the student.
@@ -218,10 +216,6 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        self.distill_scheme = 'hard' # 'hard' or 'soft'
-        # As the distll mask weight is obtained by sigmoid(), even if teacher is worse than student, i.e., 
-        # (student - teacher) < 0, the distill mask weight could still be as high as ~0.5. 
-        self.distill_soft_min_weight = 0.4  
         self.ctx_use_merged_flow = ctx_use_merged_flow
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
@@ -336,7 +330,7 @@ class IFNet(nn.Module):
                 # dual_teaching_loss: the student can also teach the teacher, 
                 # when the student is more accurate.
                 # Distilling both merged flow and global mask score leads to slightly worse performance.
-                loss_distill += dual_teaching_loss(self.distill_scheme, gt, 
+                loss_distill += dual_teaching_loss(gt, 
                                                    merged_img_list[i], flow_list[i], 
                                                    merged_tea,         flow_tea,     
                                                   )
