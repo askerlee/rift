@@ -18,13 +18,13 @@ import random
 device = torch.device("cuda")
 
 # img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
+def random_shift(img0, img1, gt, shift_sigmas=(10, 8)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
-    dx = np.random.laplace(0, u_shift_sigma)
-    dy = np.random.laplace(0, v_shift_sigma)
+    dx = np.random.uniform(-u_shift_sigma, u_shift_sigma)
+    dy = np.random.laplace(-v_shift_sigma, v_shift_sigma)
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
@@ -55,18 +55,23 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
 
     # Swapping the shifts to img0 and img1, to increase diversity.
     reversed_01 = random.random() > 0.5
-    # Shift gt (middle frame) by half of (dy, dx).
-
+    do_identity_shift = True
+    
     if reversed_01:
         img0_bound, img1_bound = img1_bound, img0_bound
+        if do_identity_shift:
+            img0, img1, gt = img1, img1, img1
         # Shifting to img0 & img1 are swapped.
         # dxy: offsets (from old to new flow) for two directions.
-        # Take half of dx, dy as this is the shift for the middle frame.
+        # Note the middle frame is shifted by *half* of dx, dy.
         # Note the flows are for backward warping (from middle to 0/1).
         # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([-dx2, -dy2,  dx2,  dy2], dtype=float, device=img0.device)
     else:
+        if do_identity_shift:
+            img0, img1, gt = img0, img0, img0        
+        # Note the middle frame is shifted by *half* of dx, dy.
         # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
@@ -107,7 +112,7 @@ class Model:
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
-                 shift_sigmas=(10,6),
+                 shift_sigmas=(10,8),
                  consist_loss_weight=0.05):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()

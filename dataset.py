@@ -13,34 +13,28 @@ cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # img0, img1, gt are 3D np arrays of (H, W, 3).
-def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
+def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
-    dx = np.random.laplace(0, u_shift_sigma)
-    dy = np.random.laplace(0, v_shift_sigma)
+    dx = np.random.uniform(-u_shift_sigma, u_shift_sigma)
+    dy = np.random.uniform(-v_shift_sigma, v_shift_sigma)
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
 
-    # Do not bother to make a special case to handle 0 offsets. 
-    # Just discard such shift params.
-    # valid_mask == None: such a valid_mask will be ignored by downsteam processing.
-    if dx == 0 or dy == 0:
-        return img0, img1, gt
-
-    if dx > 0 and dy > 0:
+    if dx >= 0 and dy >= 0:
         # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
         img0_bound = (0,  img0.shape[0] - dy,  0,  img0.shape[1] - dx)
         # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
         #                                                           img1[dy:,  dx:]
         img1_bound = (dy, img0.shape[0],       dx, img0.shape[1])
-    if dx > 0 and dy < 0:
+    if dx >= 0 and dy < 0:
         # img0 is cropped at the right side, and shifted to the up. img0[-dy:, :-dx]
         img0_bound = (-dy, img0.shape[0],      0,  img0.shape[1] - dx)
         # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
         img1_bound = (0,   img0.shape[0] + dy, dx, img0.shape[1])
-    if dx < 0 and dy > 0:
+    if dx < 0 and dy >= 0:
         # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
         img0_bound = (0,   img0.shape[0] - dy, -dx, img0.shape[1])
         # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
@@ -73,7 +67,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16,10)):
     return img0a, img1a, gta
 
 class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(16,10)):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8)):
         self.batch_size = batch_size
         self.dataset_name = dataset_name        
         self.h = 256
