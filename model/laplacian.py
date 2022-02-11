@@ -54,7 +54,7 @@ class LapLoss(torch.nn.Module):
         self.gauss_kernel = gauss_kernel(channels=channels)
         self.reduction = reduction
         if loss_type == 2:
-            self.loss = torch.nn.MSELoss(reduction=self.reduction)
+            self.loss = torch.nn.SmoothL1Loss(reduction=self.reduction)
         else:
             self.loss = torch.nn.L1Loss(reduction=self.reduction)
 
