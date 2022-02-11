@@ -23,8 +23,9 @@ def random_shift(img0, img1, gt, shift_sigmas=(10, 8)):
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
+    # Use uniform instead of laplacian.
     dx = np.random.uniform(-u_shift_sigma, u_shift_sigma)
-    dy = np.random.laplace(-v_shift_sigma, v_shift_sigma)
+    dy = np.random.uniform(-v_shift_sigma, v_shift_sigma)
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
