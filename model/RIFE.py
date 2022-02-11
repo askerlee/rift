@@ -55,7 +55,8 @@ def random_shift(img0, img1, gt, shift_sigmas=(10, 8)):
 
     # Swapping the shifts to img0 and img1, to increase diversity.
     reversed_01 = random.random() > 0.5
-    do_identity_shift = True
+    # Make the shifted img0, img1, gt shifted copies of the same image. Performs slightly worse.
+    do_identity_shift = False
     
     if reversed_01:
         img0_bound, img1_bound = img1_bound, img0_bound
