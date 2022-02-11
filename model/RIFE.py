@@ -120,7 +120,8 @@ class Model:
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(16,10),
-                 consist_loss_weight=0.05):
+                 consist_loss_weight=0.05,
+                 laplacian_loss_type=1):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -142,7 +143,7 @@ class Model:
         self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=conv_weight_decay)
 
         self.epe = EPE()
-        self.lap = LapLoss()
+        self.lap = LapLoss(loss_type=laplacian_loss_type)
         self.sobel = SOBEL()
         if local_rank != -1:
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 

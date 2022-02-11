@@ -219,8 +219,8 @@ class IFNet(nn.Module):
         self.ctx_use_merged_flow = ctx_use_merged_flow
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
-        self.use_grad_clamp = False
-        if self.use_grad_clamp:
+        self.use_clamp_with_grad = False
+        if self.use_clamp_with_grad:
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
@@ -351,7 +351,7 @@ class IFNet(nn.Module):
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
 
-        if self.use_grad_clamp:
+        if self.use_clamp_with_grad:
             merged_img = self.clamp01(merged_img_list[2] + img_residual)
         else:
             merged_img = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
