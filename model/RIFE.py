@@ -18,14 +18,19 @@ import random
 device = torch.device("cuda")
 
 # img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-def random_shift(img0, img1, gt, shift_sigmas=(10, 8)):
+def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
-    # Use uniform instead of laplacian.
-    dx = np.random.uniform(-u_shift_sigma, u_shift_sigma)
-    dy = np.random.uniform(-v_shift_sigma, v_shift_sigma)
+    # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
+    if random.rand() > 0.5:
+        dx = np.random.laplace(0, u_shift_sigma / 4)
+        dy = np.random.laplace(0, v_shift_sigma)
+    else:
+        dx = np.random.laplace(0, u_shift_sigma)
+        dy = np.random.laplace(0, v_shift_sigma / 4)
+
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
@@ -114,7 +119,7 @@ class Model:
                  ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
-                 shift_sigmas=(10,8),
+                 shift_sigmas=(16,10),
                  consist_loss_weight=0.05):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
