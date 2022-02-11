@@ -185,8 +185,6 @@ if __name__ == "__main__":
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
-    parser.add_argument('--laplosstype', dest='laplacian_loss_type', default=1, type=int, 
-                        help='Type of laplacian loss (1 or 2 for L1 or L2 loss between two laplacians).')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -212,7 +210,6 @@ if __name__ == "__main__":
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
                   consist_loss_weight=args.consist_loss_weight,
-                  laplacian_loss_type=args.laplacian_loss_type
                   )
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)
