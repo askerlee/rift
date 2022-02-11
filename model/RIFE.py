@@ -24,7 +24,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
     # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
-    if random.rand() > 0.5:
+    if random.random() > 0.5:
         dx = np.random.laplace(0, u_shift_sigma / 4)
         dy = np.random.laplace(0, v_shift_sigma)
     else:
