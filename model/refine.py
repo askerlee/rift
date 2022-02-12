@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.optim as optim
 import itertools
-from model.warp import multiwarp, multimerge_flow
+from model.warp import warp, multiwarp, multimerge_flow
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
