@@ -35,6 +35,29 @@ class Conv2(nn.Module):
         x = self.conv2(x)
         return x
 
+class Contextnet_rife(nn.Module):
+    def __init__(self, c=16):
+        super(Contextnet, self).__init__()
+        self.conv1 = Conv2(3, c)
+        self.conv2 = Conv2(c, 2*c)
+        self.conv3 = Conv2(2*c, 4*c)
+        self.conv4 = Conv2(4*c, 8*c)
+    
+    def forward(self, x, flow):
+        x = self.conv1(x)
+        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f1 = warp(x, flow)        
+        x = self.conv2(x)
+        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f2 = warp(x, flow)
+        x = self.conv3(x)
+        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f3 = warp(x, flow)
+        x = self.conv4(x)
+        flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+        f4 = warp(x, flow)
+        return [f1, f2, f3, f4]
+        
 # Contextnet generates warped features of the input image. 
 # flow is not used as input to generate the features, but to warp the features.
 class Contextnet(nn.Module):

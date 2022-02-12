@@ -57,7 +57,7 @@ class IFNet_rife(nn.Module):
         self.block1 = IFBlock(13+4, c=150)
         self.block2 = IFBlock(13+4, c=90)
         self.block_tea = IFBlock(16+4, c=90)
-        self.contextnet = Contextnet()
+        self.contextnet = Contextnet_rife()
         self.unet = Unet()
 
     def forward(self, x, scale=[4,2,1], timestep=0.5):
