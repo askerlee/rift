@@ -120,7 +120,7 @@ class VimeoDataset(Dataset):
                                     shear=(-16, 16), # shear by -16 to +16 degrees
                                     order=1,
                                     cval=(0,255),
-                                    mode='reflect'
+                                    mode='constant'
                             )),
                             iaa.Sometimes(perspect_prob, iaa.PerspectiveTransform(scale=(0.01, 0.15))),
                             iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
