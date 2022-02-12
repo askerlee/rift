@@ -37,7 +37,7 @@ class Conv2(nn.Module):
 
 class Contextnet_rife(nn.Module):
     def __init__(self, c=16):
-        super(Contextnet, self).__init__()
+        super(Contextnet_rife, self).__init__()
         self.conv1 = Conv2(3, c)
         self.conv2 = Conv2(c, 2*c)
         self.conv3 = Conv2(2*c, 4*c)
