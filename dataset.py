@@ -93,7 +93,8 @@ class VimeoDataset(Dataset):
                 tgt_height, tgt_width = 224, 224
                 # Mean crop size at any side of the image. delta = 16.
                 delta = (self.h - tgt_height) // 2
-                affine_prob     = 0 #0.15
+                affine_prob     = 0.15
+                perspect_prob   = 0.15 
 
                 self.geo_aug_func =   iaa.Sequential(
                         [
@@ -121,7 +122,7 @@ class VimeoDataset(Dataset):
                                     cval=(0,255),
                                     mode='reflect'
                             )),
-                            iaa.Sometimes(0.15, iaa.PerspectiveTransform(scale=(0.01, 0.15))),
+                            iaa.Sometimes(perspect_prob, iaa.PerspectiveTransform(scale=(0.01, 0.15))),
                             iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
                             # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                             # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
