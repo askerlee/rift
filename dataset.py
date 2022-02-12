@@ -93,8 +93,8 @@ class VimeoDataset(Dataset):
                 tgt_height, tgt_width = 224, 224
                 # Mean crop size at any side of the image. delta = 16.
                 delta = (self.h - tgt_height) // 2
-                affine_prob     = 0.15
-                perspect_prob   = 0.15 
+                affine_prob     = 0.1
+                perspect_prob   = 0.1 
 
                 self.geo_aug_func =   iaa.Sequential(
                         [
