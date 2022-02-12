@@ -93,7 +93,7 @@ class VimeoDataset(Dataset):
                 tgt_height, tgt_width = 224, 224
                 # Mean crop size at any side of the image. delta = 16.
                 delta = (self.h - tgt_height) // 2
-                affine_prob     = 0.2
+                affine_prob     = 0 #0.2
 
                 self.geo_aug_func =   iaa.Sequential(
                         [
@@ -112,7 +112,7 @@ class VimeoDataset(Dataset):
                             # apply the following augmenters to most images
                             iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
                             iaa.Flipud(0.5),  # Vertically flip 50% of all images
-                            iaa.Sometimes(0.2, iaa.Rot90((1,3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
+                            iaa.Sometimes(0.2, iaa.Rot90((1, 3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
                             # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
                             iaa.Sometimes(affine_prob, iaa.Affine(
                                     rotate=(-45, 45), # rotate by -45 to +45 degrees

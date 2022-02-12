@@ -55,7 +55,8 @@ ssim_list = []
 for i, name in enumerate(names):
     i0 = cv2.imread('middlebury/other-data/{}/frame10.png'.format(name)).transpose(2, 0, 1) / 255.
     i1 = cv2.imread('middlebury/other-data/{}/frame11.png'.format(name)).transpose(2, 0, 1) / 255.
-    gt = (torch.tensor(cv2.imread('middlebury/other-gt-interp/{}/frame10i11.png'.format(name)).transpose(2, 0, 1) / 255.)).to(device).float().unsqueeze(0)
+    gt = (torch.tensor(cv2.imread('middlebury/other-gt-interp/{}/frame10i11.png'.format(name)).transpose(2, 0, 1))).to(device).float().unsqueeze(0)
+    gt_norm = gt / 255.
     h, w = i0.shape[1], i0.shape[2]
     imgs = torch.zeros([1, 6, 480, 640]).to(device)
     ph = (480 - h) // 2
@@ -65,16 +66,18 @@ for i, name in enumerate(names):
     I0 = imgs[:, :3]
     I2 = imgs[:, 3:]
     pred = model.inference(I0, I2)[0]
-    ssim = ssim_matlab(gt, torch.round(pred * 255).unsqueeze(0) / 255.).detach().cpu().numpy()
+    pred = pred[:, :h, :w]
+    ssim = ssim_matlab(gt_norm, torch.round(pred * 255).unsqueeze(0) / 255.).detach().cpu().numpy()
     out = pred.detach().cpu().numpy().transpose(1, 2, 0)
-    out = np.round(out * 255) / 255.
+    out = np.round(out * 255)
+    out_norm = out / 255.
     gt = gt[0].cpu().numpy().transpose(1, 2, 0)
-    psnr = -10 * math.log10(((gt - out) * (gt - out)).mean())
+    gt_norm = gt / 255.
+    psnr = -10 * math.log10(((gt_norm - out_norm) * (gt_norm - out_norm)).mean())
     psnr_list.append(psnr)
     ssim_list.append(ssim)
     IE = np.abs((out - gt * 1.0)).mean()
     IE_list.append(IE)
-    print(np.mean(IE_list))
 
     print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}, IE {:.3f} Avg {:.3f}".format( \
-          i+1, len(name), psnr, np.mean(psnr_list), ssim, np.mean(ssim_list), IE, np.mean(IE_list)))
+          i+1, len(names), psnr, np.mean(psnr_list), ssim, np.mean(ssim_list), IE, np.mean(IE_list)))
