@@ -104,12 +104,7 @@ class VimeoDataset(Dataset):
                             # is (self.h - 2*delta) * (self.w - 2*delta).
                             iaa.Crop(px=(0, 2*delta), keep_size=False),
                             # resize the image to the shape of orig_input_size
-                            iaa.Resize({'height': tgt_height, 'width': tgt_width}),  
-                            # iaa.Sometimes(0.5, iaa.CropAndPad(
-                            #     percent=crop_percents,
-                            #     pad_mode='constant', # ia.ALL,
-                            #     pad_cval=0
-                            # )),
+                            iaa.Resize({'height': tgt_height, 'width': tgt_width}),
                             # apply the following augmenters to most images
                             iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
                             iaa.Flipud(0.5),  # Vertically flip 50% of all images
@@ -120,14 +115,19 @@ class VimeoDataset(Dataset):
                                     shear=(-16, 16), # shear by -16 to +16 degrees
                                     order=1,
                                     cval=(0,255),
-                                    mode='constant'
+                                    mode='constant'  
+                                    # Previously mode='reflect' and no PerspectiveTransform => worse performance.
+                                    # Which is the culprit? maybe mode='reflect'? 
+                                    # But PerspectiveTransform should also have positive impact, as it simulates
+                                    # a kind of scene changes due to motion.
                             )),
-                            iaa.Sometimes(perspect_prob, iaa.PerspectiveTransform(scale=(0.01, 0.15))),
+                            iaa.Sometimes(perspect_prob, iaa.PerspectiveTransform(scale=(0.01, 0.15)), 
+                                          cval=(0,255), mode='constant'),
                             iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
                             # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                             # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
-                            #iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
-                            #iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
+                            # iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
+                            # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
                         ])
                         
         self.aug_shift_prob = aug_shift_prob
