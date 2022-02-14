@@ -179,7 +179,7 @@ if __name__ == "__main__":
                         help='Use merged flow for contextnet.')
     parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
-    parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0, type=float,
+    parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.1, type=float,
                         help='Probability of shifting consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')

@@ -29,7 +29,7 @@ print(f"Args:\n{args}")
 
 if args.use_old_model:
     model = Model(use_old_model=True)
-    model.load_model('rife_checkpoint/flownet.pth')
+    model.load_model('checkpoints/rife.pth')
 elif args.hd:
     from train_log.RIFE_HDv3 import Model
     model = Model()
