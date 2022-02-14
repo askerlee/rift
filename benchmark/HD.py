@@ -45,7 +45,7 @@ else:
 model.eval()
 model.device()
 
-name_list = [
+video_structs = [
     ('HD_dataset/HD720p_GT/parkrun_1280x720_50.yuv', 720, 1280),
     ('HD_dataset/HD720p_GT/shields_1280x720_60.yuv', 720, 1280),
     ('HD_dataset/HD720p_GT/stockholm_1280x720_60.yuv', 720, 1280),
@@ -58,12 +58,13 @@ name_list = [
     ('HD_dataset/HD544p_GT/Sintel_Temple1_1280x544.yuv', 544, 1280),
     ('HD_dataset/HD544p_GT/Sintel_Temple2_1280x544.yuv', 544, 1280),
 ]
-tot = 0.
-for data in name_list:
-    psnr_list = []
-    name = data[0]
-    h = data[1]
-    w = data[2]
+video_psnr_list = []
+
+for i, video_struct in enumerate(video_structs):
+    frame_psnr_list = []
+    name = video_struct[0]
+    h = video_struct[1]
+    w = video_struct[2]
     if 'yuv' in name:
         Reader = YUV_Read(name, h, w, toRGB=True)
     else:
@@ -110,7 +111,10 @@ for data in name_list:
             psnr = 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
         else:
             breakpoint()    # obsolete code.
-        psnr_list.append(psnr)
-    print(np.mean(psnr_list))
-    tot += np.mean(psnr_list)
-print('avg psnr', tot / len(name_list))
+        frame_psnr_list.append(psnr)
+
+    video_psnr = np.mean(frame_psnr_list)
+    video_psnr_list.append(video_psnr)
+    print("{}/{} PSNR {:.3f}".format(i+1, len(video_structs), video_psnr))
+
+print('PSNR: {}(544*1280), {}(720p), {}(1080p)'.format(np.mean(video_psnr_list[7:11]), np.mean(video_psnr_list[:3]), np.mean(video_psnr_list[3:7])))

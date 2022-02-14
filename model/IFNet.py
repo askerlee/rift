@@ -58,6 +58,7 @@ def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
     Ws = [1, 0.5]
     use_lap_loss = False
     # Laplacian loss performs better in earlier epochs, but worse in later epochs.
+    # Moreover, Laplacian loss is significantly slower.
     if use_lap_loss:
         loss_fun = LapLoss(max_levels=3, reduction='none')
     else:
@@ -208,8 +209,6 @@ class IFNet(nn.Module):
         self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
                                 multi=self.Ms[2])
         # block_tea takes gt (the middle frame) as extra input. 
-        # block_tea doesn't do group dropout so that it converges faster
-        # and guides students better.
         self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
                                  multi=self.Ms[2])
         
@@ -280,10 +279,9 @@ class IFNet(nn.Module):
             # multimask_score of different layers have little correlations. 
             # No need to have residual connections.
             multimask_score = multimask_score_d
-
-            # global_mask_score is never affected by dropout.
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
+
             flow, multiflowm0, multiflowm1, flowm0, flowm1 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
