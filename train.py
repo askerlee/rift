@@ -210,7 +210,7 @@ if __name__ == "__main__":
                   consist_loss_weight=args.consist_loss_weight,
                   )
     if args.cp is not None:
-        model.load_model(args.cp)
+        model.load_model(args.cp, -1)
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)
         
