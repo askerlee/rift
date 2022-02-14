@@ -167,6 +167,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
+    parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
@@ -208,6 +209,8 @@ if __name__ == "__main__":
                   shift_sigmas=args.shift_sigmas,
                   consist_loss_weight=args.consist_loss_weight,
                   )
+    if args.cp is not None:
+        model.load_model(args.cp)
 
     train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)
         
