@@ -76,7 +76,7 @@ python3 benchmark/Vimeo90K.py --cp checkpoints/rift-02121609.pth
 python3 benchmark/MiddleBury_Other.py
 # "PSNR: 37.655 SSIM: 0.985 IE: 1.953"
 python3 benchmark/HD.py
-# "PSNR: ????"
+# "PSNR: 32.26"
 ```
 
 ## Training and Reproduction

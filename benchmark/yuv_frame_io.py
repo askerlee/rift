@@ -64,6 +64,7 @@ class YUV_Read():
         V = np.reshape(V, [int(self.w / 2), int(self.h / 2)], order='F')
         V = np.transpose(V)
 
+        # PIL Image resize takes [w, h] as the argument.
         U = numpy.array(Image.fromarray(U).resize([self.w, self.h]))
         V = numpy.array(Image.fromarray(V).resize([self.w, self.h]))
 
