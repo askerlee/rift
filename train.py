@@ -168,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
-    parser.add_argument('--cdecay', dest='conv_weight_decay', type=float, default=1e-3, 
+    parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
                         help='weight decay for convolution layers (default: 1e-3)')
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
                   multi=args.multi,
-                  conv_weight_decay=args.conv_weight_decay,
+                  weight_decay=args.weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
                   consist_loss_weight=args.consist_loss_weight,

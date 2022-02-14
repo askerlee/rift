@@ -116,7 +116,7 @@ class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
                  distill_loss_weight=0.015, 
                  multi=(8,8,4), 
-                 conv_weight_decay=1e-3,
+                 weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(16,10),
                  consist_loss_weight=0.05):
@@ -137,7 +137,7 @@ class Model:
 
         # lr here is just a placeholder. Will be overwritten in update(), 
         # where the actual LR is obtained from train.py:get_learning_rate().
-        self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=conv_weight_decay)
+        self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=weight_decay)
 
         self.epe = EPE()
         self.lap = LapLoss()
