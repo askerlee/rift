@@ -21,8 +21,6 @@ from skimage.color import rgb2yuv, yuv2rgb
 from PIL import Image
 
 import os
-from shutil import copyfile
-from skimage.measure import compare_ssim, compare_psnr
 
 
 # from PYTHON_Flow2Color.flowToColor import flowToColor
