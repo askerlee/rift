@@ -11,7 +11,6 @@ from model.pytorch_msssim import ssim_matlab
 from model.RIFE import Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
                     help='Use the old model in the RIFE repo')
@@ -37,7 +36,7 @@ elif args.hd:
     if not hasattr(model, 'version'):
         model.version = 0
     # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
-    model.load_model('rife_hd_checkpoint/flownet.pth', -1)
+    model.load_model('checkpoints/rife-hd.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
     model = Model(multi=args.multi, 
