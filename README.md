@@ -1,9 +1,10 @@
 
-# RIFT - <ins>R</ins>obust V<ins>I</ins>deo <ins>F</ins>rame Interpolation with Mul<ins>T</ins>iple Intermediate Flow
+
+# RIFT - <ins>R</ins>obust V<ins>I</ins>deo <ins>F</ins>rame Interpolation with Mul<ins>T</ins>iple Intermediate Flow ¼û·ì²åÖ¡
 
 
 ## Introduction
-This project is the implement of "RIFT - <ins>R</ins>obust V<ins>I</ins>deo <ins>F</ins>rame Interpolation with Mul<ins>T</ins>iple Intermediate Flow".
+This project is the implement of "RIFT - <ins>R</ins>obust V<ins>I</ins>deo <ins>F</ins>rame Interpolation with Mul<ins>T</ins>iple Intermediate Flow" ¼û·ì²åÖ¡. The paper is still **under preparation**.
 
 ### Installation
 
