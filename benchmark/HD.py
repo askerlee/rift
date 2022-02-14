@@ -117,4 +117,6 @@ for i, video_struct in enumerate(video_structs):
     video_psnr_list.append(video_psnr)
     print("{}/{} PSNR {:.3f}".format(i+1, len(video_structs), video_psnr))
 
-print('PSNR: {}(544*1280), {}(720p), {}(1080p)'.format(np.mean(video_psnr_list[7:11]), np.mean(video_psnr_list[:3]), np.mean(video_psnr_list[3:7])))
+print('Avg: {:.3f}. 544*1280: {:.3f}, 720p: {:.3f}, 1080p: {:.3f}'.format(\
+      np.mean(video_psnr_list), np.mean(video_psnr_list[7:11]), 
+      np.mean(video_psnr_list[:3]), np.mean(video_psnr_list[3:7])))
