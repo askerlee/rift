@@ -116,7 +116,6 @@ class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
                  distill_loss_weight=0.015, 
                  multi=(8,8,4), 
-                 ctx_use_merged_flow=False,
                  conv_weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(16,10),
@@ -126,7 +125,7 @@ class Model:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, ctx_use_merged_flow)
+            self.flownet = IFNet(multi)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
@@ -136,7 +135,6 @@ class Model:
             else:
                 conv_param_groups.append(param)
 
-        # Use a large weight decay may avoid NaN loss, but reduces transformer performance.
         # lr here is just a placeholder. Will be overwritten in update(), 
         # where the actual LR is obtained from train.py:get_learning_rate().
         self.optimG = AdamW(self.flownet.parameters(), lr=1e-6, weight_decay=conv_weight_decay)
@@ -209,10 +207,8 @@ class Model:
                 # s enumerates all scales.
                 loss_on_scales = np.arange(len(flow))
                 for s in loss_on_scales:
-                    # flow[s].data to make the loss one-way only, i.e., the original flow as the teacher.
                     loss_consist_stu += torch.abs(flow[s] + dxy - flow2[s])[smask].mean()
 
-                # flow_teacher.data to make the loss one-way only, i.e., the original flow as the teacher.
                 loss_consist_tea = torch.abs(flow_teacher + dxy - flow_teacher2)[smask].mean()
                 loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
                 mean_shift = dxy.abs().mean().item()

@@ -195,7 +195,7 @@ class IFBlock(nn.Module):
         return multiflow, multimask_score
     
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), ctx_use_merged_flow=False):
+    def __init__(self, multi=(8,8,4)):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -216,7 +216,6 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
-        self.ctx_use_merged_flow = ctx_use_merged_flow
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -335,16 +334,12 @@ class IFNet(nn.Module):
                                                    merged_tea,         flow_tea,     
                                                   )
 
-        if self.ctx_use_merged_flow:
-            # contextnet generates warped features of the input image. 
-            # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
-            # Setting M=1 makes multiwarp fall back to warp. So it's equivalent to the traditional RIFE scheme.
-            # Using merged flow seems to perform slightly worse.
-            c0 = self.contextnet(img0, flowm0, multimask_score, 1)
-            c1 = self.contextnet(img1, flowm1, multimask_score, 1)
-        else:
-            c0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
-            c1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
+        # contextnet generates warped features of the input image. 
+        # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
+        # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
+        # But using merged flow seems to perform slightly worse.
+        c0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
+        c1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
 
         # flow: merged flow from multiflow of the previous iteration.
         tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)

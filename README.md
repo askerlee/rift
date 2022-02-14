@@ -73,9 +73,9 @@ python3 benchmark/UCF101.py --cp checkpoints/rift-02121609.pth
 # "PSNR: 35.328 SSIM: 0.969"
 python3 benchmark/Vimeo90K.py --cp checkpoints/rift-02121609.pth
 # "PSNR: 35.714 SSIM: 0.979"
-python3 benchmark/MiddleBury_Other.py
+python3 benchmark/MiddleBury_Other.py --cp checkpoints/rift-02121609.pth
 # "PSNR: 37.655 SSIM: 0.985 IE: 1.953"
-python3 benchmark/HD.py
+python3 benchmark/HD.py --cp checkpoints/rift-02121609.pth
 # "PSNR: 32.26"
 ```
 

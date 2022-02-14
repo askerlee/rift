@@ -18,28 +18,34 @@ parser.add_argument('--exp', default=4, type=int)
 parser.add_argument('--ratio', default=0, type=float, help='inference ratio between two images with 0 - 1 range')
 parser.add_argument('--rthreshold', default=0.02, type=float, help='returns image when actual ratio falls in given range threshold')
 parser.add_argument('--rmaxcycles', default=8, type=int, help='limit max number of bisectional cycles')
-parser.add_argument('--model', dest='modelDir', type=str, default='train_log', help='directory with trained model files')
+# RIFT model options
+parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
+                    help='Use the old model in the RIFE repo')
+parser.add_argument('--hd', action='store_true', help='Use newer HD model')
+parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
+parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
+parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
+                    help='Output M groups of flow')     
 
 args = parser.parse_args()
+args.multi = [ int(m) for m in args.multi.split(",") ]
+print(f"Args:\n{args}")
 
-try:
-    try:
-        from model.RIFE_HDv2 import Model
-        model = Model()
-        model.load_model(args.modelDir, -1)
-        print("Loaded v2.x HD model.")
-    except:
-        from train_log.RIFE_HDv3 import Model
-        model = Model()
-        model.load_model(args.modelDir, -1)
-        print("Loaded v3.x HD model.")
-except:
-    from model.RIFE_HD import Model
+if args.use_old_model:
+    model = Model(use_old_model=True)
+    model.load_model('checkpoints/rife.pth')
+elif args.hd:
+    from v4_0.RIFE_HDv3 import Model
     model = Model()
-    model.load_model(args.modelDir, -1)
-    print("Loaded v1.x HD model")
-if not hasattr(model, 'version'):
-    model.version = 0
+    if not hasattr(model, 'version'):
+        model.version = 0
+    # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
+    model.load_model('checkpoints/rife-hd.pth', -1)
+    print("Loaded 3.x/4.x HD model.")
+else:
+    model = Model(multi=args.multi)
+    model.load_model(args.cp)
+
 model.eval()
 model.device()
 

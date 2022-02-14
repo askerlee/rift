@@ -58,7 +58,6 @@ parser.add_argument('--video', dest='video', type=str, default=None)
 parser.add_argument('--output', dest='output', type=str, default=None)
 parser.add_argument('--img', dest='img', type=str, default=None)
 parser.add_argument('--montage', dest='montage', action='store_true', help='montage origin video')
-parser.add_argument('--model', dest='modelDir', type=str, default='train_log', help='directory with trained model files')
 parser.add_argument('--fp16', dest='fp16', action='store_true', help='fp16 mode for faster and more lightweight inference on cards with Tensor Cores')
 parser.add_argument('--UHD', dest='UHD', action='store_true', help='support 4k video')
 parser.add_argument('--scale', dest='scale', type=float, default=1.0, help='Try scale=0.5 for 4k video')
@@ -67,11 +66,19 @@ parser.add_argument('--fps', dest='fps', type=int, default=None)
 parser.add_argument('--png', dest='png', action='store_true', help='whether to vid_out png format vid_outs')
 parser.add_argument('--ext', dest='ext', type=str, default='mp4', help='vid_out video extension')
 parser.add_argument('--exp', dest='exp', type=int, default=1)
-parser.add_argument('--multi', dest='multi', type=int, default=2, help='multiply fps by this ratio')
+parser.add_argument('--mul', dest='mul', type=int, default=2, help='multiply fps by this ratio')
+# RIFT model options
+parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
+                    help='Use the old model in the RIFE repo')
+parser.add_argument('--hd', action='store_true', help='Use newer HD model')
+parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
+parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
+parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
+                    help='Output M groups of flow')                      
 
 args = parser.parse_args()
 if args.exp != 1:
-    args.multi = (2 ** args.exp)
+    args.mul = (2 ** args.exp)
 assert (not args.video is None or not args.img is None)
 if args.skip:
     print("skip flag is abandoned, please refer to issue #207.")
@@ -80,6 +87,8 @@ if args.UHD and args.scale==1.0:
 assert args.scale in [0.25, 0.5, 1.0, 2.0, 4.0]
 if not args.img is None:
     args.png = True
+args.multi = [ int(m) for m in args.multi.split(",") ]
+print(f"Args:\n{args}")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_grad_enabled(False)
@@ -89,15 +98,21 @@ if torch.cuda.is_available():
     if(args.fp16):
         torch.set_default_tensor_type(torch.cuda.HalfTensor)
 
-try:
-    from train_log.RIFE_HDv3 import Model
-except:
-    print("Please download our model from model list")
-model = Model()
-if not hasattr(model, 'version'):
-    model.version = 0
-model.load_model(args.modelDir, -1)
-print("Loaded 3.x/4.x HD model.")
+if args.use_old_model:
+    model = Model(use_old_model=True)
+    model.load_model('checkpoints/rife.pth')
+elif args.hd:
+    from v4_0.RIFE_HDv3 import Model
+    model = Model()
+    if not hasattr(model, 'version'):
+        model.version = 0
+    # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
+    model.load_model('checkpoints/rife-hd.pth', -1)
+    print("Loaded 3.x/4.x HD model.")
+else:
+    model = Model(multi=args.multi)
+    model.load_model(args.cp)
+
 model.eval()
 model.device()
 
@@ -108,7 +123,7 @@ if not args.video is None:
     videoCapture.release()
     if args.fps is None:
         fpsNotAssigned = True
-        args.fps = fps * args.multi
+        args.fps = fps * args.mul
     else:
         fpsNotAssigned = False
     videogen = skvideo.io.vreader(args.video)
@@ -139,7 +154,7 @@ else:
     if args.output is not None:
         vid_out_name = args.output
     else:
-        vid_out_name = '{}_{}X_{}fps.{}'.format(video_path_wo_ext, args.multi, int(np.round(args.fps)), args.ext)
+        vid_out_name = '{}_{}X_{}fps.{}'.format(video_path_wo_ext, args.mul, int(np.round(args.fps)), args.ext)
     vid_out = cv2.VideoWriter(vid_out_name, fourcc, args.fps, (w, h))
 
 def clear_write_buffer(user_args, write_buffer):
@@ -241,19 +256,19 @@ while True:
         
     if ssim < 0.2:
         output = []
-        for i in range(args.multi - 1):
+        for i in range(args.mul - 1):
             output.append(I0)
         '''
         output = []
-        step = 1 / args.multi
+        step = 1 / args.mul
         alpha = 0
-        for i in range(args.multi - 1):
+        for i in range(args.mul - 1):
             alpha += step
             beta = 1-alpha
             output.append(torch.from_numpy(np.transpose((cv2.addWeighted(frame[:, :, ::-1], alpha, lastframe[:, :, ::-1], beta, 0)[:, :, ::-1].copy()), (2,0,1))).to(device, non_blocking=True).unsqueeze(0).float() / 255.)
         '''
     else:
-        output = make_inference(I0, I1, args.multi-1)
+        output = make_inference(I0, I1, args.mul-1)
 
     if args.montage:
         write_buffer.put(np.concatenate((lastframe, lastframe), 1))

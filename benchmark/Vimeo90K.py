@@ -9,7 +9,6 @@ import numpy as np
 from torch.nn import functional as F
 from model.pytorch_msssim import ssim_matlab
 from model.RIFE import Model
-from model.IFNet_rife import IFNet_rife
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
@@ -20,8 +19,6 @@ parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from t
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                 
-parser.add_argument('--ctxmergeflow', dest='ctx_use_merged_flow', action='store_true', 
-                    help='Use merged flow for contextnet.')
 
 args = parser.parse_args()
 args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -32,7 +29,7 @@ if args.use_old_model:
     model = Model(use_old_model=True)
     model.load_model('checkpoints/rife.pth')
 elif args.hd:
-    from train_log.RIFE_HDv3 import Model
+    from v4_0.RIFE_HDv3 import Model
     model = Model()
     if not hasattr(model, 'version'):
         model.version = 0
@@ -40,8 +37,7 @@ elif args.hd:
     model.load_model('checkpoints/rife-hd.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(multi=args.multi, 
-                  ctx_use_merged_flow=args.ctx_use_merged_flow)
+    model = Model(multi=args.multi)
     model.load_model(args.cp)
 
 model.eval()
