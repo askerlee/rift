@@ -171,7 +171,9 @@ class Model:
             
         if rank <= 0:
             self.flownet.load_state_dict(convert(torch.load(path)))
-        
+        else:
+            self.flownet.load_state_dict(torch.load(path))
+
     def save_model(self, path, epoch, rank=0):
         if rank == 0:
             torch.save(self.flownet.state_dict(), '{}/ep{:03}.pth'.format(path, epoch))
