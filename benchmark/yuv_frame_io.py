@@ -12,15 +12,15 @@ import numpy
 import random
 import logging
 import numpy as np
-from scipy.misc import imsave, imresize
+from imageio import imsave
 import matplotlib as mpl
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
 # plt.style.use('bmh')
 from skimage.color import rgb2yuv, yuv2rgb
+from PIL import Image
 
 import os
-from scipy.misc import imread, imsave, imshow, imresize, imsave
 from shutil import copyfile
 from skimage.measure import compare_ssim, compare_psnr
 
@@ -66,8 +66,8 @@ class YUV_Read():
         V = np.reshape(V, [int(self.w / 2), int(self.h / 2)], order='F')
         V = np.transpose(V)
 
-        U = imresize(U, [self.h, self.w], interp='nearest')
-        V = imresize(V, [self.h, self.w], interp='nearest')
+        U = numpy.array(Image.fromarray(U).resize([self.h, self.w]))
+        V = numpy.array(Image.fromarray(V).resize([self.h, self.w]))
 
         # plt.figure(3)
         # plt.title("GT")

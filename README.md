@@ -17,7 +17,7 @@ pip3 install -r requirements.txt
 
 **Video Frame Interpolation**
 
-You can use our [demo video](https://drive.google.com/file/d/1i3xlKb7ax7Y70khcTcuePi6E7crO_dFc/view?usp=sharing) or your own video. 
+You can use the RIFE [demo video](https://drive.google.com/file/d/1i3xlKb7ax7Y70khcTcuePi6E7crO_dFc/view?usp=sharing) or your own video. 
 ```
 python3 inference_video.py --exp=1 --video=video.mp4 
 ```
