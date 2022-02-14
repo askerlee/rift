@@ -113,7 +113,7 @@ for data in name_list:
             PIXEL_MAX = 255.0
             psnr = 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
         else:
-            psnr = skim.compare_psnr(gt, out)
+            breakpoint()    # obsolete code.
         psnr_list.append(psnr)
     print(np.mean(psnr_list))
     tot += np.mean(psnr_list)
