@@ -31,7 +31,7 @@ if args.use_old_model:
     model = Model(use_old_model=True)
     model.load_model('checkpoints/rife.pth')
 elif args.hd:
-    from v4_0.RIFE_HDv3 import Model
+    from model.rife_new.v4_0.RIFE_HDv3 import Model
     model = Model()
     if not hasattr(model, 'version'):
         model.version = 0
