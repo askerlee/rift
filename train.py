@@ -171,7 +171,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epoch', dest='total_epochs', default=300, type=int)
+    parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
