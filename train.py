@@ -31,7 +31,7 @@ def get_learning_rate(base_lr, base_weight_decay, step):
         mul = step / 2000.
         return M * mul, base_weight_decay
     else:
-        # reduce the weight decay to 0.2 every decaydecay_epochs (default 100) epochs.
+        # Reduce the weight decay to 0.2 every decaydecay_epochs (default 100) epochs.
         reduce_weight_decay_cycles = step // (args.steps_per_epoch * args.decaydecay_epochs)
         weight_decay = base_weight_decay * (0.2 ** reduce_weight_decay_cycles)
         mul = np.cos((step - 2000) / (args.total_epochs * args.steps_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
                   grad_clip=args.clip,
                   multi=args.multi,
-                  weight_decay=args.weight_decay,
+                  weight_decay=args.base_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
                   consist_loss_weight=args.consist_loss_weight,
