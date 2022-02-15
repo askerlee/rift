@@ -31,8 +31,8 @@ def get_learning_rate(base_lr, base_weight_decay, step):
         mul = step / 2000.
         return M * mul, base_weight_decay
     else:
-        # reduce the weight decay once every 100 epochs to 1/10.
-        reduce_weight_decay_cycles = step // (args.steps_per_epoch * 100)
+        # reduce the weight decay to 0.2 every decaydecay_epochs (default 100) epochs.
+        reduce_weight_decay_cycles = step // (args.steps_per_epoch * args.decaydecay_epochs)
         weight_decay = base_weight_decay * (0.2 ** reduce_weight_decay_cycles)
         mul = np.cos((step - 2000) / (args.total_epochs * args.steps_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
         return (M - M * 0.1) * mul + (M * 0.1), weight_decay
@@ -173,6 +173,9 @@ if __name__ == "__main__":
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
+    parser.add_argument('--decaydecay', dest='decaydecay_epochs', type=int, metavar='D', default=100, 
+                        help='Reduce the weight decay to 0.2 every D epochs')
+    
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
