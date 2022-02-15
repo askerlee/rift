@@ -24,15 +24,18 @@ if local_rank == 0:
     if not os.path.isdir(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-def get_learning_rate(base_lr, step):
+def get_learning_rate(base_lr, base_weight_decay, step):
     M = base_lr # default: 3e-4
     # warmup. 0 -> 0.0001
     if step < 2000:
         mul = step / 2000.
-        return M * mul
+        return M * mul, base_weight_decay
     else:
-        mul = np.cos((step - 2000) / (args.epoch * args.step_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
-        return (M - M * 0.1) * mul + (M * 0.1)
+        # reduce the weight decay once every 100 epochs to 1/10.
+        reduce_weight_decay_cycles = step // (args.steps_per_epoch * 100)
+        weight_decay = base_weight_decay * (0.2 ** reduce_weight_decay_cycles)
+        mul = np.cos((step - 2000) / (args.total_epochs * args.steps_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
+        return (M - M * 0.1) * mul + (M * 0.1), weight_decay
 
 # Only visualize the first two channels of flow_map_np.
 def flow2rgb(flow_map_np):
@@ -47,7 +50,7 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
+def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_sigmas):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -60,13 +63,13 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
     dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas)
     sampler = DistributedSampler(dataset)
     train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
-    args.step_per_epoch = train_data.__len__()
+    args.steps_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
     val_data = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
 
     print('training...')
     time_stamp = time.time()
-    for epoch in range(args.epoch):
+    for epoch in range(args.total_epochs):
         sampler.set_epoch(epoch)
         for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
@@ -74,8 +77,8 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
             data_gpu = data.to(device, non_blocking=True) / 255.
             imgs = data_gpu[:, :6]
             gt = data_gpu[:, 6:9]
-            learning_rate = get_learning_rate(base_lr, step)
-            pred, info = model.update(imgs, gt, learning_rate, training=True)
+            learning_rate, weight_decay = get_learning_rate(base_lr, base_weight_decay, step)
+            pred, info = model.update(imgs, gt, learning_rate, weight_decay, training=True)
             train_time_interval = time.time() - time_stamp
             time_stamp = time.time()
             if step % 200 == 1 and local_rank == 0:
@@ -99,7 +102,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
                 
             if local_rank == 0:
                 print('epoch {} {}/{} time {:.2f}+{:.2f} loss_stu {:.4f} loss_cons {:.2f}/{:.2f}'.format(
-                       epoch, bi+1, args.step_per_epoch, data_time_interval, train_time_interval, 
+                       epoch, bi+1, args.steps_per_epoch, data_time_interval, train_time_interval, 
                        info['loss_stu'], info['loss_consist'], info['mean_shift']), 
                        flush=True)
 
@@ -165,11 +168,11 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epoch', default=300, type=int)
+    parser.add_argument('--epoch', dest='total_epochs', default=300, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
-    parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
-                        help='weight decay for convolution layers (default: 1e-3)')
+    parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
+                        help='initial weight decay (default: 1e-3)')
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
@@ -212,5 +215,6 @@ if __name__ == "__main__":
     if args.cp is not None:
         model.load_model(args.cp, 1)
 
-    train(model, args.local_rank, args.base_lr, args.aug_shift_prob, args.shift_sigmas)
+    train(model, args.local_rank, args.base_lr, args.base_weight_decay, 
+          args.aug_shift_prob, args.shift_sigmas)
         

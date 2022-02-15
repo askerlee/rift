@@ -188,9 +188,11 @@ class Model:
             flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
             return (stu_pred + merged_img_list2[2].flip(2).flip(3)) / 2
     
-    def update(self, imgs, gt, learning_rate=0, mul=1, training=True, flow_gt=None):
+    def update(self, imgs, gt, learning_rate=0, weight_decay=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
             param_group['lr'] = learning_rate
+            param_group['weight_decay'] = weight_decay
+            
         img0 = imgs[:, :3]
         img1 = imgs[:, 3:]
         if training:
