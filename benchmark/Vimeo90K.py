@@ -64,7 +64,7 @@ for i, line in enumerate(f):
     name = str(line).strip()
     if(len(name) <= 1):
         continue
-    print(path + 'sequences/' + name + '/im1.png')
+    # print(path + 'sequences/' + name + '/im1.png')
     I0 = cv2.imread(path + 'sequences/' + name + '/im1.png')
     I1 = cv2.imread(path + 'sequences/' + name + '/im2.png')
     I2 = cv2.imread(path + 'sequences/' + name + '/im3.png')
@@ -77,8 +77,8 @@ for i, line in enumerate(f):
     psnr = -10 * math.log10(((I1 - mid) * (I1 - mid)).mean())
     psnr_list.append(psnr)
     ssim_list.append(ssim)
-    print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
-          i+1, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)), end=endl)
+    print("{}/{} {} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
+          i+1, total_triplets, name, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)), end=endl)
 
 if args.out_summary:
     print()
