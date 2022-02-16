@@ -19,8 +19,8 @@ parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from t
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                      
-parser.add_argument('--s', dest='out_summary', action='store_true', 
-                    help='Overwrite per-frame stats and output summary only')
+parser.add_argument('--each', dest='out_summary', action='store_false', 
+                    help='Output the scores of each frame instead of outputting summary only')
 
 args = parser.parse_args()
 args.multi = [ int(m) for m in args.multi.split(",") ]
