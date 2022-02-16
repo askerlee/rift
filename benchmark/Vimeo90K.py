@@ -19,9 +19,15 @@ parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from t
 parser.add_argument('--count', type=int, default=-1, help='Evaluate on the first count images')
 parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                     help='Output M groups of flow')                 
+parser.add_argument('--s', dest='out_summary', action='store_true', 
+                    help='Overwrite per-frame stats and output summary only')
 
 args = parser.parse_args()
 args.multi = [ int(m) for m in args.multi.split(",") ]
+if args.out_summary:
+    endl = "\r"
+else:
+    endl = "\n"
 
 print(f"Args:\n{args}")
 
@@ -72,4 +78,8 @@ for i, line in enumerate(f):
     psnr_list.append(psnr)
     ssim_list.append(ssim)
     print("{}/{} PSNR {:.3f} Avg {:.3f}, SSIM {:.3f} Avg {:.3f}".format( \
-          i+1, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)))
+          i+1, total_triplets, psnr, np.mean(psnr_list), ssim, np.mean(ssim_list)), end=endl)
+
+if args.out_summary:
+    print()
+    
