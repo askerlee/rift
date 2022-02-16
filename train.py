@@ -182,7 +182,7 @@ if __name__ == "__main__":
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
-    parser.add_argument('--lr', dest='base_lr', default=4e-4, type=float)
+    parser.add_argument('--lr', dest='base_lr', default=3e-4, type=float)
     parser.add_argument('--multi', dest='multi', default="8,8,4", type=str, metavar='M', 
                         help='Output M groups of flow')
     parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
