@@ -148,12 +148,15 @@ class IFBlock(nn.Module):
 
     def forward(self, imgs, nonimg, flow, scale):
         # Downscale img0/img1 by scale.
-        imgs   = F.interpolate(imgs,   scale_factor = 1. / scale, mode="bilinear", align_corners=False)
-        nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, mode="bilinear", align_corners=False)
+        imgs   = F.interpolate(imgs,   scale_factor = 1. / scale, recompute_scale_factor=False, 
+                               mode="bilinear", align_corners=False)
+        nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, recompute_scale_factor=False, 
+                               mode="bilinear", align_corners=False)
         if flow is not None:
             # the size and magnitudes of the flow is scaled to the size of this layer. 
             # Values in flow needs to be scaled as well. So flow and nonimg are treated separately.
-            flow   = F.interpolate(flow,   scale_factor = 1. / scale, mode="bilinear", align_corners=False) * 1. / scale
+            flow   = F.interpolate(flow,   scale_factor = 1. / scale, recompute_scale_factor=False, 
+                                   mode="bilinear", align_corners=False) * 1. / scale
             nonimg = torch.cat([nonimg, flow], dim=1)
 
         # Pack the channels of the two images into the batch dimension,
@@ -181,7 +184,8 @@ class IFBlock(nn.Module):
         # unscaled_output size = input size / scale / 2.
         unscaled_output = self.lastconv(x)
 
-        scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, mode="bilinear", align_corners=False)
+        scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, recompute_scale_factor=False, 
+                                      mode="bilinear", align_corners=False)
         # multiflow/multimask_score: same size as original images.
         # each group of flow has 4 channels. 2 for one direction, 2 for the other direction
         # multiflow has 4*M channels.
