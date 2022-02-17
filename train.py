@@ -31,9 +31,12 @@ def get_learning_rate(base_lr, base_weight_decay, step):
         mul = step / 2000.
         return M * mul, base_weight_decay
     else:
-        # Reduce the weight decay to 0.2 every decaydecay_epochs (default 100) epochs.
-        decaydecay_cycles = step // (args.steps_per_epoch * args.decaydecay_epochs)
-        weight_decay = base_weight_decay * (0.2 ** decaydecay_cycles)
+        if args.decaydecay_epochs <= 0:
+            weight_decay = base_weight_decay
+        else:
+            # Reduce the weight decay to 0.2 every decaydecay_epochs epochs. Seems to reduce performance.
+            decaydecay_cycles = step // (args.steps_per_epoch * args.decaydecay_epochs)
+            weight_decay = base_weight_decay * (0.4 ** decaydecay_cycles)
         # mul: begin: 1, midway: 0.5, end: 0.00025 -> extremely close to 0.
         mul = np.cos((step - 2000) / (args.total_epochs * args.steps_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
         # returned lr: 0.9*base_lr * mul + 0.1*base_lr
@@ -176,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
-    parser.add_argument('--decaydecay', dest='decaydecay_epochs', type=int, metavar='D', default=100, 
+    parser.add_argument('--decaydecay', dest='decaydecay_epochs', type=int, metavar='D', default=-1, 
                         help='Reduce the weight decay to 0.2 every D epochs')
     
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
