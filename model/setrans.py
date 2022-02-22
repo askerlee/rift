@@ -8,8 +8,6 @@ import torch
 import torch.nn as nn
 from torch.nn import Parameter
 import torch.nn.functional as F
-from torch import einsum
-from einops import rearrange
 from .setrans_ablation import RandPosEmbedder, SinuPosEmbedder, ZeroEmbedder, MultiHeadFeatTrans
 torch.set_printoptions(sci_mode=False)
 
