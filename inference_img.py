@@ -3,6 +3,7 @@ import cv2
 import torch
 import argparse
 from torch.nn import functional as F
+from model.RIFE import Model
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -33,6 +34,8 @@ print(f"Args:\n{args}")
 
 if args.use_old_model:
     model = Model(use_old_model=True)
+    if not hasattr(model, 'version'):
+        model.version = 0     
     model.load_model('checkpoints/rife.pth')
 elif args.hd:
     from model.rife_new.v4_0.RIFE_HDv3 import Model
@@ -45,6 +48,7 @@ elif args.hd:
 else:
     model = Model(multi=args.multi)
     model.load_model(args.cp)
+    model.version = 1.0
 
 model.eval()
 model.device()
@@ -75,6 +79,7 @@ if args.ratio:
     if model.version >= 3.9:
         img_list = [img0, model.inference(img0, img1), img1]
     else:
+        img_list = [img0] 
         img0_ratio = 0.0
         img1_ratio = 1.0
         if args.ratio <= img0_ratio + args.rthreshold / 2:
@@ -102,7 +107,7 @@ else:
         img_list = [img0]        
         n = 2 ** args.exp
         for i in range(n-1):
-            res.append(model.inference(img0, img1, (i+1) * 1. / (n+1), args.scale))
+            img_list.append(model.inference(img0, img1, (i+1) * 1. / (n+1), args.scale))
         img_list.append(img1)
     else:
         img_list = [img0, img1]
