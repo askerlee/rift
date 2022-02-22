@@ -114,7 +114,8 @@ elif args.hd:
 else:
     model = Model(multi=args.multi)
     model.load_model(args.cp)
-
+    model.version = 1.0
+    
 model.eval()
 model.device()
 
