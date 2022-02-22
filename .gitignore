@@ -3,7 +3,6 @@
 *.py#
 
 output/*
-*.mp4
 
 test/
 .idea/
