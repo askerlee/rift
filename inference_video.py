@@ -102,6 +102,8 @@ if torch.cuda.is_available():
 
 if args.use_old_model:
     model = Model(use_old_model=True)
+    if not hasattr(model, 'version'):
+        model.version = 0    
     model.load_model('checkpoints/rife.pth')
 elif args.hd:
     from model.rife_new.v4_0.RIFE_HDv3 import Model
