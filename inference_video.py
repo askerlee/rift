@@ -66,7 +66,8 @@ parser.add_argument('--skip', dest='skip', action='store_true', help='whether to
 parser.add_argument('--fps', dest='fps', type=int, default=None)
 parser.add_argument('--png', dest='png', action='store_true', help='whether to vid_out png format vid_outs')
 parser.add_argument('--ext', dest='ext', type=str, default='mp4', help='vid_out video extension')
-parser.add_argument('--exp', dest='exp', type=int, default=1)
+parser.add_argument('--exp', dest='exp', type=int, default=1, 
+                    help='increase the multiply ratio with 2**exp')
 parser.add_argument('--mul', dest='mul', type=int, default=2, help='multiply fps by this ratio')
 # RIFT model options
 parser.add_argument('--oldmodel', dest='use_old_model', action='store_true', 
@@ -117,7 +118,7 @@ else:
 model.eval()
 model.device()
 
-if not args.video is None:
+if args.video is not None:
     videoCapture = cv2.VideoCapture(args.video)
     fps = videoCapture.get(cv2.CAP_PROP_FPS)
     tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)

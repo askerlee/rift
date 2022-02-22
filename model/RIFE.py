@@ -178,8 +178,9 @@ class Model:
         if rank == 0:
             torch.save(self.flownet.state_dict(), '{}/ep{:03}.pth'.format(path, epoch))
 
-    def inference(self, img0, img1, scale_list=[4, 2, 1], TTA=False, timestep=0.5):
+    def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
+        scale_list = [4/scale, 2/scale, 1/scale]        
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
         stu_pred = merged_img_list[2]
         if TTA == False:
