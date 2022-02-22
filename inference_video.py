@@ -10,6 +10,7 @@ import _thread
 import skvideo.io
 from queue import Queue, Empty
 from model.pytorch_msssim import ssim_matlab
+from model.RIFE import Model
 
 warnings.filterwarnings("ignore")
 
