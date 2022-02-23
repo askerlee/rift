@@ -123,17 +123,48 @@ model.eval()
 model.device()
 
 if args.video is not None:
-    videoCapture = cv2.VideoCapture(args.video)
-    fps = videoCapture.get(cv2.CAP_PROP_FPS)
-    tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
-    videoCapture.release()
+    if os.path.splitext(args.video)[1] != '.yuv':
+        videoCapture = cv2.VideoCapture(args.video)
+        fps = videoCapture.get(cv2.CAP_PROP_FPS)
+        tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
+        videoCapture.release()
+        videogen = skvideo.io.vreader(args.video)
+        lastframe = next(videogen)
+    else: # '.yuv'
+        from benchmark.yuv_frame_io import YUV_Read,YUV_Write
+        video_structs_dict = {
+            'HD_dataset/HD720p_GT/parkrun_1280x720_50.yuv': [720, 1280],
+            'HD_dataset/HD720p_GT/shields_1280x720_60.yuv': [720, 1280],
+            'HD_dataset/HD720p_GT/stockholm_1280x720_60.yuv': [720, 1280],
+            'HD_dataset/HD1080p_GT/BlueSky.yuv': [1080, 1920],
+            'HD_dataset/HD1080p_GT/Kimono1_1920x1080_24.yuv': [1080, 1920],
+            'HD_dataset/HD1080p_GT/ParkScene_1920x1080_24.yuv': [1080, 1920],
+            'HD_dataset/HD1080p_GT/sunflower_1080p25.yuv': [1080, 1920],
+            'HD_dataset/HD544p_GT/Sintel_Alley2_1280x544.yuv': [544, 1280],
+            'HD_dataset/HD544p_GT/Sintel_Market5_1280x544.yuv': [544, 1280],
+            'HD_dataset/HD544p_GT/Sintel_Temple1_1280x544.yuv': [544, 1280],
+            'HD_dataset/HD544p_GT/Sintel_Temple2_1280x544.yuv': [544, 1280]
+        }
+        name = args.video
+        h = video_structs_dict[name][0]
+        w = video_structs_dict[name][1]
+        Reader = YUV_Read(name, h, w, toRGB=True)
+        lastframe, lastframe_bool = Reader.read()
+        videogen = []
+        for index in range(Reader.frame_length):
+            img, success = Reader.read(index)
+            if not success:
+                break
+            videogen.append(img)
+        videogen = videogen[1:]
+        fps = args.fps if args.fps is not None else 15 # fps of files in HD544p_GT seems to be 15
+        tot_frame = 100 # refer HD.py L75: for index in range(0, 100, 2):
+    
     if args.fps is None:
         fpsNotAssigned = True
-        args.fps = fps * args.mul
     else:
         fpsNotAssigned = False
-    videogen = skvideo.io.vreader(args.video)
-    lastframe = next(videogen)
+    args.fps = fps * args.mul
     fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
     video_path_wo_ext, ext = os.path.splitext(args.video)
     print('{}.{}, {} frames in total, {}FPS to {}FPS'.format(video_path_wo_ext, args.ext, tot_frame, fps, args.fps))
