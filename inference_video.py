@@ -1,3 +1,4 @@
+from ctypes import resize
 import os
 import cv2
 import torch
@@ -210,9 +211,16 @@ def pad_image(img):
     else:
         return F.pad(img, padding)
 
+def resize_image(img, size):
+    if(args.fp16):
+        return F.interpolate(img, size, mode='bilinear', align_corners=False).half()
+    else:
+        return F.interpolate(img, size, mode='bilinear', align_corners=False)
+
 if args.montage:
     left = w // 4
     w = w // 2
+# Resize images to multiple of 128, to facilitate model processing.
 tmp = max(128, int(128 / args.scale))
 ph = ((h - 1) // tmp + 1) * tmp
 pw = ((w - 1) // tmp + 1) * tmp
@@ -226,7 +234,7 @@ _thread.start_new_thread(build_read_buffer, (args, read_buffer, videogen))
 _thread.start_new_thread(clear_write_buffer, (args, write_buffer))
 
 I1 = torch.from_numpy(np.transpose(lastframe, (2,0,1))).to(device, non_blocking=True).unsqueeze(0).float() / 255.
-I1 = pad_image(I1)
+I1 = resize_image(I1, (ph, pw))
 temp = None # save lastframe when processing static frame
 
 while True:
@@ -239,9 +247,10 @@ while True:
         break
     I0 = I1
     I1 = torch.from_numpy(np.transpose(frame, (2,0,1))).to(device, non_blocking=True).unsqueeze(0).float() / 255.
-    I1 = pad_image(I1)
-    I0_small = F.interpolate(I0, (32, 32), mode='bilinear', align_corners=False)
-    I1_small = F.interpolate(I1, (32, 32), mode='bilinear', align_corners=False)
+    I1 = resize_image(I1, (ph, pw))
+    # I0_small, I1_small are only used to compute ssim.
+    I0_small = resize_image(I0, (32, 32))
+    I1_small = resize_image(I1, (32, 32))
     ssim = ssim_matlab(I0_small[:, :3], I1_small[:, :3])
 
     break_flag = False
@@ -253,11 +262,12 @@ while True:
         else:
             temp = frame
         I1 = torch.from_numpy(np.transpose(frame, (2,0,1))).to(device, non_blocking=True).unsqueeze(0).float() / 255.
-        I1 = pad_image(I1)
+        I1 = resize_image(I1, (ph, pw))
         I1 = model.inference(I0, I1, args.scale)
-        I1_small = F.interpolate(I1, (32, 32), mode='bilinear', align_corners=False)
+        # I1_small is only used to compute ssim.
+        I1_small = resize_image(I1, (32, 32))
         ssim = ssim_matlab(I0_small[:, :3], I1_small[:, :3])
-        frame = (I1[0] * 255).byte().cpu().numpy().transpose(1, 2, 0)[:h, :w]
+        # frame = (I1[0] * 255).byte().cpu().numpy().transpose(1, 2, 0)[:h, :w]
         
     if ssim < 0.2:
         output = []
@@ -278,13 +288,15 @@ while True:
     if args.montage:
         write_buffer.put(np.concatenate((lastframe, lastframe), 1))
         for mid in output:
+            mid = resize_image(mid, (h, w))
             mid = (((mid[0] * 255.).byte().cpu().numpy().transpose(1, 2, 0)))
-            write_buffer.put(np.concatenate((lastframe, mid[:h, :w]), 1))
+            write_buffer.put(np.concatenate((lastframe, mid), 1))
     else:
         write_buffer.put(lastframe)
         for mid in output:
+            mid = resize_image(mid, (h, w))
             mid = (((mid[0] * 255.).byte().cpu().numpy().transpose(1, 2, 0)))
-            write_buffer.put(mid[:h, :w])
+            write_buffer.put(mid)
     pbar.update(1)
     lastframe = frame
     if break_flag:
