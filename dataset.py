@@ -29,6 +29,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
     dx = (int(dx) // 2) * 2
     dy = (int(dy) // 2) * 2
 
+	# If flow=0, pixels at (dy, dx)_0a <-> (0, 0)_1a.
     if dx >= 0 and dy >= 0:
         # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
         img0_bound = (0,  img0.shape[0] - dy,  0,  img0.shape[1] - dx)
@@ -40,11 +41,15 @@ def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
         img0_bound = (-dy, img0.shape[0],      0,  img0.shape[1] - dx)
         # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
         img1_bound = (0,   img0.shape[0] + dy, dx, img0.shape[1])
+        # (dx, 0)_0 => (dx, dy)_0a, (dx, 0)_1 => (0, 0)_1a.
+        # So if flow=0, i.e., (dx, dy)_0 == (dx, dy)_1, then (dx, dy)_0a => (0, 0)_1a.        
     if dx < 0 and dy >= 0:
         # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
         img0_bound = (0,   img0.shape[0] - dy, -dx, img0.shape[1])
         # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
         img1_bound = (dy,  img0.shape[0],      0,   img0.shape[1] + dx)
+        # (0, dy)_0 => (dx, dy)_0a, (0, dy)_1 => (0, 0)_1a.
+        # So if flow=0, i.e., (dx, dy)_0 == (dx, dy)_1, then (dx, dy)_0a => (0, 0)_1a.            
     if dx < 0 and dy < 0:
         # img0 is shifted by (-dx, -dy) to the left and up. img0[-dy:, -dx:]
         img0_bound = (-dy, img0.shape[0],      -dx, img0.shape[1])
@@ -57,15 +62,17 @@ def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
         img0_bound, img1_bound = img1_bound, img0_bound
 
     dx2, dy2 = abs(dx) // 2, abs(dy) // 2
+    # T, B, L, R: top, bottom, left, right boundary.
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
+    # TM, BM, LM, RM: new boundary of the middle frame.
     TM, BM, LM, RM = dy2, img0.shape[0] - dy2, dx2, img0.shape[1] - dx2
 
     img0a = img0[T1:B1, L1:R1]
     img1a = img1[T2:B2, L2:R2]
     gta   = gt[TM:BM, LM:RM]
 
-    # Pad img1, img2, gt by half of (dy, dx).
+    # Pad img0a, img1a, gta by half of (dy, dx), to the original size.
     img0a   = np.pad(img0a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
     img1a   = np.pad(img1a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
     gta     = np.pad(gta,    ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')

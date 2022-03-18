@@ -37,6 +37,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     dx2 = dx // 2
     dy2 = dy // 2
     
+    # If flow=0, pixels at (dy, dx)_0a <-> (0, 0)_1a.
     if dx >= 0 and dy >= 0:
         # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
         img0_bound = (0,  H - dy,  0,  W - dx)
@@ -48,11 +49,15 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
         img0_bound = (-dy, H,      0,  W - dx)
         # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
         img1_bound = (0,   H + dy, dx, W)
+        # (dx, 0)_0 => (dx, dy)_0a, (dx, 0)_1 => (0, 0)_1a.
+        # So if flow=0, i.e., (dx, dy)_0 == (dx, dy)_1, then (dx, dy)_0a => (0, 0)_1a.          
     if dx < 0 and dy >= 0:
         # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
         img0_bound = (0,   H - dy, -dx, W)
         # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
         img1_bound = (dy,  H,      0,   W + dx)
+        # (0, dy)_0 => (dx, dy)_0a, (0, dy)_1 => (0, 0)_1a.
+        # So if flow=0, i.e., (dx, dy)_0 == (dx, dy)_1, then (dx, dy)_0a => (0, 0)_1a.         
     if dx < 0 and dy < 0:
         # img0 is shifted by (-dx, -dy) to the left and up. img0[-dy:, -dx:]
         img0_bound = (-dy, H,      -dx, W)
@@ -64,6 +69,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # Make the shifted img0, img1, gt shifted copies of the same image. Performs slightly worse.
     do_identity_shift = False
     
+    # dxy is the motion of the middle frame. It's always half of the relative motion between frames 0 and 1.
     if reversed_01:
         img0_bound, img1_bound = img1_bound, img0_bound
         if do_identity_shift:
@@ -83,7 +89,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
         # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
-    # T*: top boundary, B*: bottom boundary, L*: left boundary, R*: right boundary.
+    # T, B, L, R: top, bottom, left, right boundary.
     T1, B1, L1, R1 = img0_bound
     T2, B2, L2, R2 = img1_bound
     # For the middle frame, the numbers of cropped pixels at the left and right, or the up and the bottom are equal.
@@ -91,12 +97,13 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # zero-padded at the four sides.
     # This property makes it easy to compare the flow before and after shifting.
     dx2, dy2 = abs(dx2), abs(dy2)
+    # TM, BM, LM, RM: new boundary of the middle frame.
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
     gta   = gt[:, :, TM:BM, LM:RM]
 
-    # pad img0a, img1a, gta to the original size.
+    # Pad img0a, img1a, gta by half of (dy, dx), to the original size.
     # Note the pads are ordered as (x1, x2, y1, y2) instead of (y1, y2, x1, x2). 
     # The order is different from np.pad().
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
