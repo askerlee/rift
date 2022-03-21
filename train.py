@@ -67,8 +67,11 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
     step = 0
     nr_eval = 0
     dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas)
-    sampler = DistributedSampler(dataset)
-    train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
+    if not args.debug:
+        sampler = DistributedSampler(dataset)
+        train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
+    else:
+        train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, shuffle=True)
     args.steps_per_epoch = train_data.__len__()
     dataset_val = VimeoDataset('validation')
     val_data = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
@@ -76,7 +79,8 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
     print('training...')
     time_stamp = time.time()
     for epoch in range(args.total_epochs):
-        sampler.set_epoch(epoch)
+        if not args.debug:
+            sampler.set_epoch(epoch)
         for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
             time_stamp = time.time()
@@ -196,6 +200,8 @@ if __name__ == "__main__":
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
+    parser.add_argument('--debug', default=True, type=bool, 
+                        help='When debug is true, do not use distributed launch')
 
     args = parser.parse_args()
     args.multi = [ int(m) for m in args.multi.split(",") ]
@@ -205,7 +211,8 @@ if __name__ == "__main__":
     if args.local_rank == 0:
         print(f"Args:\n{args}")
 
-    torch.distributed.init_process_group(backend="nccl", init_method='env://')
+    if not args.debug:
+        torch.distributed.init_process_group(backend="nccl", init_method='env://')
     torch.cuda.set_device(args.local_rank)
     seed = 1234
     random.seed(seed)
@@ -220,7 +227,7 @@ if __name__ == "__main__":
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
                   consist_loss_weight=args.consist_loss_weight,
-                  )
+                  debug=args.debug)
     if args.cp is not None:
         model.load_model(args.cp, 1)
 

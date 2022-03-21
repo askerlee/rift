@@ -126,7 +126,8 @@ class Model:
                  weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(16,10),
-                 consist_loss_weight=0.05):
+                 consist_loss_weight=0.05,
+                 debug=False):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
@@ -149,7 +150,7 @@ class Model:
         self.epe = EPE()
         self.lap = LapLoss()
         self.sobel = SOBEL()
-        if local_rank != -1:
+        if local_rank != -1 and (not debug):
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
                                find_unused_parameters=True)
