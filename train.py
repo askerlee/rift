@@ -196,11 +196,15 @@ if __name__ == "__main__":
                         help='Probability of shifting augmentation')
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.1, type=float,
                         help='Probability of shifting consistency loss')
+    parser.add_argument('--consflipprob', dest='cons_flip_prob', default=0.1, type=float,
+                        help='Probability of flipping consistency loss')
+    parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.1, type=float,
+                        help='Probability of rotating consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
-    parser.add_argument('--debug', default=True, type=bool, 
+    parser.add_argument('--debug', default=False, type=bool, 
                         help='When debug is true, do not use distributed launch')
 
     args = parser.parse_args()
@@ -226,6 +230,8 @@ if __name__ == "__main__":
                   weight_decay=args.base_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
+                  cons_flip_prob=args.cons_flip_prob,
+                  cons_rot_prob=args.cons_rot_prob,
                   consist_loss_weight=args.consist_loss_weight,
                   debug=args.debug)
     if args.cp is not None:
