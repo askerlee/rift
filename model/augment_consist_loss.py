@@ -196,16 +196,14 @@ def rotater(flow, R):
     # flow: B, C, H, W (16, 4, 224, 224) tensor
     # R: (2, 2) rotation matrix, tensor
     flow_fst, flow_sec = torch.split(flow, 2, dim=1)
-    flow_fst = flow_fst.permute(0, 2, 3, 1) # B, H, W, C
-    flow_sec = flow_sec.permute(0, 2, 3, 1)
-    flow_fst_rot = torch.matmul(flow_fst, R) # B, H, W, C
-    flow_sec_rot = torch.matmul(flow_sec, R)
-    flow_rot = torch.cat((flow_fst_rot, flow_sec_rot), dim=-1)
-    flow_rot = flow_rot.permute(0, 3, 1, 2)
-    # visualize_flow(flow_fst[0], 'flow.png')
-    # visualize_flow(flow_fst_rot[0], 'flow_rotate_90.png')
-    # print(flow_fst[0, 0, 0, :])
-    # print(flow_fst_rot[0, 0, 0, :])
+    # flow map left multiply by rotation matrix R
+    flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
+    flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
+    flow_rot = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
+    # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
+    # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
+    # print(flow_fst[0, :, 0, 0])
+    # print(flow_fst_rot[0, :, 0, 0])
     return flow_rot
 
 
