@@ -83,7 +83,7 @@ Download [Vimeo90K dataset](http://toflow.csail.mit.edu/).
 
 We use 2 GPUs and 20G RAM each GPU for training: 
 ```
-torchrun --nproc_per_node=2 --consshiftprob 0.1 --multi 8,8,4
+torchrun train.py --consshiftprob 0.1 --multi 8,8,4
 ```
 
 ## Citation

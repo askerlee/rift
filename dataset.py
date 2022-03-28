@@ -85,7 +85,7 @@ class VimeoDataset(Dataset):
         self.dataset_name = dataset_name        
         self.h = 256
         self.w = 448
-        self.data_root = 'vimeo_triplet'
+        self.data_root = 'data/vimeo_triplet'
         self.image_root = os.path.join(self.data_root, 'sequences')
         train_fn = os.path.join(self.data_root, 'tri_trainlist.txt')
         test_fn = os.path.join(self.data_root, 'tri_testlist.txt')
