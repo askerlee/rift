@@ -27,6 +27,7 @@ class Model:
                  shift_sigmas=(16,10),
                  cons_flip_prob=0,
                  cons_rot_prob=0,
+                 cons_affine_prob=0,
                  consist_loss_weight=0.05,
                  debug=False):
         #if arbitrary == True:
@@ -61,6 +62,7 @@ class Model:
         self.shift_sigmas = shift_sigmas
         self.cons_flip_prob = cons_flip_prob
         self.cons_rot_prob = cons_rot_prob
+        self.cons_affine_prob = cons_affine_prob
         self.consist_loss_weight = consist_loss_weight
 
     def train(self):
@@ -113,24 +115,38 @@ class Model:
             self.eval()
         flow, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
-        args = dict(img0=img0, img1=img1, gt=gt, flow=flow, flow_teacher=flow_teacher,
-                    model=self.flownet, shift_sigmas=self.shift_sigmas)
+        args = dict(img0=img0, img1=img1, gt=gt, flow=flow, flow_teacher=flow_teacher, shift_sigmas=self.shift_sigmas)
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
             args["aug_handler"] = random_shift
-            args["flow_handler"] = adder
-            loss_consist, loss_distill2, mean_shift = calculate_consist_loss(**args)
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
             args["aug_handler"] = random_flip
-            args["flow_handler"] = multiplier
-            loss_consist, loss_distill2, mean_shift = calculate_consist_loss(**args)
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
             args["aug_handler"] = random_rotate
-            args["flow_handler"] = rotater
-            loss_consist, loss_distill2, mean_shift = calculate_consist_loss(**args)
+        elif self.cons_affine_prob > 0 and random.random() < self.cons_affine_prob:
+            args["aug_handler"] = random_affine
+        else:
+            args["aug_handler"] = None
+        
+        if args["aug_handler"] is not None:
+            img0a, img1a, gta, flow_a, flow_teacher_a, smask, dxy = calculate_consist_loss(**args)
+            imgsa = torch.cat((img0a, img1a), 1)
+            flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+            loss_consist_stu = 0
+            # s enumerates all scales.
+            loss_on_scales = np.arange(len(flow))
+            for s in loss_on_scales:
+                loss_consist_stu += torch.abs(flow_a[s] - flow2[s])[smask].mean()
+            loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
+            loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
+            if isinstance(dxy, int):
+                mean_shift = dxy
+            else:
+                mean_shift = dxy.abs().mean().item()
         else:
             loss_consist = 0
             mean_shift = 0
             loss_distill2 = 0
+
         only_calc_final_loss = True
         if only_calc_final_loss:
             stu_pred = merged_img_list[2]
