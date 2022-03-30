@@ -1,11 +1,9 @@
-from cv2 import ROTATE_90_CLOCKWISE
-from numpy import imag
 import torch
+import cv2
 import random
 import numpy as np
 import torch.nn.functional as F
 from torchvision.transforms.functional import hflip, vflip, rotate
-import cv2
 
 
 def visualize_flow(flow, save_name):
@@ -24,7 +22,7 @@ def visualize_flow(flow, save_name):
 
 
 # img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
+def random_shift(img0, img1, gt, flow, flow_teacher, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
@@ -123,10 +121,17 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # mask for the middle frame. Both directions have the same mask.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
-    return img0a, img1a, gta, mask, dxy
+
+    # merge flow_handler with aug_handler
+    # s enumerates all scales.
+    flow_a = []
+    for s in np.arange(len(flow)):
+        flow_a.append(flow[s] + dxy)
+    flow_teacher_a = flow_teacher + dxy
+    return img0a, img1a, gta, flow_a, flow_teacher_a, mask, dxy
 
 
-def _hflip(img0, img1, gt):
+def _hflip(img0, img1, gt, flow, flow_teacher):
     # B, C, H, W
     img0a = hflip(img0.clone())
     img1a = hflip(img1.clone())
@@ -136,14 +141,18 @@ def _hflip(img0, img1, gt):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=img0.device)
     sxy = sxy.view(1, 4, 1, 1)
-    # temp0 = img0a[0].permute(1, 2, 0).cpu().numpy()
-    # cv2.imwrite('flip0.png', temp0*255)
-    # temp1 = img0[0].permute(1, 2, 0).cpu().numpy()
-    # cv2.imwrite('0.png', temp1*255)
-    return img0a, img1a, gta, mask, sxy
+    # merge flow_handler with aug_handler
+    # s enumerates all scales.
+    flow_a = []
+    for s in np.arange(len(flow)):
+        temp = hflip(flow[s])
+        flow_a.append(temp * sxy)
+    temp = hflip(flow_teacher)
+    flow_teacher_a = temp * sxy
+    return img0a, img1a, gta, flow_a, flow_teacher_a, mask
 
 
-def _vflip(img0, img1, gt):
+def _vflip(img0, img1, gt, flow, flow_teacher):
     # B, C, H, W
     img0a = vflip(img0.clone())
     img1a = vflip(img1.clone())
@@ -153,17 +162,42 @@ def _vflip(img0, img1, gt):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=img0.device)
     sxy = sxy.view(1, 4, 1, 1)
-    return img0a, img1a, gta, mask, sxy
+    # merge flow_handler with aug_handler
+    # s enumerates all scales.
+    flow_a = []
+    for s in np.arange(len(flow)):
+        temp = vflip(flow[s])
+        flow_a.append(temp * sxy)
+    temp = vflip(flow_teacher)
+    flow_teacher_a = temp * sxy
+    return img0a, img1a, gta, flow_a, flow_teacher_a, mask
 
-def random_flip(img0, img1, gt, shift_sigmas=None):
+def random_flip(img0, img1, gt, flow, flow_teacher, shift_sigmas=None):
     if random.random() > 0.5:
-        img0a, img1a, gta, smask, sxy = _hflip(img0, img1, gt)
+        img0a, img1a, gta, flow_a, flow_teacher_a, smask = _hflip(img0, img1, gt, flow, flow_teacher)
     else:
-        img0a, img1a, gta, smask, sxy = _vflip(img0, img1, gt)
-    return img0a, img1a, gta, smask, sxy
+        img0a, img1a, gta, flow_a, flow_teacher_a, smask = _vflip(img0, img1, gt, flow, flow_teacher)
+    return img0a, img1a, gta, flow_a, flow_teacher_a, smask, 0
 
 
-def random_rotate(img0, img1, gt, shift_sigmas=None):
+def rotater(flow, R):
+    """
+    flow: B, C, H, W (16, 4, 224, 224) tensor
+    R: (2, 2) rotation matrix, tensor
+    """
+    flow_fst, flow_sec = torch.split(flow, 2, dim=1)
+    # flow map left multiply by rotation matrix R
+    flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
+    flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
+    flow_rot = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
+    # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
+    # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate.png')
+    # print(flow_fst[0, :, 112, 112])
+    # print(flow_fst_rot[0, :, 112, 112])
+    return flow_rot
+
+
+def random_rotate(img0, img1, gt, flow, flow_teacher, shift_sigmas=None):
     if random.random() < 1/3.:
         angle = 90
     elif random.random() < 2/3.:
@@ -183,48 +217,99 @@ def random_rotate(img0, img1, gt, shift_sigmas=None):
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, gta, mask, torch.from_numpy(R).to(img0.device)
+    R = torch.from_numpy(R).to(img0.device)
+    # merge flow_handler with aug_handler
+    # s enumerates all scales.
+    flow_a = []
+    for s in np.arange(len(flow)):
+        temp = rotate(flow[s], angle=angle)
+        temp = rotater(temp, R)
+        flow_a.append(temp)
+    flow_teacher_a = rotate(flow_teacher, angle=angle)
+    flow_teacher_a = rotater(flow_teacher_a, R)
+    return img0a, img1a, gta, flow_a, flow_teacher_a, mask, 0
 
 
-def adder(a, b):
-    return a + b
+def polygons_to_mask(polys, height, width):
+    """
+    Convert polygons to binary masks.
+    Args:
+        polys: a list of nx2 float array. Each array contains many (x, y) coordinates.
+    Returns:
+        a binary matrix of (height, width)
+    """
+    polys = [p.flatten().tolist() for p in polys]
+    assert len(polys) > 0, "Polygons are empty!"
 
-def multiplier(a, b):
-    return a * b
-
-def rotater(flow, R):
-    # flow: B, C, H, W (16, 4, 224, 224) tensor
-    # R: (2, 2) rotation matrix, tensor
-    flow_fst, flow_sec = torch.split(flow, 2, dim=1)
-    # flow map left multiply by rotation matrix R
-    flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
-    flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
-    flow_rot = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
-    # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
-    # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
-    # print(flow_fst[0, :, 0, 0])
-    # print(flow_fst_rot[0, :, 0, 0])
-    return flow_rot
+    import pycocotools.mask as cocomask
+    rles = cocomask.frPyObjects(polys, height, width)
+    rle = cocomask.merge(rles)
+    return cocomask.decode(rle).astype(bool)
 
 
-def calculate_consist_loss(img0, img1, gt, flow, flow_teacher, model, shift_sigmas, aug_handler, flow_handler):
-    img0a, img1a, gta, smask, dxy = aug_handler(img0, img1, gt, shift_sigmas)
+def random_affine(img0, img1, gt, flow, flow_teacher, shift_sigmas=None):
+    B, C, H, W = img0.shape
+    # OpenCV uses 3 points to generate an affine matrix.
+    # https://docs.opencv.org/3.4/d4/d61/tutorial_warp_affine.html
+    W_shift_ratio_low1 = np.random.uniform(0, 0.3)
+    W_shift_ratio_low2 = np.random.uniform(0, 0.3)
+    W_shift_ratio_high = np.random.uniform(0.7, 1)
+    H_shift_ratio_low1 = np.random.uniform(0, 0.3)
+    H_shift_ratio_low2 = np.random.uniform(0, 0.3)
+    H_shift_ratio_high = np.random.uniform(0.7, 1)
+    srcTri = np.array([[0, 0], [W - 1, 0], [0, H - 1]]).astype(np.float32) # 4th pt: [W-1, H-1]
+    dstTri = np.array([[W*W_shift_ratio_low1, H*H_shift_ratio_low1], \
+        [W*W_shift_ratio_high, H*H_shift_ratio_low2], \
+        [W*W_shift_ratio_low2, H*H_shift_ratio_high]]).astype(np.float32)
+    warp_mat = cv2.getAffineTransform(srcTri, dstTri).astype(np.float32) # (2, 3) affine transformation matrix
+    # transform 4 vertices to get new vertices of affine transformed image
+    # new vertices are used to generate mask
+    fourth_pt = np.matmul(warp_mat, np.array([W-1, H-1, 1]))
+    fourth_pt[0] = np.clip(fourth_pt[0], 0, W)
+    fourth_pt[1] = np.clip(fourth_pt[1], 0, H)
+    polygon = np.ndarray((4, 2), dtype=np.float32)
+    polygon[:2, :] = dstTri[:2, :]
+    polygon[2, :] = fourth_pt
+    polygon[3, :] = dstTri[-1, :]
+    mask = polygons_to_mask([np.array(polygon, np.float32)], H, W)
+    # cv2.imwrite('mask.png', mask.astype(float)*255)
+    mask = torch.from_numpy(mask).to(img0.device).view(1, 1, H, W)
+    mask = mask.repeat(B, 4, 1, 1)
 
-    if dxy is not None:
-        imgsa = torch.cat((img0a, img1a), 1)
-        flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
-        loss_consist_stu = 0
-        # s enumerates all scales.
-        loss_on_scales = np.arange(len(flow))
-        for s in loss_on_scales:
-            loss_consist_stu += torch.abs(flow_handler(flow[s].clone(), dxy) - flow2[s])[smask].mean()
+    aff0 = np.empty((B, H, W, C), dtype=np.float32)
+    aff1 = np.empty((B, H, W, C), dtype=np.float32)
+    aff2 = np.empty((B, H, W, C), dtype=np.float32)
+    img0_copy = img0.permute(0, 2, 3, 1).cpu().numpy() # B, H, W, C
+    img1_copy = img1.permute(0, 2, 3, 1).cpu().numpy()
+    gt_copy = gt.permute(0, 2, 3, 1).cpu().numpy()
+    for i in range(B):
+        aff0[i] = cv2.warpAffine(img0_copy[i], warp_mat, (H, W))
+        aff1[i] = cv2.warpAffine(img1_copy[i], warp_mat, (H, W))
+        aff2[i] = cv2.warpAffine(gt_copy[i], warp_mat, (H, W))
+    img0a = torch.from_numpy(aff0).permute(0, 3, 1, 2).to(img0.device)
+    img1a = torch.from_numpy(aff1).permute(0, 3, 1, 2).to(img0.device)
+    gta = torch.from_numpy(aff2).permute(0, 3, 1, 2).to(img0.device)
+    # cv2.imwrite('affine0.png', img0a[0].permute(1, 2, 0).cpu().numpy()*255)
+    R = torch.from_numpy(warp_mat[:, :2]).to(img0.device)
+    flow_all_a = []
+    flow_all = flow + [flow_teacher]
+    for s in np.arange(len(flow_all)):
+        aff4 = np.empty((B, H, W, 4), dtype=np.float32)
+        flow_copy = flow_all[s].clone().detach().permute(0, 2, 3, 1).cpu().numpy() # B, H, W, 4
+        for i in range(B):
+            aff4[i] = cv2.warpAffine(flow_copy[i], warp_mat, (H, W))
+        aff4 = torch.from_numpy(aff4).permute(0, 3, 1, 2).to(img0.device)
+        # affine transform to flow value
+        temp = rotater(aff4, R)
+        flow_all_a.append(temp)
+    flow_a = flow_all_a[:-1]
+    flow_teacher_a = flow_all_a[-1]
+    # visualize_flow(flow[0][0].permute(1, 2, 0), 'flow.png')
+    # visualize_flow(flow_a[0][0].permute(1, 2, 0), 'flow_affine.png')
+    return img0a, img1a, gta, flow_a, flow_teacher_a, mask, 0
 
-        loss_consist_tea = torch.abs(flow_handler(flow_teacher.clone(), dxy) - flow_teacher2)[smask].mean()
-        loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
-        mean_shift = dxy.abs().mean().item()
-    else:
-        loss_consist = 0
-        mean_shift = 0
-        loss_distill2 = 0
 
-    return loss_consist, loss_distill2, mean_shift
+def calculate_consist_loss(img0, img1, gt, flow, flow_teacher, shift_sigmas, aug_handler):
+    assert(aug_handler is not None)
+    img0a, img1a, gta, flow_a, flow_teacher_a, smask, dxy = aug_handler(img0, img1, gt, flow, flow_teacher, shift_sigmas)
+    return img0a, img1a, gta, flow_a, flow_teacher_a, smask, dxy
