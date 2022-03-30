@@ -200,6 +200,8 @@ if __name__ == "__main__":
                         help='Probability of flipping consistency loss')
     parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.1, type=float,
                         help='Probability of rotating consistency loss')
+    parser.add_argument('--consaffineprob', dest='cons_affine_prob', default=0.1, type=float,
+                        help='Probability of affine transform for consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
@@ -232,6 +234,7 @@ if __name__ == "__main__":
                   shift_sigmas=args.shift_sigmas,
                   cons_flip_prob=args.cons_flip_prob,
                   cons_rot_prob=args.cons_rot_prob,
+                  cons_affine_prob=args.cons_affine_prob,
                   consist_loss_weight=args.consist_loss_weight,
                   debug=args.debug)
     if args.cp is not None:
