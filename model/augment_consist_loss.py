@@ -134,13 +134,11 @@ def _hflip(img0, img1, gt):
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=img0.device)
-    sxy = sxy.view(1, 4, 1, 1)
     # temp0 = img0a[0].permute(1, 2, 0).cpu().numpy()
     # cv2.imwrite('flip0.png', temp0*255)
     # temp1 = img0[0].permute(1, 2, 0).cpu().numpy()
     # cv2.imwrite('0.png', temp1*255)
-    return img0a, img1a, gta, mask, sxy
+    return img0a, img1a, gta, mask, 'h'
 
 
 def _vflip(img0, img1, gt):
@@ -151,9 +149,7 @@ def _vflip(img0, img1, gt):
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=img0.device)
-    sxy = sxy.view(1, 4, 1, 1)
-    return img0a, img1a, gta, mask, sxy
+    return img0a, img1a, gta, mask, 'v'
 
 def random_flip(img0, img1, gt, shift_sigmas=None):
     if random.random() > 0.5:
@@ -170,61 +166,106 @@ def random_rotate(img0, img1, gt, shift_sigmas=None):
         angle = 180
     else:
         angle = 270
-    # The two dimensional rotation matrix R which rotates points in the xy plane
-    # anti-clockwise through an angle θ about the origin
-    theta = np.radians(angle)
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                [np.sin(theta), np.cos(theta)]], dtype=np.float32) # size(2, 2)
-    # Pytorch rotate: center of rotation, default is the center of the image. 
+
     # angle: value in degrees, counter-clockwise.
     img0a = rotate(img0.clone(), angle=angle)
     img1a = rotate(img1.clone(), angle=angle)
     gta = rotate(gt.clone(), angle=angle)
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    # TODO: If images height != width, then rotation will crop images, and mask will contain 0s.
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, gta, mask, torch.from_numpy(R).to(img0.device)
+    return img0a, img1a, gta, mask, angle
 
 
-def adder(a, b):
-    return a + b
+def flow_adder(flow_list, flow_teacher, offset):
+    flow_list2 = flow_list + [flow_teacher]
+    flow_list2_a = []
+    for flow in flow_list2:
+        flow_a = flow + offset
+        flow_list2_a.append(flow_a)
+    
+    flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
+    return flow_list_a, flow_teacher_a
 
-def multiplier(a, b):
-    return a * b
+# flip_direction: 'h' or 'v'
+def flow_flipper(flow_list, flow_teacher, flip_direction):
+    flow_list2 = flow_list + [flow_teacher]
+    if flip_direction == 'h':
+        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow.device)
+        OP = hflip  
+    elif flip_direction == 'v':
+        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow.device)
+        OP = vflip
+    else:
+        breakpoint()
 
-def rotater(flow, R):
-    # flow: B, C, H, W (16, 4, 224, 224) tensor
-    # R: (2, 2) rotation matrix, tensor
-    flow_fst, flow_sec = torch.split(flow, 2, dim=1)
-    # flow map left multiply by rotation matrix R
-    flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
-    flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
-    flow_rot = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
-    # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
-    # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
-    # print(flow_fst[0, :, 0, 0])
-    # print(flow_fst_rot[0, :, 0, 0])
-    return flow_rot
+    sxy = sxy.view(1, 4, 1, 1)
 
+    flow_list2_a = []
+    for flow in flow_list2:
+        flow_flip = OP(flow)
+        flow_flip_trans = flow_flip * sxy
+        flow_list2_a.append(flow_flip_trans)
 
-def calculate_consist_loss(img0, img1, gt, flow, flow_teacher, model, shift_sigmas, aug_handler, flow_handler):
-    img0a, img1a, gta, smask, dxy = aug_handler(img0, img1, gt, shift_sigmas)
+    flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
+    return flow_list_a, flow_teacher_a
 
-    if dxy is not None:
+# angle: value in degrees, counter-clockwise.
+def flow_rotater(flow_list, flow_teacher, angle):
+    flow_list2 = flow_list + [flow_teacher]
+    # The two dimensional rotation matrix R which rotates points in the uv plane
+    # radians: angle * pi / 180
+    # Flow values should be transformed accordingly.
+    theta = np.radians(angle)
+    R = np.array([[  np.cos(theta), np.sin(theta) ],
+                  [ -np.sin(theta), np.cos(theta) ]], 
+                  dtype=np.float32) # size(2, 2)
+    # angle = 90:  R = [[0, 1], [-1, 0]], i.e., negate u, then swap u and v.
+    # angle = 180: R = [[-1, 0], [0, -1]], i.e., negate u, negate v.
+    # angle = 270: R = [[0, -1], [1, 0]], i.e., negate v, then swap u and v.
+
+    flow_list2_a = []
+    for flow in flow_list2:
+        # counter-clockwise through an angle θ about the origin
+        flow_rot = rotate(flow, angle=angle)
+        # Pytorch rotate: center of rotation, default is the center of the image.     
+        # flow: B, C, H, W (16, 4, 224, 224) tensor
+        # R: (2, 2) rotation matrix, tensor
+        flow_fst, flow_sec = torch.split(flow_rot, 2, dim=1)
+        # flow map left multiply by rotation matrix R
+        flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
+        flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
+        flow_rot_trans = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
+        # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
+        # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
+        # print(flow_fst[0, :, 0, 0])
+        # print(flow_fst_rot[0, :, 0, 0])
+        flow_list2_a.append(flow_rot_trans)
+
+    flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
+    return flow_list_a, flow_teacher_a
+
+# flow_list include flow in all scales.
+def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift_sigmas, aug_handler, flow_handler):
+    img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
+
+    if tidbit is not None:
         imgsa = torch.cat((img0a, img1a), 1)
-        flow2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+        flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit)
+        flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
         loss_consist_stu = 0
         # s enumerates all scales.
-        loss_on_scales = np.arange(len(flow))
+        loss_on_scales = np.arange(len(flow_list))
         for s in loss_on_scales:
-            loss_consist_stu += torch.abs(flow_handler(flow[s].clone(), dxy) - flow2[s])[smask].mean()
+            loss_consist_stu += torch.abs(flow_list_a[s].data - flow_list2[s])[smask].mean()
 
-        loss_consist_tea = torch.abs(flow_handler(flow_teacher.clone(), dxy) - flow_teacher2)[smask].mean()
+        loss_consist_tea = torch.abs(flow_teacher_a.data - flow_teacher2)[smask].mean()
         loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
-        mean_shift = dxy.abs().mean().item()
+        mean_tidbit = tidbit.abs().mean().item()
     else:
         loss_consist = 0
-        mean_shift = 0
+        mean_tidbit = 0
         loss_distill2 = 0
 
-    return loss_consist, loss_distill2, mean_shift
+    return loss_consist, loss_distill2, mean_tidbit
