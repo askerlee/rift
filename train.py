@@ -111,7 +111,7 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch {} {}/{} time {:.2f}+{:.2f} loss_stu {:.4f} loss_cons {:.2f}/{:.2f}'.format(
+                print('epoch {} {}/{} time {:.2f}+{:.2f} loss_stu {:.4f} loss_cons {:.2f}/{}'.format(
                        epoch, bi+1, args.steps_per_epoch, data_time_interval, train_time_interval, 
                        info['loss_stu'], info['loss_consist'], info['mean_tidbit']), 
                        flush=True)

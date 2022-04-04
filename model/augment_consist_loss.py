@@ -263,7 +263,11 @@ def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift
 
         loss_consist_tea = torch.abs(flow_teacher_a.data - flow_teacher2)[smask].mean()
         loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
-        mean_tidbit = torch.tensor(tidbit).abs().float().mean().item()
+        if not isinstance(tidbit, str):
+            mean_tidbit = torch.tensor(tidbit).abs().float().mean().item()
+            mean_tidbit = f"{mean_tidbit:.2f}"
+        else:
+            mean_tidbit = tidbit
     else:
         loss_consist = 0
         mean_tidbit = 0
