@@ -212,7 +212,7 @@ def flow_flipper(flow_list, flow_teacher, flip_direction):
     return flow_list_a, flow_teacher_a
 
 # angle: value in degrees, counter-clockwise.
-def flow_rotater(flow_list, flow_teacher, angle):
+def flow_rotator(flow_list, flow_teacher, angle):
     flow_list2 = flow_list + [flow_teacher]
     # The two dimensional rotation matrix R which rotates points in the uv plane
     # radians: angle * pi / 180
@@ -222,9 +222,15 @@ def flow_rotater(flow_list, flow_teacher, angle):
                       [  np.sin(theta), np.cos(theta) ]], 
                       dtype=flow_teacher.dtype, 
                       device=flow_teacher.device)
+    # WRONG:
     # angle = 90:  R = [[0, 1], [-1, 0]],  i.e., (u, v) => ( v, -u)
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
     # angle = 270: R = [[0, -1], [1, 0]],  i.e., (u, v) => (-v,  u)
+    # RIGHT:
+    # angle = 90:  R = [[0, -1], [1, 0]],  i.e., (u, v) => ( -v, u)
+    # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
+    # angle = 270: R = [[0, 1],  [-1, 0]], i.e., (u, v) => ( v, -u)
+    # But why?    
 
     flow_list2_a = []
     for flow in flow_list2:

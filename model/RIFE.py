@@ -125,7 +125,7 @@ class Model:
             loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
             args["aug_handler"]  = random_rotate
-            args["flow_handler"] = flow_rotater
+            args["flow_handler"] = flow_rotator
             loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
         else:
             loss_consist = 0
