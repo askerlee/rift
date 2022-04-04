@@ -20,14 +20,14 @@ device = torch.device("cuda")
 
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
-                 distill_loss_weight=0.015, 
+                 distill_loss_weight=0.02, 
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  cons_shift_prob=0,
                  shift_sigmas=(16,10),
                  cons_flip_prob=0,
                  cons_rot_prob=0,
-                 consist_loss_weight=0.05,
+                 consist_loss_weight=0.02,
                  debug=False):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
@@ -131,6 +131,7 @@ class Model:
             loss_consist = 0
             mean_tidbit = 0
             loss_distill2 = 0
+            
         only_calc_final_loss = True
         if only_calc_final_loss:
             stu_pred = merged_img_list[2]

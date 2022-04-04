@@ -265,9 +265,9 @@ def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift
         # s enumerates all scales.
         loss_on_scales = np.arange(len(flow_list))
         for s in loss_on_scales:
-            loss_consist_stu += torch.abs(flow_list_a[s].data - flow_list2[s])[smask].mean()
+            loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
-        loss_consist_tea = torch.abs(flow_teacher_a.data - flow_teacher2)[smask].mean()
+        loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
         loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
         if not isinstance(tidbit, str):
             mean_tidbit = torch.tensor(tidbit).abs().float().mean().item()
