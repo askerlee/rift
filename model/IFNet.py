@@ -200,7 +200,9 @@ class IFBlock(nn.Module):
         return multiflow, multimask_score
     
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4)):
+    # calc_sofi: whether to do SOFI estimation. 
+    # SOFI: Self-supervised optical flow through video frame interpolation.    
+    def __init__(self, multi=(8,8,4), calc_sofi=False):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -226,6 +228,9 @@ class IFNet(nn.Module):
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
+        self.calc_sofi = calc_sofi
+        if self.calc_sofi:
+            
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
