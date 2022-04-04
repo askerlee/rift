@@ -192,10 +192,10 @@ def flow_adder(flow_list, flow_teacher, offset):
 def flow_flipper(flow_list, flow_teacher, flip_direction):
     flow_list2 = flow_list + [flow_teacher]
     if flip_direction == 'h':
-        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow.device)
+        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_teacher.device)
         OP = hflip  
     elif flip_direction == 'v':
-        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow.device)
+        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow_teacher.device)
         OP = vflip
     else:
         breakpoint()
