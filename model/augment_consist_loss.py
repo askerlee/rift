@@ -219,9 +219,11 @@ def flow_rotator(flow_list, flow_teacher, angle):
     # Flow values should be transformed accordingly.
     theta = np.radians(angle)
     R = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
-                      [  np.sin(theta), np.cos(theta) ]], 
+                      [  np.sin(theta), np.cos(theta)  ]], 
                       dtype=flow_teacher.dtype, 
                       device=flow_teacher.device)
+    # Repeat for the flow of two directions.
+    R = R.repeat(2, 1)
     # WRONG:
     # angle = 90:  R = [[0, 1], [-1, 0]],  i.e., (u, v) => ( v, -u)
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
@@ -238,12 +240,9 @@ def flow_rotator(flow_list, flow_teacher, angle):
         flow_rot = rotate(flow, angle=angle)
         # Pytorch rotate: center of rotation, default is the center of the image.     
         # flow: B, C, H, W (16, 4, 224, 224) tensor
-        # R: (2, 2) rotation matrix, tensor
-        flow_fst_rot, flow_sec_rot = torch.split(flow_rot, 2, dim=1)
+        # R: (4, 2) rotation matrix, tensor
         # flow map left multiplied by rotation matrix R
-        flow_fst_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_fst_rot)
-        flow_sec_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_sec_rot)
-        flow_rot_trans = torch.cat((flow_fst_rot_trans, flow_sec_rot_trans), dim=1)
+        flow_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_rot)
         # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
         # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
         # print(flow_fst[0, :, 0, 0])
