@@ -90,7 +90,6 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
             learning_rate, weight_decay = get_learning_rate(base_lr, base_weight_decay, step)
             pred, info = model.update(imgs, gt, learning_rate, weight_decay, training=True)
             train_time_interval = time.time() - time_stamp
-            time_stamp = time.time()
             if step % 200 == 1 and local_rank == 0:
                 writer.add_scalar('learning_rate', learning_rate, step)
                 writer.add_scalar('loss/stu', info['loss_stu'], step)
@@ -116,6 +115,7 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
                        info['loss_stu'], info['loss_consist'], info['mean_tidbit']), 
                        flush=True)
 
+            time_stamp = time.time()
             step += 1
         nr_eval += 1
 

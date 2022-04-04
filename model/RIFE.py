@@ -162,14 +162,14 @@ class Model:
             flow_teacher = flow_list[2]
 
         return stu_pred, {
-            'merged_tea': merged_teacher,
-            'mask': mask,
-            'mask_tea': mask,
-            'flow': flow_list[2][:, :2],
-            'flow_tea': flow_teacher,
-            'loss_stu': loss_stu,
-            'loss_tea': loss_tea,
-            'loss_distill': loss_distill,
-            'loss_consist': loss_consist,
-            'mean_tidbit': mean_tidbit
-            }
+                'merged_tea': merged_teacher,
+                'mask': mask,
+                'mask_tea': mask,
+                'flow': flow_list[2][:, :2],
+                'flow_tea': flow_teacher,
+                'loss_stu': loss_stu,
+                'loss_tea': loss_tea,
+                'loss_distill': loss_distill,
+                'loss_consist': loss_consist,
+                'mean_tidbit': mean_tidbit
+               }
