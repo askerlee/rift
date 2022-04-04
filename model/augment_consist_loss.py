@@ -170,7 +170,7 @@ def random_rotate(img0, img1, gt, shift_sigmas=None):
     # angle: value in degrees, counter-clockwise.
     img0a = rotate(img0.clone(), angle=angle)
     img1a = rotate(img1.clone(), angle=angle)
-    gta = rotate(gt.clone(), angle=angle)
+    gta   = rotate(gt.clone(),   angle=angle)
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     # TODO: If images height != width, then rotation will crop images, and mask will contain 0s.
@@ -218,13 +218,13 @@ def flow_rotater(flow_list, flow_teacher, angle):
     # radians: angle * pi / 180
     # Flow values should be transformed accordingly.
     theta = np.radians(angle)
-    R = torch.tensor([[  np.cos(theta), np.sin(theta) ],
-                      [ -np.sin(theta), np.cos(theta) ]], 
+    R = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
+                      [  np.sin(theta), np.cos(theta) ]], 
                       dtype=flow_teacher.dtype, 
                       device=flow_teacher.device)
-    # angle = 90:  R = [[0, 1], [-1, 0]], i.e., negate u, then swap u and v.
-    # angle = 180: R = [[-1, 0], [0, -1]], i.e., negate u, negate v.
-    # angle = 270: R = [[0, -1], [1, 0]], i.e., negate v, then swap u and v.
+    # angle = 90:  R = [[0, 1], [-1, 0]],  i.e., (u, v) => ( v, -u)
+    # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
+    # angle = 270: R = [[0, -1], [1, 0]],  i.e., (u, v) => (-v,  u)
 
     flow_list2_a = []
     for flow in flow_list2:
@@ -233,11 +233,11 @@ def flow_rotater(flow_list, flow_teacher, angle):
         # Pytorch rotate: center of rotation, default is the center of the image.     
         # flow: B, C, H, W (16, 4, 224, 224) tensor
         # R: (2, 2) rotation matrix, tensor
-        flow_fst, flow_sec = torch.split(flow_rot, 2, dim=1)
-        # flow map left multiply by rotation matrix R
-        flow_fst_rot = torch.einsum('jc, bjhw -> bchw', R, flow_fst)
-        flow_sec_rot = torch.einsum('jc, bjhw -> bchw', R, flow_sec)
-        flow_rot_trans = torch.cat((flow_fst_rot, flow_sec_rot), dim=1)
+        flow_fst_rot, flow_sec_rot = torch.split(flow_rot, 2, dim=1)
+        # flow map left multiplied by rotation matrix R
+        flow_fst_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_fst_rot)
+        flow_sec_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_sec_rot)
+        flow_rot_trans = torch.cat((flow_fst_rot_trans, flow_sec_rot_trans), dim=1)
         # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
         # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
         # print(flow_fst[0, :, 0, 0])
