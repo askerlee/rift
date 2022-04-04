@@ -230,6 +230,7 @@ class IFNet(nn.Module):
 
         self.calc_sofi = calc_sofi
         if self.calc_sofi:
+            self.sofi = SOFI()
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
