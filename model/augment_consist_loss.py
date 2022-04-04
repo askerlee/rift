@@ -218,9 +218,9 @@ def flow_rotater(flow_list, flow_teacher, angle):
     # radians: angle * pi / 180
     # Flow values should be transformed accordingly.
     theta = np.radians(angle)
-    R = np.array([[  np.cos(theta), np.sin(theta) ],
-                  [ -np.sin(theta), np.cos(theta) ]], 
-                  dtype=np.float32) # size(2, 2)
+    R = torch.tensor([[  np.cos(theta), np.sin(theta) ],
+                      [ -np.sin(theta), np.cos(theta) ]], 
+                      device=flow_teacher.device)
     # angle = 90:  R = [[0, 1], [-1, 0]], i.e., negate u, then swap u and v.
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., negate u, negate v.
     # angle = 270: R = [[0, -1], [1, 0]], i.e., negate v, then swap u and v.
