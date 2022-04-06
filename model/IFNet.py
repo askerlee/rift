@@ -199,10 +199,10 @@ class IFBlock(nn.Module):
 
         return multiflow, multimask_score
     
+# Incorporate SOFI into RIFT.
+# SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    # calc_sofi: whether to do SOFI estimation. 
-    # SOFI: Self-supervised optical flow through video frame interpolation.    
-    def __init__(self, multi=(8,8,4), calc_sofi=False):
+    def __init__(self, multi=(8,8,4)):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -228,9 +228,7 @@ class IFNet(nn.Module):
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
-        self.calc_sofi = calc_sofi
-        if self.calc_sofi:
-            self.sofi = SOFI()
+        self.sofi = SOFI()
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -292,6 +290,7 @@ class IFNet(nn.Module):
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
 
+            # multiflowm0, multiflowm1: first/second half of multiflow.
             flow, multiflowm0, multiflowm1, flowm0, flowm1 = \
                 multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
