@@ -46,17 +46,17 @@ model.eval()
 model.device()
 
 video_structs = [
-    ('HD_dataset/HD720p_GT/parkrun_1280x720_50.yuv', 720, 1280),
-    ('HD_dataset/HD720p_GT/shields_1280x720_60.yuv', 720, 1280),
-    ('HD_dataset/HD720p_GT/stockholm_1280x720_60.yuv', 720, 1280),
-    ('HD_dataset/HD1080p_GT/BlueSky.yuv', 1080, 1920),
-    ('HD_dataset/HD1080p_GT/Kimono1_1920x1080_24.yuv', 1080, 1920),
-    ('HD_dataset/HD1080p_GT/ParkScene_1920x1080_24.yuv', 1080, 1920),
-    ('HD_dataset/HD1080p_GT/sunflower_1080p25.yuv', 1080, 1920),
-    ('HD_dataset/HD544p_GT/Sintel_Alley2_1280x544.yuv', 544, 1280),
-    ('HD_dataset/HD544p_GT/Sintel_Market5_1280x544.yuv', 544, 1280),
-    ('HD_dataset/HD544p_GT/Sintel_Temple1_1280x544.yuv', 544, 1280),
-    ('HD_dataset/HD544p_GT/Sintel_Temple2_1280x544.yuv', 544, 1280),
+    ('data/HD_dataset/HD720p_GT/parkrun_1280x720_50.yuv', 720, 1280),
+    ('data/HD_dataset/HD720p_GT/shields_1280x720_60.yuv', 720, 1280),
+    ('data/HD_dataset/HD720p_GT/stockholm_1280x720_60.yuv', 720, 1280),
+    ('data/HD_dataset/HD1080p_GT/BlueSky.yuv', 1080, 1920),
+    ('data/HD_dataset/HD1080p_GT/Kimono1_1920x1080_24.yuv', 1080, 1920),
+    ('data/HD_dataset/HD1080p_GT/ParkScene_1920x1080_24.yuv', 1080, 1920),
+    ('data/HD_dataset/HD1080p_GT/sunflower_1080p25.yuv', 1080, 1920),
+    ('data/HD_dataset/HD544p_GT/Sintel_Alley2_1280x544.yuv', 544, 1280),
+    ('data/HD_dataset/HD544p_GT/Sintel_Market5_1280x544.yuv', 544, 1280),
+    ('data/HD_dataset/HD544p_GT/Sintel_Temple1_1280x544.yuv', 544, 1280),
+    ('data/HD_dataset/HD544p_GT/Sintel_Temple2_1280x544.yuv', 544, 1280),
 ]
 video_psnr_list = []
 
