@@ -342,14 +342,15 @@ class IFNet(nn.Module):
                                                   )
 
         # contextnet generates warped features of the input image. 
+        # context0, context1: four level conv features of img0 and img1, gradually scaled down. 
         # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
         # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
         # But using merged flow seems to perform slightly worse.
-        c0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
-        c1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
+        context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
+        context1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
 
         # flow: merged flow from multiflow of the previous iteration.
-        tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, c0, c1)
+        tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         img_residual = tmp[:, :3] * 2 - 1
 

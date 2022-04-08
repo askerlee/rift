@@ -55,8 +55,8 @@ psnr_list = []
 ssim_list = []
 
 for i, name in enumerate(names):
-    i0 = cv2.imread('middlebury/other-data/{}/frame10.png'.format(name)).transpose(2, 0, 1) / 255.
-    i1 = cv2.imread('middlebury/other-data/{}/frame11.png'.format(name)).transpose(2, 0, 1) / 255.
+    i0 = cv2.imread('data/middlebury/other-data/{}/frame10.png'.format(name)).transpose(2, 0, 1) / 255.
+    i1 = cv2.imread('data/middlebury/other-data/{}/frame11.png'.format(name)).transpose(2, 0, 1) / 255.
     gt = (torch.tensor(cv2.imread('middlebury/other-gt-interp/{}/frame10i11.png'.format(name)).transpose(2, 0, 1))).to(device).float().unsqueeze(0)
     gt_norm = gt / 255.
     h, w = i0.shape[1], i0.shape[2]

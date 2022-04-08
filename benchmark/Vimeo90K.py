@@ -49,7 +49,7 @@ else:
 model.eval()
 model.device()
 
-path = 'vimeo_triplet/'
+path = 'data/vimeo_triplet/'
 testlist_path = path + 'tri_testlist.txt'
 f = open(testlist_path, 'r')
 psnr_list = []
