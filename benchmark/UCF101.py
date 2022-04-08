@@ -49,7 +49,7 @@ else:
 model.eval()
 model.device()
 
-path = 'UCF101/ucf101_interp_ours/'
+path = 'data/UCF101/ucf101_interp_ours/'
 dirs = os.listdir(path)
 psnr_list = []
 ssim_list = []
