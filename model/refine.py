@@ -91,6 +91,7 @@ class Contextnet(nn.Module):
 class Unet(nn.Module):
     def __init__(self, c=16):
         super(Unet, self).__init__()
+        # 17: 4 images (4*3) + mask (1) + flow (4)
         self.down0 = Conv2(17, 2*c)
         self.down1 = Conv2(4*c, 4*c)
         self.down2 = Conv2(8*c, 8*c)
@@ -117,4 +118,5 @@ class Unet(nn.Module):
         x  = self.conv(x)
         # 0 < x < 1 due to sigmoid.
         # the returned tensor is scaled to [-1, 1], and used as image residual.
-        return torch.sigmoid(x)
+        # return torch.sigmoid(x)
+        return torch.tanh(x)

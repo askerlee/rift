@@ -228,7 +228,7 @@ class IFNet(nn.Module):
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
-        self.sofi = SOFI()
+        # self.sofi = SOFI()
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -349,10 +349,11 @@ class IFNet(nn.Module):
         context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
         context1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
 
-        # flow: merged flow from multiflow of the previous iteration.
-        tmp = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
+        # unet is to refine the warped image merged_img_list[2] with its output img_residual.
+        # flow: merged flow (of two directions) from multiflow computed in the last iteration.
+        img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
         # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        img_residual = tmp[:, :3] * 2 - 1
+        # img_residual = tmp[:, :3] * 2 - 1
 
         if self.use_clamp_with_grad:
             merged_img = self.clamp01(merged_img_list[2] + img_residual)
