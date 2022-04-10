@@ -228,7 +228,7 @@ class IFNet(nn.Module):
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
-        self.sofi = SOFI()
+        # self.sofi = SOFI()
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -343,7 +343,7 @@ class IFNet(nn.Module):
 
         # contextnet generates warped features of the input image. 
         # context0, context1: four level conv features of img0 and img1, gradually scaled down. 
-        # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
+        # multiflowm0/multiflowm1 is not used as input to generate the features, but to warp the features.
         # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
         # But using merged flow seems to perform slightly worse.
         context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
