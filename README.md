@@ -69,13 +69,13 @@ ffmpeg -r 10 -f image2 -i output/img%d.png -s 448x256 -vf "split[s0][s1];[s0]pal
 ```
 # RIFT
 python3 benchmark/UCF101.py --cp checkpoints/rift-02171158.pth
-# "PSNR: 35.331 SSIM: 0.969"
+# "PSNR: 35.356 SSIM: 0.969"
 python3 benchmark/Vimeo90K.py --cp checkpoints/rift-02171158.pth
-# "PSNR: 35.781 SSIM: 0.979"
+# "PSNR: 35.798 SSIM: 0.979"
 python3 benchmark/MiddleBury_Other.py --cp checkpoints/rift-02171158.pth
-# "PSNR: 37.822 SSIM: 0.986 IE: 1.935"
+# "PSNR: 37.670 SSIM: 0.985 IE: 1.961"
 python3 benchmark/HD.py --cp checkpoints/rift-02171158.pth
-# "PSNR: 32.321. 544*1280: 25.704, 720p: 33.766, 1080p: 37.855"
+# "PSNR: 32.327. 544*1280: 25.694, 720p: 33.741, 1080p: 37.898"
 ```
 
 ## Training and Reproduction
