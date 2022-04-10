@@ -68,13 +68,13 @@ ffmpeg -r 10 -f image2 -i output/img%d.png -s 448x256 -vf "split[s0][s1];[s0]pal
 **HD**: Download [HD dataset](https://github.com/baowenbo/MEMC-Net) at ./HD_dataset. The RIFE authors also provide a [google drive download link](https://drive.google.com/file/d/1iHaLoR2g1-FLgr9MEv51NH_KQYMYz-FA/view?usp=sharing).
 ```
 # RIFT
-python3 benchmark/UCF101.py --cp checkpoints/rift-02171158.pth
+python3 benchmark/UCF101.py --cp checkpoints/rift-04041959.pth
 # "PSNR: 35.356 SSIM: 0.969"
-python3 benchmark/Vimeo90K.py --cp checkpoints/rift-02171158.pth
+python3 benchmark/Vimeo90K.py --cp checkpoints/rift-04041959.pth
 # "PSNR: 35.798 SSIM: 0.979"
-python3 benchmark/MiddleBury_Other.py --cp checkpoints/rift-02171158.pth
+python3 benchmark/MiddleBury_Other.py --cp checkpoints/rift-04041959.pth
 # "PSNR: 37.670 SSIM: 0.985 IE: 1.961"
-python3 benchmark/HD.py --cp checkpoints/rift-02171158.pth
+python3 benchmark/HD.py --cp checkpoints/rift-04041959.pth
 # "PSNR: 32.327. 544*1280: 25.694, 720p: 33.741, 1080p: 37.898"
 ```
 
