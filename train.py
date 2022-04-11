@@ -80,7 +80,7 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
     for epoch in range(args.total_epochs):
         if not args.debug:
             sampler.set_epoch(epoch)
-            
+
         time_stamp = time.time()
         for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
@@ -205,6 +205,8 @@ if __name__ == "__main__":
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
+    parser.add_argument('--mixed_precision', default=False, action='store_true', 
+                        help='use mixed precision')
     parser.add_argument('--debug', default=False, type=bool, 
                         help='When debug is true, do not use distributed launch')
 
@@ -234,6 +236,7 @@ if __name__ == "__main__":
                   cons_flip_prob=args.cons_flip_prob,
                   cons_rot_prob=args.cons_rot_prob,
                   consist_loss_weight=args.consist_loss_weight,
+                  mixed_precision=args.mixed_precision,
                   debug=args.debug)
     if args.cp is not None:
         model.load_model(args.cp, 1)

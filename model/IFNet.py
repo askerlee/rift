@@ -10,6 +10,20 @@ from model.laplacian import LapLoss
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
+try:
+    autocast = torch.cuda.amp.autocast
+except:
+    # dummy autocast for PyTorch < 1.6
+    class autocast:
+        def __init__(self, enabled):
+            pass
+
+        def __enter__(self):
+            pass
+
+        def __exit__(self, *args):
+            pass
+
 def deconv_gen(do_BN=False):
     if do_BN:
         norm_layer = nn.BatchNorm2d
@@ -202,7 +216,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4)):
+    def __init__(self, multi=(8,8,4), mixed_precision=False):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -228,6 +242,7 @@ class IFNet(nn.Module):
             clamp01_inst = Clamp01()
             self.clamp01 = clamp01_inst.apply
 
+        self.mixed_precision = mixed_precision
         # self.sofi = SOFI()
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
@@ -265,7 +280,8 @@ class IFNet(nn.Module):
             # multiflow, multiflow_d: [16, 4*M, 224, 224]
             # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
             # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
-            multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
+            with autocast(enabled=self.mixed_precision):
+                multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
 
             if i == 0:
                 multiflow_skip = 0
@@ -312,7 +328,8 @@ class IFNet(nn.Module):
             # The teacher only predicts the residual.
             imgs  = torch.cat((img0, img0_warped, img1, img1_warped), 1)
             nonimg = torch.cat((global_mask_score, gt), 1)
-            multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, nonimg, flow, scale=1)
+            with autocast(enabled=self.mixed_precision):
+                multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, nonimg, flow, scale=1)
 
             # Removing this residual connection makes the teacher perform much worse.                      
             multiflow_tea = multiflow_skip + multiflow_tea_d
@@ -341,20 +358,21 @@ class IFNet(nn.Module):
                                                    merged_tea,         flow_tea,     
                                                   )
 
-        # contextnet generates warped features of the input image. 
-        # context0, context1: four level conv features of img0 and img1, gradually scaled down. 
-        # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
-        # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
-        # But using merged flow seems to perform slightly worse.
-        context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
-        context1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
+        with autocast(enabled=self.mixed_precision):
+            # contextnet generates warped features of the input image. 
+            # context0, context1: four level conv features of img0 and img1, gradually scaled down. 
+            # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
+            # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
+            # But using merged flow seems to perform slightly worse.
+            context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
+            context1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
 
-        # unet is to refine the warped image merged_img_list[2] with its output img_residual.
-        # flow: merged flow (of two directions) from multiflow computed in the last iteration.
-        img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
-        # unet activation function changes from softmax to tanh. No need to scale anymore.
-        ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        ## img_residual = tmp[:, :3] * 2 - 1
+            # unet is to refine the warped image merged_img_list[2] with its output img_residual.
+            # flow: merged flow (of two directions) from multiflow computed in the last iteration.
+            img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
+            # unet activation function changes from softmax to tanh. No need to scale anymore.
+            ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
+            ## img_residual = tmp[:, :3] * 2 - 1
 
         if self.use_clamp_with_grad:
             merged_img = self.clamp01(merged_img_list[2] + img_residual)

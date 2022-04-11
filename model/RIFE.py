@@ -28,13 +28,14 @@ class Model:
                  cons_flip_prob=0,
                  cons_rot_prob=0,
                  consist_loss_weight=0.02,
+                 mixed_precision=False,
                  debug=False):
         #if arbitrary == True:
         #    self.flownet = IFNet_m()
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi)
+            self.flownet = IFNet(multi, mixed_precision=mixed_precision)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
