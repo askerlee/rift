@@ -282,6 +282,8 @@ class IFNet(nn.Module):
             # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
             with autocast(enabled=self.mixed_precision):
                 multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
+            
+            multiflow_d, multimask_score_d = multiflow_d.float(), multimask_score_d.float()
 
             if i == 0:
                 multiflow_skip = 0
@@ -331,6 +333,8 @@ class IFNet(nn.Module):
             with autocast(enabled=self.mixed_precision):
                 multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, nonimg, flow, scale=1)
 
+            multiflow_tea_d, multimask_score_tea = multiflow_tea_d.float(), multimask_score_tea.float()
+            
             # Removing this residual connection makes the teacher perform much worse.                      
             multiflow_tea = multiflow_skip + multiflow_tea_d
             img0_warped_tea, img1_warped_tea = \
