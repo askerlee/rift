@@ -372,8 +372,10 @@ class IFNet(nn.Module):
             img0_warped_db, img1_warped_db = \
                             multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
             # cut gradient to flow and ctx0_db, to avoid leaking of information.
-            img1_residual = self.sofi_unet0(img0, img0_warped_db, flow.data*2, ctx0_db)
-            img0_residual = self.sofi_unet1(img1, img1_warped_db, flow.data*2, ctx1_db)
+            ctx0_db = [ feat.data for feat in ctx0_db ]
+            ctx1_db = [ feat.data for feat in ctx1_db ]            
+            img1_residual = self.sofi_unet0(img0, img0_warped_db.data, flow.data*2, ctx0_db)
+            img0_residual = self.sofi_unet1(img1, img1_warped_db.data, flow.data*2, ctx1_db)
             merged_img0 = self.clamp(img0_warped + img0_residual)
             merged_img1 = self.clamp(img1_warped + img1_residual)
             merged_img_list[3] = merged_img0
