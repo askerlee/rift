@@ -135,7 +135,7 @@ class Unet(nn.Module):
 # SOFI_Unet: 16 channels of input, 6 channels of output.
 class SOFI_Unet(nn.Module):
     def __init__(self, c=16):
-        super(Unet, self).__init__()
+        super(SOFI_Unet, self).__init__()
         # 16: 4 images (4*3) + flow (4)
         self.down0 = Conv2(16, 2*c)
         self.down1 = Conv2(4*c, 4*c)
