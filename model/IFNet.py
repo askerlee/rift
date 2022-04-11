@@ -224,7 +224,8 @@ class IFNet(nn.Module):
         self.unet = Unet()
         self.esti_sofi = esti_sofi
         if self.esti_sofi:
-            self.sofi_unet = SOFI_Unet()
+            self.sofi_unet0 = SOFI_Unet()
+            self.sofi_unet1 = SOFI_Unet()
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -365,13 +366,13 @@ class IFNet(nn.Module):
         # unet activation function changes from softmax to tanh. No need to scale anymore.
         ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         ## img_residual = tmp[:, :3] * 2 - 1
-        
+
         if self.esti_sofi:
             # Ms: multi, i.e., different scales in each layer.
             img0_warped_db, img1_warped_db = \
                             multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
-            sofi_residual = self.sofi_unet(img0, img1, img0_warped_db, img1_warped_db, flow, ctx0_db, ctx1_db)
-            img1_residual, img0_residual = torch.split(sofi_residual, 3, 1)
+            img1_residual = self.sofi_unet0(img0, img0_warped_db, flow, ctx0_db)
+            img0_residual = self.sofi_unet1(img1, img1_warped_db, flow, ctx1_db)
             merged_img0 = self.clamp(img0_warped + img0_residual)
             merged_img1 = self.clamp(img1_warped + img1_residual)
             merged_img_list[3] = merged_img0

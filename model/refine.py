@@ -113,8 +113,8 @@ class Unet(nn.Module):
         self.up3   = deconv(4*c, c)
         self.conv  = nn.Conv2d(c, 3, 3, 1, 1)
 
-    # context0: conv features of img0 extracted with contextnet. 
-    # context1: conv features of img1 extracted with contextnet. 
+    # context0: 4 conv features of img0 extracted with contextnet. channels: c, 2c, 4c, 8c.
+    # context1: 4 conv features of img1 extracted with contextnet. channels: c, 2c, 4c, 8c.
     # context0, context1 are two lists of 4 feature maps in 4 scales.
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
     def forward(self, img0, img1, warped_img0, warped_img1, mask, flow, context0, context1):
@@ -132,34 +132,34 @@ class Unet(nn.Module):
         # return torch.sigmoid(x)
         return torch.tanh(x)
 
-# SOFI_Unet: 16 channels of input, 6 channels of output.
+# SOFI_Unet: 10 channels of input, 3 channels of output.
 class SOFI_Unet(nn.Module):
     def __init__(self, c=16):
         super(SOFI_Unet, self).__init__()
-        # 16: 4 images (4*3) + flow (4)
-        self.down0 = Conv2(16, 2*c)
-        self.down1 = Conv2(4*c, 4*c)
-        self.down2 = Conv2(8*c, 8*c)
-        self.down3 = Conv2(16*c, 16*c)
-        self.up0   = deconv(32*c, 8*c)
+        # 10: 2 images (2*3) + flow (4)
+        self.down0 = Conv2(10, 2*c)
+        self.down1 = Conv2(3*c, 4*c)
+        self.down2 = Conv2(6*c, 8*c)
+        self.down3 = Conv2(12*c, 16*c)
+        self.up0   = deconv(24*c, 8*c)
         self.up1   = deconv(16*c, 4*c)
         self.up2   = deconv(8*c, 2*c)
         self.up3   = deconv(4*c, c)
-        self.conv  = nn.Conv2d(c, 6, 3, 1, 1)
+        self.conv  = nn.Conv2d(c, 3, 3, 1, 1)
 
-    # context0: conv features of img0 extracted with contextnet. 
-    # context1: conv features of img1 extracted with contextnet. 
+    # context0: 4 conv features of img0 extracted with contextnet. channels: c, 2c, 4c, 8c. 
+    # context1: 4 conv features of img1 extracted with contextnet. channels: c, 2c, 4c, 8c.
     # context0, context1 are two lists of 4 feature maps in 4 scales.
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
-    def forward(self, img0, img1, warped_img0, warped_img1, flow, context0, context1):
-        s0 = self.down0(torch.cat((img0, img1, warped_img0, warped_img1, flow), 1))
-        s1 = self.down1(torch.cat((s0, context0[0], context1[0]), 1))
-        s2 = self.down2(torch.cat((s1, context0[1], context1[1]), 1))
-        s3 = self.down3(torch.cat((s2, context0[2], context1[2]), 1))
-        x  = self.up0(  torch.cat((s3, context0[3], context1[3]), 1))
-        x  = self.up1(torch.cat((x, s2), 1)) 
-        x  = self.up2(torch.cat((x, s1), 1)) 
-        x  = self.up3(torch.cat((x, s0), 1)) 
+    def forward(self, img0, warped_img0, context0, flow):
+        s0 = self.down0(torch.cat((img0, warped_img0, flow), 1))    # 10 -> 2c
+        s1 = self.down1(torch.cat((s0, context0[0]), 1))            # 3c -> 4c
+        s2 = self.down2(torch.cat((s1, context0[1]), 1))            # 6c -> 8c
+        s3 = self.down3(torch.cat((s2, context0[2]), 1))            # 12c -> 16c
+        x  = self.up0(  torch.cat((s3, context0[3]), 1))            # 24c -> 8c
+        x  = self.up1(torch.cat((x, s2), 1))                        # 16c -> 4c
+        x  = self.up2(torch.cat((x, s1), 1))                        # 8c -> 2c
+        x  = self.up3(torch.cat((x, s0), 1))                        # 4c -> c
         x  = self.conv(x)
         # 0 < x < 1 due to sigmoid.
         # the returned tensor is scaled to [-1, 1], and used as image residual.
