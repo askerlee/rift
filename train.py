@@ -77,10 +77,11 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
     val_data = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
 
     print('training...')
-    time_stamp = time.time()
     for epoch in range(args.total_epochs):
         if not args.debug:
             sampler.set_epoch(epoch)
+            
+        time_stamp = time.time()
         for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
             time_stamp = time.time()
