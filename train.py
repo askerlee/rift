@@ -174,7 +174,8 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--sofi', action='store_true', help='Do SOFI estimation')
+    parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
+                        help='Do SOFI estimation')
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
