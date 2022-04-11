@@ -153,10 +153,10 @@ class SOFI_Unet(nn.Module):
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
     def forward(self, img0, warped_img0, flow, context0):
         s0 = self.down0(torch.cat((img0, warped_img0, flow), 1))    # 10 -> 2c
-        s1 = self.down1(torch.cat((s0, context0[0]), 1))            # 3c -> 4c
-        s2 = self.down2(torch.cat((s1, context0[1]), 1))            # 6c -> 8c
-        s3 = self.down3(torch.cat((s2, context0[2]), 1))            # 12c -> 16c
-        x  = self.up0(  torch.cat((s3, context0[3]), 1))            # 24c -> 8c
+        s1 = self.down1(torch.cat((s0, context0[0].data), 1))            # 3c -> 4c
+        s2 = self.down2(torch.cat((s1, context0[1].data), 1))            # 6c -> 8c
+        s3 = self.down3(torch.cat((s2, context0[2].data), 1))            # 12c -> 16c
+        x  = self.up0(  torch.cat((s3, context0[3].data), 1))            # 24c -> 8c
         x  = self.up1(torch.cat((x, s2), 1))                        # 16c -> 4c
         x  = self.up2(torch.cat((x, s1), 1))                        # 8c -> 2c
         x  = self.up3(torch.cat((x, s0), 1))                        # 4c -> c
