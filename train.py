@@ -24,24 +24,18 @@ if local_rank == 0:
     if not os.path.isdir(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-def get_learning_rate(base_lr, base_weight_decay, step):
+def get_learning_rate(base_lr, step):
     M = base_lr # default: 3e-4
     # linear warmup: 0 -> base_lr
     if step < 2000:
         mul = step / 2000.
-        return M * mul, base_weight_decay
+        return M * mul
     else:
-        if args.decaydecay_epochs <= 0:
-            weight_decay = base_weight_decay
-        else:
-            # Reduce the weight decay to 0.2 every decaydecay_epochs epochs. Seems to reduce performance.
-            decaydecay_cycles = step // (args.steps_per_epoch * args.decaydecay_epochs)
-            weight_decay = base_weight_decay * (0.4 ** decaydecay_cycles)
         # mul: begin: 1, midway: 0.5, end: 0.00025 -> extremely close to 0.
         mul = np.cos((step - 2000) / (args.total_epochs * args.steps_per_epoch - 2000.) * math.pi) * 0.5 + 0.5
         # returned lr: 0.9*base_lr * mul + 0.1*base_lr
         # begin: base_lr, midway: 0.55*base_lr, end: 0.1*base_lr.
-        return (M - M * 0.1) * mul + (M * 0.1), weight_decay
+        return (M - M * 0.1) * mul + (M * 0.1)
 
 # Only visualize the first two channels of flow_map_np.
 def flow2rgb(flow_map_np):
@@ -88,8 +82,8 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
             data_gpu = data.to(device, non_blocking=True) / 255.
             imgs = data_gpu[:, :6]
             gt = data_gpu[:, 6:9]
-            learning_rate, weight_decay = get_learning_rate(base_lr, base_weight_decay, step)
-            pred, info = model.update(imgs, gt, learning_rate, weight_decay, training=True)
+            learning_rate = get_learning_rate(base_lr, base_weight_decay, step)
+            pred, info = model.update(imgs, gt, learning_rate, training=True)
             train_time_interval = time.time() - time_stamp
             if step % 200 == 1 and local_rank == 0:
                 writer.add_scalar('learning_rate', learning_rate, step)
@@ -180,13 +174,12 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
+    parser.add_argument('--sofi', action='store_true', help='Do SOFI estimation')
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
-    parser.add_argument('--decaydecay', dest='decaydecay_epochs', type=int, metavar='D', default=-1, 
-                        help='Reduce the weight decay to 0.2 every D epochs')
     
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
@@ -229,8 +222,10 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
-    model = Model(args.local_rank, distill_loss_weight=args.distill_loss_weight,
+    model = Model(args.local_rank, 
+                  esti_sofi=args.esti_sofi,
                   grad_clip=args.clip,
+                  distill_loss_weight=args.distill_loss_weight,
                   multi=args.multi,
                   weight_decay=args.base_weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
