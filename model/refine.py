@@ -151,7 +151,7 @@ class SOFI_Unet(nn.Module):
     # context1: 4 conv features of img1 extracted with contextnet. channels: c, 2c, 4c, 8c.
     # context0, context1 are two lists of 4 feature maps in 4 scales.
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
-    def forward(self, img0, warped_img0, context0, flow):
+    def forward(self, img0, warped_img0, flow, context0):
         s0 = self.down0(torch.cat((img0, warped_img0, flow), 1))    # 10 -> 2c
         s1 = self.down1(torch.cat((s0, context0[0]), 1))            # 3c -> 4c
         s2 = self.down2(torch.cat((s1, context0[1]), 1))            # 6c -> 8c
