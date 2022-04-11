@@ -17,6 +17,19 @@ from .augment_consist_loss import *
 
 device = torch.device("cuda")
 
+try:
+    autocast = torch.cuda.amp.autocast
+except:
+    # dummy autocast for PyTorch < 1.6
+    class autocast:
+        def __init__(self, enabled):
+            pass
+
+        def __enter__(self):
+            pass
+
+        def __exit__(self, *args):
+            pass
 
 class Model:
     def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
@@ -35,7 +48,7 @@ class Model:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, mixed_precision=mixed_precision)
+            self.flownet = IFNet(multi)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
@@ -63,6 +76,7 @@ class Model:
         self.cons_flip_prob = cons_flip_prob
         self.cons_rot_prob = cons_rot_prob
         self.consist_loss_weight = consist_loss_weight
+        self.mixed_precision = mixed_precision
 
     def train(self):
         self.flownet.train()
@@ -112,10 +126,13 @@ class Model:
             self.train()
         else:
             self.eval()
-        flow_list, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
+        
+        with autocast(enabled=self.mixed_precision):
+            flow_list, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
         args = dict(img0=img0, img1=img1, gt=gt, flow_list=flow_list, flow_teacher=flow_teacher,
-                    model=self.flownet, shift_sigmas=self.shift_sigmas)
+                    model=self.flownet, shift_sigmas=self.shift_sigmas,
+                    mixed_precision=self.mixed_precision)
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
             args["aug_handler"]  = random_shift
             args["flow_handler"] = flow_adder

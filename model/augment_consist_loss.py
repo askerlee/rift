@@ -7,6 +7,19 @@ import torch.nn.functional as F
 from torchvision.transforms.functional import hflip, vflip, rotate
 import cv2
 
+try:
+    autocast = torch.cuda.amp.autocast
+except:
+    # dummy autocast for PyTorch < 1.6
+    class autocast:
+        def __init__(self, enabled):
+            pass
+
+        def __enter__(self):
+            pass
+
+        def __exit__(self, *args):
+            pass
 
 def visualize_flow(flow, save_name):
     # https://stackoverflow.com/questions/28898346/visualize-optical-flow-with-color-model
@@ -256,13 +269,16 @@ def flow_rotator(flow_list, flow_teacher, angle):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift_sigmas, aug_handler, flow_handler):
+def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift_sigmas, 
+                           aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
 
     if tidbit is not None:
         imgsa = torch.cat((img0a, img1a), 1)
         flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit)
-        flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+        with autocast(enabled=mixed_precision):
+            flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+
         loss_consist_stu = 0
         # s enumerates all scales.
         loss_on_scales = np.arange(len(flow_list))
