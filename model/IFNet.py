@@ -7,6 +7,7 @@ from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
 import torch.distributed as dist
 from model.laplacian import LapLoss
+import functools
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
@@ -202,7 +203,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4)):
+    def __init__(self, multi=(8,8,4), esti_sofi=False):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -221,14 +222,17 @@ class IFNet(nn.Module):
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
+        self.esti_sofi = esti_sofi
+        if self.esti_sofi:
+            self.sofi_unet = SOFI_Unet()
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
         if self.use_clamp_with_grad:
             clamp01_inst = Clamp01()
-            self.clamp01 = clamp01_inst.apply
-
-        # self.sofi = SOFI()
+            self.clamp = clamp01_inst.apply
+        else:
+            self.clamp = functools.partial(torch.clamp, min=0, max=1)
             
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
@@ -248,7 +252,8 @@ class IFNet(nn.Module):
 
         flow_list = []
         warped_imgs_list = []
-        merged_img_list  = [None, None, None]
+        # 3 scales + reconstructed img0 + reconstructed img1
+        merged_img_list  = [None, None, None, None, None]
         mask_list = []
         for i in range(3):
             if i == 0:
@@ -342,25 +347,37 @@ class IFNet(nn.Module):
                                                   )
 
         # contextnet generates warped features of the input image. 
-        # context0, context1: four level conv features of img0 and img1, gradually scaled down. 
+        # ctx0, ctx1: four level conv features of img0 and img1, gradually scaled down. 
         # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
         # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
         # But using merged flow seems to perform slightly worse.
-        context0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2])
-        context1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2])
+        ctx0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2], do_doubleflow_warp=self.esti_sofi)
+        ctx1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2], do_doubleflow_warp=self.esti_sofi)
+        # ctx0_db, ctx1_db: contextual features warped according to double of the multiflow.
+        # The double of the (mid -> 0/1) flow is to approximate the (1 -> 0 and 0 -> 1) flow.
+        if self.esti_sofi:
+            ctx0, ctx0_db = ctx0
+            ctx1, ctx1_db = ctx1
 
         # unet is to refine the warped image merged_img_list[2] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
-        img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
+        img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, ctx0, ctx1)
         # unet activation function changes from softmax to tanh. No need to scale anymore.
         ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
         ## img_residual = tmp[:, :3] * 2 - 1
+        
+        if self.esti_sofi:
+            # Ms: multi, i.e., different scales in each layer.
+            img0_warped_db, img1_warped_db = \
+                            multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
+            sofi_residual = self.sofi_unet(img0, img1, img0_warped_db, img1_warped_db, flow, ctx0_db, ctx1_db)
+            img1_residual, img0_residual = torch.split(sofi_residual, 3, 1)
+            merged_img0 = self.clamp(img0_warped + img0_residual)
+            merged_img1 = self.clamp(img1_warped + img1_residual)
+            merged_img_list[3] = merged_img0
+            merged_img_list[4] = merged_img1
 
-        if self.use_clamp_with_grad:
-            merged_img = self.clamp01(merged_img_list[2] + img_residual)
-        else:
-            merged_img = torch.clamp(merged_img_list[2] + img_residual, 0, 1)
-
+        merged_img = self.clamp(merged_img_list[2] + img_residual)
         merged_img_list[2] = merged_img
 
         # flow_list, mask_list: flow and mask in 3 different scales.

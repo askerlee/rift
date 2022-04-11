@@ -68,24 +68,35 @@ class Contextnet(nn.Module):
         self.conv3 = Conv2(2*c, 4*c)
         self.conv4 = Conv2(4*c, 8*c)
     
-    def forward(self, x, multiflow, multimask_score, M):
+    def forward(self, x, multiflow, multimask_score, M, do_doubleflow_warp=False):
         x = self.conv1(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1, _ = multiwarp(x, None, multiflow, multimask_score, M)        
+        f1, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if do_doubleflow_warp:
+            g1, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
         x = self.conv2(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f2, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if do_doubleflow_warp:
+            g2, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
         x = self.conv3(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f3, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if do_doubleflow_warp:
+            g3, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
         x = self.conv4(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f4, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if do_doubleflow_warp:
+            g4, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         # The feature maps in every scale are warped only after the last conv of the corresponding scale, 
         # not in the middle.
-        return [f1, f2, f3, f4]
+        if do_doubleflow_warp:
+            return [f1, f2, f3, f4], [g1, g2, g3, g4]
+        else:
+            return [f1, f2, f3, f4]
 
 # Unet: 17 channels of input, 3 channels of output.
 class Unet(nn.Module):
@@ -108,6 +119,40 @@ class Unet(nn.Module):
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
     def forward(self, img0, img1, warped_img0, warped_img1, mask, flow, context0, context1):
         s0 = self.down0(torch.cat((img0, img1, warped_img0, warped_img1, mask, flow), 1))
+        s1 = self.down1(torch.cat((s0, context0[0], context1[0]), 1))
+        s2 = self.down2(torch.cat((s1, context0[1], context1[1]), 1))
+        s3 = self.down3(torch.cat((s2, context0[2], context1[2]), 1))
+        x  = self.up0(  torch.cat((s3, context0[3], context1[3]), 1))
+        x  = self.up1(torch.cat((x, s2), 1)) 
+        x  = self.up2(torch.cat((x, s1), 1)) 
+        x  = self.up3(torch.cat((x, s0), 1)) 
+        x  = self.conv(x)
+        # 0 < x < 1 due to sigmoid.
+        # the returned tensor is scaled to [-1, 1], and used as image residual.
+        # return torch.sigmoid(x)
+        return torch.tanh(x)
+
+# SOFI_Unet: 16 channels of input, 6 channels of output.
+class SOFI_Unet(nn.Module):
+    def __init__(self, c=16):
+        super(Unet, self).__init__()
+        # 16: 4 images (4*3) + flow (4)
+        self.down0 = Conv2(16, 2*c)
+        self.down1 = Conv2(4*c, 4*c)
+        self.down2 = Conv2(8*c, 8*c)
+        self.down3 = Conv2(16*c, 16*c)
+        self.up0   = deconv(32*c, 8*c)
+        self.up1   = deconv(16*c, 4*c)
+        self.up2   = deconv(8*c, 2*c)
+        self.up3   = deconv(4*c, c)
+        self.conv  = nn.Conv2d(c, 6, 3, 1, 1)
+
+    # context0: conv features of img0 extracted with contextnet. 
+    # context1: conv features of img1 extracted with contextnet. 
+    # context0, context1 are two lists of 4 feature maps in 4 scales.
+    # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
+    def forward(self, img0, img1, warped_img0, warped_img1, flow, context0, context1):
+        s0 = self.down0(torch.cat((img0, img1, warped_img0, warped_img1, flow), 1))
         s1 = self.down1(torch.cat((s0, context0[0], context1[0]), 1))
         s2 = self.down2(torch.cat((s1, context0[1], context1[1]), 1))
         s3 = self.down3(torch.cat((s2, context0[2], context1[2]), 1))

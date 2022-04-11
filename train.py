@@ -96,6 +96,8 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
                 writer.add_scalar('loss/stu', info['loss_stu'], step)
                 writer.add_scalar('loss/tea', info['loss_tea'], step)
                 writer.add_scalar('loss/distill', info['loss_distill'], step)
+                writer.add_scalar('loss/sofi', info['loss_sofi'], step)
+
             if step % 1000 == 1 and local_rank == 0:
                 gt = (gt.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 mask = (torch.cat((info['mask'], info['mask_tea']), 3).permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
@@ -111,10 +113,9 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
                 writer.flush()
                 
             if local_rank == 0:
-                print('epoch {} {}/{} time {:.2f}+{:.2f} loss_stu {:.4f} loss_cons {:.2f}/{}'.format(
-                       epoch, bi+1, args.steps_per_epoch, data_time_interval, train_time_interval, 
-                       info['loss_stu'], info['loss_consist'], info['mean_tidbit']), 
-                       flush=True)
+                print(f"epoch {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
+                      f"loss_stu {info['loss_stu']:.4f} sofi {info['loss_sofi']:.4f} cons {info['loss_consist']:.2f}/{info['mean_tidbit']}",
+                      flush=True)
 
             time_stamp = time.time()
             step += 1
@@ -205,6 +206,7 @@ if __name__ == "__main__":
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
+    # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
                         help='use mixed precision')
     parser.add_argument('--debug', default=False, type=bool, 

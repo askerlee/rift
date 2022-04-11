@@ -32,7 +32,9 @@ except:
             pass
 
 class Model:
-    def __init__(self, local_rank=-1, use_old_model=False, grad_clip=-1, 
+    def __init__(self, local_rank=-1, use_old_model=False, 
+                 esti_sofi=False,
+                 grad_clip=-1, 
                  distill_loss_weight=0.02, 
                  multi=(8,8,4), 
                  weight_decay=1e-3,
@@ -43,12 +45,13 @@ class Model:
                  consist_loss_weight=0.02,
                  mixed_precision=False,
                  debug=False):
-        #if arbitrary == True:
-        #    self.flownet = IFNet_m()
+
+        self.esti_sofi = esti_sofi
+
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi)
+            self.flownet = IFNet(multi, esti_sofi)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
@@ -65,6 +68,7 @@ class Model:
         self.epe = EPE()
         self.lap = LapLoss()
         self.sobel = SOBEL()
+        
         if local_rank != -1 and (not debug):
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
@@ -161,6 +165,15 @@ class Model:
                 loss_stu += (self.lap(stu_pred, gt)).mean()
             loss_stu = loss_stu / len(merged_img_list)
 
+        if self.esti_sofi:
+            img0_pred = merged_img_list[3]
+            img1_pred = merged_img_list[4]
+            loss_img0 = (self.lap(img0_pred, img0)).mean()
+            loss_img1 = (self.lap(img1_pred, img1)).mean()
+            loss_sofi = loss_img0 + loss_img1
+        else:
+            loss_sofi = 0
+
         # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
         loss_tea = (self.lap(merged_teacher, gt)).mean()
         if training:
@@ -170,7 +183,7 @@ class Model:
             # loss_distill2: the distillation loss when the input is shifted. 
             # Discounted by 2, so the effective weight is 0.01.
             loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / CONS_DISTILL_DISCOUNT) * self.distill_loss_weight \
-                     + loss_consist * self.consist_loss_weight
+                     + loss_consist * self.consist_loss_weight + loss_sofi
             loss_G.backward()
             if self.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(self.flownet.parameters(), self.grad_clip)
@@ -187,6 +200,7 @@ class Model:
                 'flow_tea': flow_teacher,
                 'loss_stu': loss_stu,
                 'loss_tea': loss_tea,
+                'loss_sofi': loss_sofi,
                 'loss_distill': loss_distill,
                 'loss_consist': loss_consist,
                 'mean_tidbit': mean_tidbit
