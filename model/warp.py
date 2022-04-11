@@ -5,6 +5,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Precomputed coordinate grids dictionary, with (tensor device, tensor size) as the keys.
 backwarp_tenGrid = {}
 
+# warp and multiwarp are doing backward warping using the forward flow.
 # warp feature maps according to flow. ten: tensor?
 def warp(tenInput, tenFlow):
     k = (str(tenFlow.device), str(tenFlow.size()))

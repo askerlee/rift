@@ -218,12 +218,15 @@ def flow_rotator(flow_list, flow_teacher, angle):
     # radians: angle * pi / 180
     # Flow values should be transformed accordingly.
     theta = np.radians(angle)
-    R = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
+    R0 = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
                       [  np.sin(theta), np.cos(theta)  ]], 
                       dtype=flow_teacher.dtype, 
                       device=flow_teacher.device)
     # Repeat for the flow of two directions.
-    R = R.repeat(2, 1)
+    R = torch.zeros(4, 4, dtype=flow_teacher.dtype, device=flow_teacher.device)
+    R[:2, :2] = R0
+    R[2:, 2:] = R0
+
     # WRONG:
     # angle = 90:  R = [[0, 1], [-1, 0]],  i.e., (u, v) => ( v, -u)
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)

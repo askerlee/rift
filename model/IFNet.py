@@ -352,8 +352,9 @@ class IFNet(nn.Module):
         # unet is to refine the warped image merged_img_list[2] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
         img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, context0, context1)
-        # unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        # img_residual = tmp[:, :3] * 2 - 1
+        # unet activation function changes from softmax to tanh. No need to scale anymore.
+        ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
+        ## img_residual = tmp[:, :3] * 2 - 1
 
         if self.use_clamp_with_grad:
             merged_img = self.clamp01(merged_img_list[2] + img_residual)
