@@ -50,7 +50,7 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_sigmas):
+def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -82,7 +82,7 @@ def train(model, local_rank, base_lr, base_weight_decay, aug_shift_prob, shift_s
             data_gpu = data.to(device, non_blocking=True) / 255.
             imgs = data_gpu[:, :6]
             gt = data_gpu[:, 6:9]
-            learning_rate = get_learning_rate(base_lr, base_weight_decay, step)
+            learning_rate = get_learning_rate(base_lr, step)
             pred, info = model.update(imgs, gt, learning_rate, training=True)
             train_time_interval = time.time() - time_stamp
             if step % 200 == 1 and local_rank == 0:
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
-    parser.add_argument('--decay', dest='base_weight_decay', type=float, default=1e-3, 
+    parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
     
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
                   multi=args.multi,
-                  weight_decay=args.base_weight_decay,
+                  weight_decay=args.weight_decay,
                   cons_shift_prob=args.cons_shift_prob, 
                   shift_sigmas=args.shift_sigmas,
                   cons_flip_prob=args.cons_flip_prob,
@@ -239,6 +239,6 @@ if __name__ == "__main__":
     if args.cp is not None:
         model.load_model(args.cp, 1)
 
-    train(model, args.local_rank, args.base_lr, args.base_weight_decay, 
+    train(model, args.local_rank, args.base_lr, 
           args.aug_shift_prob, args.shift_sigmas)
         
