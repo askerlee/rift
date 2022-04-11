@@ -377,8 +377,8 @@ class IFNet(nn.Module):
             img1_residual = self.sofi_unet0(img0, img0_warped_db.data, flow.data*2, ctx0_db)
             img0_residual = self.sofi_unet1(img1, img1_warped_db.data, flow.data*2, ctx1_db)
             # img0_warped is to approximate img1, so it's added with img1_residual.
-            merged_img1 = self.clamp(img0_warped + img1_residual)
-            merged_img0 = self.clamp(img1_warped + img0_residual)
+            merged_img1 = self.clamp(img0_warped_db + img1_residual)
+            merged_img0 = self.clamp(img1_warped_db + img0_residual)
             merged_img_list[3] = merged_img0
             merged_img_list[4] = merged_img1
 
