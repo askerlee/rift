@@ -62,7 +62,8 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     # ML: 0.5 -> 0, MR: 0.5 -> 1.
     # ML_0, ML_1, ..., ML_M, MR_0, ..., MR_M, ML~MR weight
     # 1: mask, for the warp0-warp1 combination weight.
-    assert multimask_score.shape[1] == 2*M+1
+    if img1 is not None:
+        assert multimask_score.shape[1] == 2*M+1        
 
     # img0_warped_list, img1_warped_list are two lists, each of length M.
     # => [16, M, 3, 224, 224]
