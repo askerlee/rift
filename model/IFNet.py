@@ -209,16 +209,19 @@ class IFNet(nn.Module):
         block_widths = [240, 144, 80]
 
         self.Ms = multi
-        self.block0 =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
-                                multi=self.Ms[0])
-        self.block1 =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
-                                multi=self.Ms[1])
-        self.block2 =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                multi=self.Ms[2])
+        self.block0 =       IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
+                                    multi=self.Ms[0])
+        self.block1 =       IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
+                                    multi=self.Ms[1])
+        self.block2 =       IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
+                                    multi=self.Ms[2])
         # block_tea takes gt (the middle frame) as extra input. 
-        self.block_tea = IFBlock('block_tea', c=block_widths[2], img_chans=6, nonimg_chans=8,
-                                 multi=self.Ms[2])
+        self.block_tea =    IFBlock('block_tea',  c=block_widths[2], img_chans=6, nonimg_chans=8,
+                                    multi=self.Ms[2])
         
+        self.block_sofi =   IFBlock('block_sofi', c=block_widths[2], img_chans=6, nonimg_chans=5,
+                                    multi=self.Ms[2])
+
         self.contextnet = Contextnet()
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
@@ -268,8 +271,10 @@ class IFNet(nn.Module):
                 # scale_list[i]: 1/4, 1/2, 1, i.e., from coarse to fine grained, and from smaller to larger images.
                 imgs = torch.cat((img0, img0_warped, img1, img1_warped), 1)
             # flow: merged flow from multiflow of the previous iteration.
+            # multiflow_d: delta multiflow. 
+            # multimask_score_d: score for delta multiflow (not delta score; score has no skip connection.)
             # multiflow, multiflow_d: [16, 4*M, 224, 224]
-            # multimask_score, multimask_score_d:   [16, 1*M, 224, 224]
+            # multimask_score, multimask_score_d:   [16, 2*M+1, 224, 224]
             # multiflow, multimask_score returned from an IFBlock is always of the size of the original image.
             multiflow_d, multimask_score_d = stu_blocks[i](imgs, global_mask_score, flow, scale=scale_list[i])
             
@@ -296,14 +301,27 @@ class IFNet(nn.Module):
             global_mask_score = multimask_score[:, [-1]]
             mask_list.append(torch.sigmoid(global_mask_score))
 
-            # multiflowm0, multiflowm1: first/second half of multiflow.
-            flow, multiflowm0, multiflowm1, flowm0, flowm1 = \
-                multimerge_flow(multiflow, multimask_score, self.Ms[i])
+            # flow: single bi-flow merged from multiflow.
+            flow = multimerge_flow(multiflow, multimask_score, self.Ms[i])
             flow_list.append(flow)
             img0_warped, img1_warped = \
                 multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
             warped_imgs = (img0_warped, img1_warped)
             warped_imgs_list.append(warped_imgs)
+
+        if self.esti_sofi:
+            # Ms: multi, i.e., different scales in each layer.
+            img0_warped_db, img1_warped_db = \
+                multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
+            imgs = torch.cat((img0, img0_warped_db, img1, img1_warped_db), 1)
+            # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
+            # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
+            # which is not used in SOFI.
+            multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
+            multiflow_sofi = multiflow_sofi_d + multiflow * 2
+            img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
+        else:
+            multiflow_sofi, multimask_score_sofi = None, None
 
         if is_training:
             # multiflow and multimask_score are from block2, 
@@ -327,7 +345,7 @@ class IFNet(nn.Module):
             global_mask_score_tea = multimask_score_tea[:, [-1]]
             mask_tea = torch.sigmoid(global_mask_score_tea)
             merged_tea = img0_warped_tea * mask_tea + img1_warped_tea * (1 - mask_tea)
-            flow_tea, _, _, _, _ = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
+            flow_tea = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
         else:
             flow_tea = None
             merged_tea = None
@@ -347,43 +365,55 @@ class IFNet(nn.Module):
                                                    merged_tea,         flow_tea,     
                                                   )
 
+        M = self.Ms[-1]
+        # multiflow0, multiflow1: first/second half of multiflow.
+        # multimask_score0, multimask_score1: first/second half of multimask_score (except the global score).
+        multiflow0, multiflow1              = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
+        multimask_score0, multimask_score1  = multimask_score[:, :M], multimask_score[:, M:2*M]
+        if self.esti_sofi:
+            multiflow0_sofi, multiflow1_sofi                = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
+            multimask_score0_sofi, multimask_score1_sofi    = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
+            # flow_sofi: single bi-flow merged from multiflow_sofi.
+            flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
+        else:
+            multiflow0_sofi, multiflow1_sofi             = None, None
+            multimask_score0_sofi, multimask_score1_sofi = None, None
+            flow_sofi = None
+
         # contextnet generates warped features of the input image. 
+        # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.
         # ctx0, ctx1: four level conv features of img0 and img1, gradually scaled down. 
-        # flowm0/flowm1 is not used as input to generate the features, but to warp the features.
         # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
         # But using merged flow seems to perform slightly worse.
-        ctx0 = self.contextnet(img0, multiflowm0, multimask_score, self.Ms[2], do_doubleflow_warp=self.esti_sofi)
-        ctx1 = self.contextnet(img1, multiflowm1, multimask_score, self.Ms[2], do_doubleflow_warp=self.esti_sofi)
-        # ctx0_db, ctx1_db: contextual features warped according to double of the multiflow.
+        ctx0 = self.contextnet(img0, M, multiflow0, multimask_score0, 
+                               multiflow0_sofi, multimask_score0_sofi)
+        ctx1 = self.contextnet(img1, M, multiflow1, multimask_score1, 
+                               multiflow1_sofi, multimask_score1_sofi)
+        # ctx0_sofi, ctx1_sofi: contextual features warped according to double of the multiflow.
         # The double of the (mid -> 0/1) flow is to approximate the (1 -> 0 and 0 -> 1) flow.
         if self.esti_sofi:
-            ctx0, ctx0_db = ctx0
-            ctx1, ctx1_db = ctx1
+            ctx0, ctx0_sofi = ctx0
+            ctx1, ctx1_sofi = ctx1
 
         # unet is to refine the warped image merged_img_list[2] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
         img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, ctx0, ctx1)
         # unet activation function changes from softmax to tanh. No need to scale anymore.
-        ## unet output is always within (0, 1). tmp*2-1: within (-1, 1).
-        ## img_residual = tmp[:, :3] * 2 - 1
 
-        if self.esti_sofi:
-            # Ms: multi, i.e., different scales in each layer.
-            img0_warped_db, img1_warped_db = \
-                            multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
-            # cut gradient to ctx0_db, to avoid leaking of information.
-            #ctx0_db = [ feat.data for feat in ctx0_db ]
-            #ctx1_db = [ feat.data for feat in ctx1_db ]            
-            img1_residual = self.sofi_unet0(img0, img0_warped_db, flow*2, ctx0_db)
-            img0_residual = self.sofi_unet1(img1, img1_warped_db, flow*2, ctx1_db)
-            # img0_warped_db is to approximate img1, so it's added with img1_residual.
-            merged_img1 = self.clamp(img0_warped_db + img1_residual)
-            merged_img0 = self.clamp(img1_warped_db + img0_residual)
+        if self.esti_sofi:        
+            img1_residual = self.sofi_unet0(img0, img0_warped_sofi, flow_sofi, ctx0_sofi)
+            img0_residual = self.sofi_unet1(img1, img1_warped_sofi, flow_sofi, ctx1_sofi)
+            # img0_warped_sofi is to approximate img1, so it's added with img1_residual.
+            merged_img1 = self.clamp(img0_warped_sofi + img1_residual)
+            merged_img0 = self.clamp(img1_warped_sofi + img0_residual)
             merged_img_list[3] = merged_img0
             merged_img_list[4] = merged_img1
 
         merged_img = self.clamp(merged_img_list[2] + img_residual)
         merged_img_list[2] = merged_img
+        # If not esti_sofi, flow_sofi is None.
+        # Otherwise, flow_sofi is the bi-flow (1->0, 0->1).
+        flow_list.append(flow_sofi) 
 
         # flow_list, mask_list: flow and mask in 3 different scales.
         return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill

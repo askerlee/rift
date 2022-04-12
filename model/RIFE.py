@@ -195,8 +195,11 @@ class Model:
                 'merged_tea': merged_teacher,
                 'mask': mask,
                 'mask_tea': mask,
-                'flow': flow_list[2][:, :2],
+                'flow': flow_list[2][:, :2],            # :2 means only one direction of the flow is passed.
                 'flow_tea': flow_teacher,
+                'flow_sofi': flow_list[-1],             # Keep both directions of sofi flow.
+                'merged_img0': merged_img_list[3],      # if not esti_sofi, merged_img0, merged_img1 are None.
+                'merged_img1': merged_img_list[4],
                 'loss_stu': loss_stu,
                 'loss_tea': loss_tea,
                 'loss_sofi': loss_sofi,

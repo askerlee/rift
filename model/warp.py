@@ -104,9 +104,7 @@ def multimerge_flow(multiflow, multimask_score, M):
         flowm0 = (warp0_attn * multiflowm0_unpack).sum(dim=1)
         flowm1 = (warp1_attn * multiflowm1_unpack).sum(dim=1)
         flow = torch.cat([flowm0, flowm1], dim=1)
-    # Returned multiflowm0, multiflowm1 are not combined with attention. 
-    # They will be used in contextnet.
-    return flow, multiflowm0, multiflowm1, flowm0, flowm1
+    return flow
 
 # group_drop brings slight degradation.
 # Modified from drop_path() in 

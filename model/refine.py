@@ -68,32 +68,37 @@ class Contextnet(nn.Module):
         self.conv3 = Conv2(2*c, 4*c)
         self.conv4 = Conv2(4*c, 8*c)
     
-    def forward(self, x, multiflow, multimask_score, M, do_doubleflow_warp=False):
+    # Can take either one or two sets of multiflow/multimask_score.
+    def forward(self, x, M, multiflow, multimask_score, multiflow2=None, multimask_score2=None):
         x = self.conv1(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f1, _ = multiwarp(x, None, multiflow, multimask_score, M)
-        if do_doubleflow_warp:
-            g1, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
+        if multiflow2 is not None:
+            g1, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv2(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f2, _ = multiwarp(x, None, multiflow, multimask_score, M)
-        if do_doubleflow_warp:
-            g2, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
+        if multiflow2 is not None:
+            g2, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv3(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f3, _ = multiwarp(x, None, multiflow, multimask_score, M)
-        if do_doubleflow_warp:
-            g3, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
+        if multiflow2 is not None:
+            g3, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv4(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f4, _ = multiwarp(x, None, multiflow, multimask_score, M)
-        if do_doubleflow_warp:
-            g4, _ = multiwarp(x, None, multiflow * 2, multimask_score, M)
+        if multiflow2 is not None:
+            g4, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         # The feature maps in every scale are warped only after the last conv of the corresponding scale, 
-        # not in the middle.
-        if do_doubleflow_warp:
+        # not in the middle. I.e., here no conv will be applied to warped features.
+        if multiflow2 is not None:
             return [f1, f2, f3, f4], [g1, g2, g3, g4]
         else:
             return [f1, f2, f3, f4]

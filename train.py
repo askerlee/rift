@@ -121,13 +121,15 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
           
         dist.barrier()
 
-def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
+def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=False):
     loss_stu_list       = []
     loss_distill_list   = []
     loss_tea_list       = []
     loss_sofi_list      = []
-    psnr_list = []
-    psnr_list_teacher = []
+    psnr_list           = []
+    psnr_teacher_list   = []
+    psnr_sofi0_list     = []
+    psnr_sofi1_list     = []
     time_stamp = time.time()
 
     for i, data in enumerate(val_data):
@@ -138,7 +140,9 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
         with torch.no_grad():
             pred, info = model.update(imgs, gt, training=False)
             tea_pred = info['merged_tea']
-        
+            merged_img0 = info['merged_img0']
+            merged_img1 = info['merged_img1']
+
         loss_stu_list.append(info['loss_stu'].cpu().numpy())
         loss_tea_list.append(info['loss_tea'].cpu().numpy())
         loss_distill_list.append(info['loss_distill'].cpu().numpy())
@@ -148,7 +152,19 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
             psnr = -10 * math.log10(torch.mean((gt[j] - pred[j]) * (gt[j] - pred[j])).cpu().data)
             psnr_list.append(psnr)
             psnr = -10 * math.log10(torch.mean((tea_pred[j] - gt[j]) * (tea_pred[j] - gt[j])).cpu().data)
-            psnr_list_teacher.append(psnr)
+            psnr_teacher_list.append(psnr)
+
+            if esti_sofi:
+                img0 = imgs[:, :3]
+                img1 = imgs[:, 3:]
+                psnr_img0 = -10 * math.log10(torch.mean((merged_img0[j] - img0[j]) * (merged_img0[j] - img0[j])).cpu().data)
+                psnr_img1 = -10 * math.log10(torch.mean((merged_img1[j] - img1[j]) * (merged_img1[j] - img1[j])).cpu().data)
+            else:
+                psnr_img0 = 0
+                psnr_img1 = 0
+            psnr_sofi0_list.append(psnr_img0)
+            psnr_sofi1_list.append(psnr_img1)
+
         gt = (gt.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         pred = (pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         tea_pred = (tea_pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
@@ -166,14 +182,17 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
         return
 
     psnr = np.array(psnr_list).mean()
-    psnr_teacher = np.array(psnr_list_teacher).mean()
+    psnr_teacher = np.array(psnr_teacher_list).mean()
     loss_distill = np.array(loss_distill_list).mean()
+    psnr_sofi0   = np.array(psnr_sofi0_list).mean()
+    psnr_sofi1   = np.array(psnr_sofi1_list).mean()
     loss_sofi    = np.array(loss_sofi_list).mean()
+    
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch {}, {}, psnr {:.2f}, psnr_tea {:.2f}, distill {:.2f}, sofi {:.2f}'.format( \
-          epoch, nr_eval, psnr, psnr_teacher, loss_distill, loss_sofi), 
+    print('epoch {}, {}, psnr {:.2f}, psnr_tea {:.2f}, distill {:.2f}, sofi {:.2f},{:.2f}'.format( \
+          epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi0, psnr_sofi1),
           flush=True)
 
 if __name__ == "__main__":    
