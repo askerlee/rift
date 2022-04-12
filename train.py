@@ -122,9 +122,10 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
         dist.barrier()
 
 def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
-    loss_stu_list = []
-    loss_distill_list = []
-    loss_tea_list = []
+    loss_stu_list       = []
+    loss_distill_list   = []
+    loss_tea_list       = []
+    loss_sofi_list      = []
     psnr_list = []
     psnr_list_teacher = []
     time_stamp = time.time()
@@ -141,6 +142,8 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
         loss_stu_list.append(info['loss_stu'].cpu().numpy())
         loss_tea_list.append(info['loss_tea'].cpu().numpy())
         loss_distill_list.append(info['loss_distill'].cpu().numpy())
+        loss_sofi_list.append(info['loss_sofi'].cpu().numpy())
+
         for j in range(gt.shape[0]):
             psnr = -10 * math.log10(torch.mean((gt[j] - pred[j]) * (gt[j] - pred[j])).cpu().data)
             psnr_list.append(psnr)
@@ -165,19 +168,20 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val):
     psnr = np.array(psnr_list).mean()
     psnr_teacher = np.array(psnr_list_teacher).mean()
     loss_distill = np.array(loss_distill_list).mean()
+    loss_sofi    = np.array(loss_sofi_list).mean()
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch {}, iter {}, psnr {:.2f}, psnr_tea {:.2f}, loss_distill {:.2f}'.format( \
-           epoch, nr_eval, psnr, psnr_teacher, loss_distill), 
-           flush=True)
+    print('epoch {}, {}, psnr {:.2f}, psnr_tea {:.2f}, distill {:.2f}, sofi {:.2f}'.format( \
+          epoch, nr_eval, psnr, psnr_teacher, loss_distill, loss_sofi), 
+          flush=True)
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
     parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
                         help='Do SOFI estimation')
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
-    parser.add_argument('--batch_size', default=16, type=int, help='minibatch size')
+    parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
