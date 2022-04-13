@@ -74,24 +74,28 @@ class Contextnet(nn.Module):
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f1, _ = multiwarp(x, None, multiflow, multimask_score, M)
         if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
             g1, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
 
         x = self.conv2(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f2, _ = multiwarp(x, None, multiflow, multimask_score, M)
         if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
             g2, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
 
         x = self.conv3(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f3, _ = multiwarp(x, None, multiflow, multimask_score, M)
         if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
             g3, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
 
         x = self.conv4(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f4, _ = multiwarp(x, None, multiflow, multimask_score, M)
         if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
             g4, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
 
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
