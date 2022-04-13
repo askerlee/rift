@@ -50,7 +50,7 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
+def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -117,7 +117,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas):
 
         model.save_model(checkpoint_dir, epoch, local_rank)
         if nr_eval % 1 == 0:
-            evaluate(model, val_data, epoch, step, local_rank, writer_val)
+            evaluate(model, val_data, epoch, step, local_rank, writer_val, esti_sofi)
           
         dist.barrier()
 
@@ -263,5 +263,5 @@ if __name__ == "__main__":
         model.load_model(args.cp, 1)
 
     train(model, args.local_rank, args.base_lr, 
-          args.aug_shift_prob, args.shift_sigmas)
+          args.aug_shift_prob, args.shift_sigmas, args.esti_sofi)
         
