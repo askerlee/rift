@@ -228,7 +228,7 @@ class IFNet(nn.Module):
         self.esti_sofi = esti_sofi
         if self.esti_sofi:
             self.sofi_unet0 = SOFI_Unet()
-            self.sofi_unet1 = SOFI_Unet()
+            # self.sofi_unet1 = SOFI_Unet()
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -417,8 +417,10 @@ class IFNet(nn.Module):
         if self.esti_sofi:        
             # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.
             # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
-            img1_residual = self.sofi_unet0(img0, img0_warped_sofi, flow_sofi, ctx0_sofi)
-            img0_residual = self.sofi_unet1(img1, img1_warped_sofi, flow_sofi, ctx1_sofi)
+            img1_residual  = self.sofi_unet0(img0, img0_warped_sofi, flow_sofi, ctx0_sofi)
+            # img0_residual = self.sofi_unet1(img1, img1_warped_sofi, flow_sofi, ctx1_sofi)
+            flow_sofi_swap = torch.cat(flow_sofi.split(2, dim=1)[::-1], dim=1)
+            img0_residual  = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_swap, ctx1_sofi)
             # img1_warped_sofi is to approximate img0, so it's added with img0_residual.
             refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
             refined_img1  = self.clamp(img0_warped_sofi + img1_residual)
