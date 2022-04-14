@@ -195,6 +195,9 @@ def flow_adder(flow_list, flow_teacher, offset):
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
     for flow in flow_list2:
+        if flow is None:
+            flow_list2_a.append(None)
+            continue
         flow_a = flow + offset
         flow_list2_a.append(flow_a)
     
@@ -217,6 +220,10 @@ def flow_flipper(flow_list, flow_teacher, flip_direction):
 
     flow_list2_a = []
     for flow in flow_list2:
+        if flow is None:
+            flow_list2_a.append(None)
+            continue
+
         flow_flip = OP(flow)
         flow_flip_trans = flow_flip * sxy
         flow_list2_a.append(flow_flip_trans)
@@ -252,6 +259,10 @@ def flow_rotator(flow_list, flow_teacher, angle):
 
     flow_list2_a = []
     for flow in flow_list2:
+        if flow is None:
+            flow_list2_a.append(None)
+            continue
+
         # counter-clockwise through an angle θ about the origin
         flow_rot = rotate(flow, angle=angle)
         # Pytorch rotate: center of rotation, default is the center of the image.     
@@ -269,8 +280,8 @@ def flow_rotator(flow_list, flow_teacher, angle):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift_sigmas, 
-                           aug_handler, flow_handler, mixed_precision):
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_loss_on_flows, 
+                           shift_sigmas, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
 
     if tidbit is not None:
@@ -280,16 +291,18 @@ def calculate_consist_loss(img0, img1, gt, flow_list, flow_teacher, model, shift
             flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
 
         loss_consist_stu = 0
-        # s enumerates all scales.
-        loss_on_scales = np.arange(len(flow_list))
-        for s in loss_on_scales:
+        # s enumerates all (middle frame flow) scales.
+        # Should not compute loss on 0-1 flow, as the image shifting needs 
+        # different transformation to the new flow, which involves too many 
+        # intermediate variables, and may not worth the trouble.
+        for s in range(num_loss_on_flows):
             loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
         # gradient can both pass to the teacher (flow of original images) 
         # and the student (flow of the augmented images).
         # So that they can correct each other.
         loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
-        loss_consist = (loss_consist_stu / len(loss_on_scales) + loss_consist_tea) / 2
+        loss_consist = (loss_consist_stu / num_loss_on_flows + loss_consist_tea) / 2
         if not isinstance(tidbit, str):
             if isinstance(tidbit, int):
                 mean_tidbit = str(tidbit)

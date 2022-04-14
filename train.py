@@ -194,7 +194,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch {}, {}, psnr {:.2f}, psnr_tea {:.2f}, distill {:.2f}, sofi {:.2f},{:.2f}'.format( \
+    print('epoch {}, {}, psnr {:.2f}, tea {:.2f}, dstl {:.2f}, sofi {:.2f},{:.2f}'.format( \
           epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi0, psnr_sofi1),
           flush=True)
 

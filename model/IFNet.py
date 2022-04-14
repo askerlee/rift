@@ -334,7 +334,7 @@ class IFNet(nn.Module):
             # multiflow_d / multimask_score_d: flow / mask score difference 
             # between the teacher and the student (or residual of the teacher). 
             # The teacher only predicts the residual.
-            imgs  = torch.cat((img0, img0_warped, img1, img1_warped), 1)
+            imgs   = torch.cat((img0, img0_warped, img1, img1_warped), 1)
             nonimg = torch.cat((global_mask_score, gt), 1)
             multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, nonimg, flow, scale=1)
 
