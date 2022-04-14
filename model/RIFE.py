@@ -139,25 +139,27 @@ class Model:
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
                     flow_list=flow_list, flow_teacher=flow_teacher, num_loss_on_flows=3,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
+        do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
             args["aug_handler"]  = random_shift
             args["flow_handler"] = flow_adder
-            loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
             args["aug_handler"]  = random_flip
             args["flow_handler"] = flow_flipper
-            loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
-            loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
-            loss_consist_str = f"{loss_consist:.2f}/{mean_tidbit}"
         else:
             loss_consist = 0
             mean_tidbit = 0
             loss_distill2 = 0
             loss_consist_str = '-'
+            do_consist_loss = False
 
+        if do_consist_loss:
+            loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
+            loss_consist_str = f"{loss_consist:.2f}/{mean_tidbit}"
+            
         only_calc_refined_loss = True
         stu_pred = refined_img_list[2]
         loss_stu = (self.lap(stu_pred, gt)).mean()
