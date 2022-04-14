@@ -108,7 +108,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                 
             if local_rank == 0:                
                 if esti_sofi:
-                    loss_sofi = f"{loss_sofi:.4f}"
+                    loss_sofi = f"{info['loss_sofi']:.4f}"
                 else:
                     loss_sofi = "0"
             
