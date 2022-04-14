@@ -172,7 +172,7 @@ class Model:
             loss_img1 = (self.lap(img1_pred, img1)).mean()
             loss_sofi = loss_img0 + loss_img1
         else:
-            loss_sofi = 0
+            loss_sofi = torch.tensor(0, device=imgs.device)
 
         # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
         loss_tea = (self.lap(merged_teacher, gt)).mean()
@@ -193,21 +193,21 @@ class Model:
             flow_teacher = flow_list[2]
 
         return refined_img_list[2], {
-                'merged_tea': merged_teacher,
-                'mask': mask,
-                'mask_tea': mask,
-                'flow': flow_list[2][:, :2],            # :2 means only one direction of the flow is passed.
-                'flow_tea': flow_teacher,
-                'flow_sofi': flow_list[-1],             # Keep both directions of sofi flow.
-                # if not esti_sofi, crude_img0, crude_img1, refined_img0, refined_img1 are all None.
-                'crude_img0': crude_img_list[3],
-                'crude_img1': crude_img_list[4],
+                'merged_tea':   merged_teacher,
+                'mask':         mask,
+                'mask_tea':     mask,
+                'flow':         flow_list[2][:, :2],    # :2 means only one direction of the flow is passed.
+                'flow_tea':     flow_teacher,
+                'flow_sofi':    flow_list[-1],          # Keep both directions of sofi flow.
+                # If not esti_sofi, crude_img0, crude_img1, refined_img0, refined_img1 are all None.
+                'crude_img0':   crude_img_list[3],
+                'crude_img1':   crude_img_list[4],
                 'refined_img0': refined_img_list[3],    
                 'refined_img1': refined_img_list[4],
-                'loss_stu': loss_stu,
-                'loss_tea': loss_tea,
-                'loss_sofi': torch.tensor(loss_sofi),
+                'loss_stu':     loss_stu,
+                'loss_tea':     loss_tea,
+                'loss_sofi':    loss_sofi,
                 'loss_distill': loss_distill,
                 'loss_consist': loss_consist,
-                'mean_tidbit': mean_tidbit
+                'mean_tidbit':  mean_tidbit
                }
