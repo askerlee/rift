@@ -75,9 +75,6 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
         if not args.debug:
             sampler.set_epoch(epoch)
 
-        if epoch == 0:
-            evaluate(model, val_data, epoch, step, local_rank, writer_val, esti_sofi)
-            
         time_stamp = time.time()
         for bi, data in enumerate(train_data):
             data_time_interval = time.time() - time_stamp
