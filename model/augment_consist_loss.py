@@ -144,7 +144,8 @@ def _hflip(img0, img1, gt):
     img0a = hflip(img0.clone())
     img1a = hflip(img1.clone())
     gta = hflip(gt.clone())
-    mask_shape = list(img0.shape)
+    # mask has the same shape as the flipped image.
+    mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     # temp0 = img0a[0].permute(1, 2, 0).cpu().numpy()
@@ -153,13 +154,13 @@ def _hflip(img0, img1, gt):
     # cv2.imwrite('0.png', temp1*255)
     return img0a, img1a, gta, mask, 'h'
 
-
 def _vflip(img0, img1, gt):
     # B, C, H, W
     img0a = vflip(img0.clone())
     img1a = vflip(img1.clone())
     gta = vflip(gt.clone())
-    mask_shape = list(img0.shape)
+    # mask has the same shape as the flipped image.
+    mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, gta, mask, 'v'
@@ -170,7 +171,6 @@ def random_flip(img0, img1, gt, shift_sigmas=None):
     else:
         img0a, img1a, gta, smask, sxy = _vflip(img0, img1, gt)
     return img0a, img1a, gta, smask, sxy
-
 
 def random_rotate(img0, img1, gt, shift_sigmas=None):
     if random.random() < 1/3.:
@@ -184,28 +184,34 @@ def random_rotate(img0, img1, gt, shift_sigmas=None):
     img0a = rotate(img0.clone(), angle=angle)
     img1a = rotate(img1.clone(), angle=angle)
     gta   = rotate(gt.clone(),   angle=angle)
-    mask_shape = list(img0.shape)
+    # mask has the same shape as the rotated image.
+    mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     # TODO: If images height != width, then rotation will crop images, and mask will contain 0s.
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, gta, mask, angle
 
 
-def flow_adder(flow_list, flow_teacher, offset):
+def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
-    for flow in flow_list2:
-        if flow is None:
-            flow_list2_a.append(None)
-            continue
-        flow_a = flow + offset
+    for i, flow in enumerate(flow_list2):
+        if i == sofi_idx:
+            if flow is None:
+                flow_list2_a.append(None)
+                continue
+            else:
+                # 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
+                flow_a = flow + 2 * offset
+        else:
+            flow_a = flow + offset
         flow_list2_a.append(flow_a)
     
     flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
     return flow_list_a, flow_teacher_a
 
 # flip_direction: 'h' or 'v'
-def flow_flipper(flow_list, flow_teacher, flip_direction):
+def flow_flipper(flow_list, flow_teacher, flip_direction, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     if flip_direction == 'h':
         sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_teacher.device)
@@ -219,8 +225,8 @@ def flow_flipper(flow_list, flow_teacher, flip_direction):
     sxy = sxy.view(1, 4, 1, 1)
 
     flow_list2_a = []
-    for flow in flow_list2:
-        if flow is None:
+    for i, flow in enumerate(flow_list2):
+        if i == sofi_idx and flow is None:
             flow_list2_a.append(None)
             continue
 
@@ -232,7 +238,7 @@ def flow_flipper(flow_list, flow_teacher, flip_direction):
     return flow_list_a, flow_teacher_a
 
 # angle: value in degrees, counter-clockwise.
-def flow_rotator(flow_list, flow_teacher, angle):
+def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     # The two dimensional rotation matrix R which rotates points in the uv plane
     # radians: angle * pi / 180
@@ -258,8 +264,8 @@ def flow_rotator(flow_list, flow_teacher, angle):
     # But why?    
 
     flow_list2_a = []
-    for flow in flow_list2:
-        if flow is None:
+    for i, flow in enumerate(flow_list2):
+        if i == sofi_idx and flow is None:
             flow_list2_a.append(None)
             continue
 
@@ -280,13 +286,15 @@ def flow_rotator(flow_list, flow_teacher, angle):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_loss_on_flows, 
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_flow, 
                            shift_sigmas, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
+    # sofi flow is always placed right after rift flows.
+    sofi_idx = num_rift_flow
 
     if tidbit is not None:
         imgsa = torch.cat((img0a, img1a), 1)
-        flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit)
+        flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit, sofi_idx)
         with autocast(enabled=mixed_precision):
             flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
                 merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
@@ -296,14 +304,20 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_l
         # Should not compute loss on 0-1 flow, as the image shifting needs 
         # different transformation to the new flow, which involves too many 
         # intermediate variables, and may not worth the trouble.
-        for s in range(num_loss_on_flows):
+        for s in range(num_rift_flow):
             loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
         # gradient can both pass to the teacher (flow of original images) 
         # and the student (flow of the augmented images).
         # So that they can correct each other.
         loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
-        loss_consist = (loss_consist_stu / num_loss_on_flows + loss_consist_tea) / 2
+
+        if flow_list[sofi_idx] is not None:
+            loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
+            loss_consist = (loss_consist_stu / num_rift_flow + loss_consist_tea + loss_consist_sofi) / 3
+        else:
+            loss_consist = (loss_consist_stu / num_rift_flow + loss_consist_tea) / 2
+            
         if not isinstance(tidbit, str):
             if isinstance(tidbit, int):
                 mean_tidbit = str(tidbit)
