@@ -137,7 +137,7 @@ class Model:
                 merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, num_loss_on_flows=3,
+                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_flow=3,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
