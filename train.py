@@ -206,9 +206,14 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('ep {}, {}, stu {:.2f}, tea {:.2f} dstl {:.2f}, sofi {:.2f},{:.2f}/{:.2f},{:.2f}'.format( \
-          epoch, nr_eval, psnr, psnr_teacher, loss_distill, 
-          psnr_sofi_crude0, psnr_sofi_crude1, psnr_sofi_refined0, psnr_sofi_refined1),
+    
+    if esti_sofi:
+        psnr_sofi = f"{psnr_sofi_crude0:.2f},{psnr_sofi_crude1:.2f}/{psnr_sofi_refined0:.2f},{psnr_sofi_refined1:.2f}"
+    else:
+        psnr_sofi = "NA"
+
+    print('ep {}, {}, stu {:.2f}, tea {:.2f} dstl {:.2f}, sofi {}'.format( \
+          epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi),
           flush=True)
 
 if __name__ == "__main__":    
