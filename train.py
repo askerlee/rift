@@ -109,9 +109,14 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                     writer.add_image(str(i) + '/mask', mask[i], step, dataformats='HWC')
                 writer.flush()
                 
-            if local_rank == 0:
+            if local_rank == 0:                
+                if esti_sofi:
+                    loss_sofi = f"{loss_sofi:.4f}"
+                else:
+                    loss_sofi = "0"
+            
                 print(f"epoch {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"loss_stu {info['loss_stu']:.4f} sofi {info['loss_sofi']:.4f} cons {info['loss_consist']:.2f}/{info['mean_tidbit']}",
+                      f"loss_stu {info['loss_stu']:.4f} sofi {loss_sofi} cons {info['loss_consist']:.2f}/{info['mean_tidbit']}",
                       flush=True)
 
             time_stamp = time.time()
