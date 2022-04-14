@@ -314,10 +314,10 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
 
         if flow_list[sofi_idx] is not None:
             loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
-            loss_consist = (loss_consist_stu / num_rift_flow + loss_consist_tea + loss_consist_sofi) / 3
+            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_flow + 1) + loss_consist_tea) / 2
         else:
             loss_consist = (loss_consist_stu / num_rift_flow + loss_consist_tea) / 2
-            
+
         if not isinstance(tidbit, str):
             if isinstance(tidbit, int):
                 mean_tidbit = str(tidbit)
