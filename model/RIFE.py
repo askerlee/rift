@@ -151,11 +151,13 @@ class Model:
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
             loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
+            loss_consist_str = f"{loss_consist:.2f}/{mean_tidbit}"
         else:
             loss_consist = 0
             mean_tidbit = 0
             loss_distill2 = 0
-            
+            loss_consist_str = '-'
+
         only_calc_refined_loss = True
         stu_pred = refined_img_list[2]
         loss_stu = (self.lap(stu_pred, gt)).mean()
@@ -208,6 +210,6 @@ class Model:
                 'loss_tea':     loss_tea,
                 'loss_sofi':    loss_sofi,
                 'loss_distill': loss_distill,
-                'loss_consist': loss_consist,
+                'loss_consist_str': loss_consist_str,
                 'mean_tidbit':  mean_tidbit
                }

@@ -113,7 +113,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                     loss_sofi = "0"
             
                 print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"loss_stu {info['loss_stu']:.4f} sofi {loss_sofi} cons {info['loss_consist']:.2f}/{info['mean_tidbit']}",
+                      f"loss_stu {info['loss_stu']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
                       flush=True)
 
             time_stamp = time.time()
