@@ -308,7 +308,10 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_l
             if isinstance(tidbit, int):
                 mean_tidbit = str(tidbit)
             else:
-                mean_tidbit = torch.tensor(tidbit).abs().float().mean().item()
+                if isinstance(tidbit, torch.Tensor):
+                    mean_tidbit = tidbit.abs().float().mean().item()
+                else:
+                    mean_tidbit = np.abs(np.array(tidbit)).astype(float).mean().item()
                 mean_tidbit = f"{mean_tidbit:.2f}"
         else:
             mean_tidbit = tidbit
