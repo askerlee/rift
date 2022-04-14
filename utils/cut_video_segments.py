@@ -2,6 +2,7 @@ import cv2
 import os
 import shutil
 import datetime
+import argparse
 import torch
 from vgg_perceptual_loss import VGGPerceptualLoss
 
@@ -28,20 +29,24 @@ def video_scene_transition(video_path, model, loss_thres=500):
     frame_exists, frame1 = cap.read()
     image1 = transform(frame1, device)
     
+    t = 0
+    num_seg = 0
     while(cap.isOpened()):
         frame_exists, frame2 = cap.read()
         if frame_exists:
+            t = max(int(cap.get(cv2.CAP_PROP_POS_MSEC)), t) #current timestamp (millisecond)
             image2 = transform(frame2, device)
             perceptual_loss = model(image1, image2)
             if perceptual_loss > loss_thres:
-                # record current timestamp (millisecond)
-                t = int(cap.get(cv2.CAP_PROP_POS_MSEC))
-                print('Segment timestamp {}'.format(t))
+                num_seg += 1
+                print('{}: Loss {}, Segment timestamp {}'.format(num_seg, perceptual_loss, t))
                 timestamps.add(t)
             image1 = image2
         else:
             break
     cap.release()
+    # add ending timestamp to list
+    timestamps.add(t)
     return sorted(timestamps)
 
 
@@ -66,12 +71,24 @@ def cut_video_timestamp(video_path:str, timestamps:list, save_root:str):
         start = end
 
 
-if __name__=='__main__':
+def main(args):
     model = VGGPerceptualLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
 
-    video_path = os.path.join('..', os.getcwd(), 'demo.mp4')
-    timestamps = video_scene_transition(video_path, model, loss_thres=500)
-    save_root = 'data/cut/'
-    cut_video_timestamp(video_path, timestamps, save_root)
+    if args.video_path != '':
+        video_path = args.video_path
+    else:
+        video_path = os.path.join('..', os.getcwd(), 'demo.mp4')
+    timestamps = video_scene_transition(video_path, model, loss_thres=args.loss_thres)
+    cut_video_timestamp(video_path, timestamps, args.save_root)
+
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--video', dest='video_path', default='')
+    parser.add_argument('--loss_thres', help='VGG perceptual loss threshold', default=500)
+    parser.add_argument('--save_root', help='folder to save video clips', default='data/cut/')
+    args = parser.parse_args()
+
+    main(args)
