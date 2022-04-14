@@ -171,7 +171,7 @@ class Model:
             loss_img1 = (self.lap(img1_pred, img1)).mean()
             loss_sofi = loss_img0 + loss_img1
         else:
-            loss_sofi = torch.zeros(1)
+            loss_sofi = 0
 
         # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
         loss_tea = (self.lap(merged_teacher, gt)).mean()
@@ -202,7 +202,7 @@ class Model:
                 'merged_img1': merged_img_list[4],
                 'loss_stu': loss_stu,
                 'loss_tea': loss_tea,
-                'loss_sofi': loss_sofi,
+                'loss_sofi': torch.tensor(loss_sofi),
                 'loss_distill': loss_distill,
                 'loss_consist': loss_consist,
                 'mean_tidbit': mean_tidbit
