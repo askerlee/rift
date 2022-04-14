@@ -288,7 +288,8 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_l
         imgsa = torch.cat((img0a, img1a), 1)
         flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit)
         with autocast(enabled=mixed_precision):
-            flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+            flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
+                merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
 
         loss_consist_stu = 0
         # s enumerates all (middle frame flow) scales.

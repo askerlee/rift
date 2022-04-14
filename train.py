@@ -112,7 +112,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                 else:
                     loss_sofi = "0"
             
-                print(f"epoch {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
+                print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
                       f"loss_stu {info['loss_stu']:.4f} sofi {loss_sofi} cons {info['loss_consist']:.2f}/{info['mean_tidbit']}",
                       flush=True)
 
@@ -133,8 +133,10 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     loss_sofi_list      = []
     psnr_list           = []
     psnr_teacher_list   = []
-    psnr_sofi0_list     = []
-    psnr_sofi1_list     = []
+    psnr_sofi_crude0_list   = []
+    psnr_sofi_crude1_list   = []
+    psnr_sofi_refined0_list = []
+    psnr_sofi_refined1_list = []
     time_stamp = time.time()
 
     for i, data in enumerate(val_data):
@@ -145,8 +147,10 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
         with torch.no_grad():
             pred, info = model.update(imgs, gt, training=False)
             tea_pred = info['merged_tea']
-            merged_img0 = info['merged_img0']
-            merged_img1 = info['merged_img1']
+            crude_img0 = info['crude_img0']
+            crude_img1 = info['crude_img1']
+            refined_img0 = info['refined_img0']
+            refined_img1 = info['refined_img1']
 
         loss_stu_list.append(info['loss_stu'].cpu().numpy())
         loss_tea_list.append(info['loss_tea'].cpu().numpy())
@@ -162,13 +166,17 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
             if esti_sofi:
                 img0 = imgs[:, :3]
                 img1 = imgs[:, 3:]
-                psnr_img0 = -10 * math.log10(torch.mean((merged_img0[j] - img0[j]) * (merged_img0[j] - img0[j])).cpu().data)
-                psnr_img1 = -10 * math.log10(torch.mean((merged_img1[j] - img1[j]) * (merged_img1[j] - img1[j])).cpu().data)
+                psnr_crude_img0 = -10 * math.log10(torch.mean((crude_img0[j] - img0[j]) * (crude_img0[j] - img0[j])).cpu().data)
+                psnr_crude_img1 = -10 * math.log10(torch.mean((crude_img1[j] - img1[j]) * (crude_img1[j] - img1[j])).cpu().data)
+                psnr_refined_img0 = -10 * math.log10(torch.mean((refined_img0[j] - img0[j]) * (refined_img0[j] - img0[j])).cpu().data)
+                psnr_refined_img1 = -10 * math.log10(torch.mean((refined_img1[j] - img1[j]) * (refined_img1[j] - img1[j])).cpu().data)
             else:
-                psnr_img0 = 0
-                psnr_img1 = 0
-            psnr_sofi0_list.append(psnr_img0)
-            psnr_sofi1_list.append(psnr_img1)
+                psnr_crude_img0, psnr_refined_img0, psnr_crude_img1, psnr_refined_img1 = 0, 0, 0, 0
+
+            psnr_sofi_crude0_list.append(psnr_crude_img0)
+            psnr_sofi_crude1_list.append(psnr_crude_img1)
+            psnr_sofi_refined0_list.append(psnr_refined_img0)
+            psnr_sofi_refined1_list.append(psnr_refined_img1)
 
         gt = (gt.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         pred = (pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
@@ -189,15 +197,18 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     psnr = np.array(psnr_list).mean()
     psnr_teacher = np.array(psnr_teacher_list).mean()
     loss_distill = np.array(loss_distill_list).mean()
-    psnr_sofi0   = np.array(psnr_sofi0_list).mean()
-    psnr_sofi1   = np.array(psnr_sofi1_list).mean()
+    psnr_sofi_crude0    = np.array(psnr_sofi_crude0_list).mean()
+    psnr_sofi_crude1    = np.array(psnr_sofi_crude1_list).mean()
+    psnr_sofi_refined0  = np.array(psnr_sofi_refined0_list).mean()
+    psnr_sofi_refined1  = np.array(psnr_sofi_refined1_list).mean()
     loss_sofi    = np.array(loss_sofi_list).mean()
     
     writer_val.add_scalar('psnr', psnr, nr_eval)
     writer_val.add_scalar('psnr_teacher', psnr_teacher, nr_eval)
     writer_val.flush()
-    print('epoch {}, {}, psnr {:.2f}, tea {:.2f}, dstl {:.2f}, sofi {:.2f},{:.2f}'.format( \
-          epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi0, psnr_sofi1),
+    print('ep {}, {}, stu {:.2f}, tea {:.2f} dstl {:.2f}, sofi {:.2f},{:.2f}/{:.2f},{:.2f}'.format( \
+          epoch, nr_eval, psnr, psnr_teacher, loss_distill, 
+          psnr_sofi_crude0, psnr_sofi_crude1, psnr_sofi_refined0, psnr_sofi_refined1),
           flush=True)
 
 if __name__ == "__main__":    

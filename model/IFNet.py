@@ -255,9 +255,12 @@ class IFNet(nn.Module):
         loss_distill = 0
 
         flow_list = []
+        # 3 scales of backwarped middle frame (each scale has two images of two directions).
         warped_imgs_list = []
-        # 3 scales + reconstructed img0 + reconstructed img1
-        merged_img_list  = [None, None, None, None, None]
+        # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
+        crude_img_list   = [None, None, None, None, None]
+        # 3 scales of estimated middle frame + reconstructed img0 + reconstructed img1
+        refined_img_list  = [None, None, None, None, None]
         mask_list = []
         for i in range(3):
             if i == 0:
@@ -309,20 +312,6 @@ class IFNet(nn.Module):
             warped_imgs = (img0_warped, img1_warped)
             warped_imgs_list.append(warped_imgs)
 
-        if self.esti_sofi:
-            # Ms: multi, i.e., different scales in each layer.
-            img0_warped_db, img1_warped_db = \
-                multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
-            imgs = torch.cat((img0, img0_warped_db, img1, img1_warped_db), 1)
-            # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
-            # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
-            # which is not used in SOFI.
-            multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
-            multiflow_sofi = multiflow_sofi_d + multiflow * 2
-            img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
-        else:
-            multiflow_sofi, multimask_score_sofi = None, None
-
         if is_training:
             # multiflow and multimask_score are from block2, 
             # which always have the same M as the teacher.
@@ -352,16 +341,16 @@ class IFNet(nn.Module):
 
         for i in range(3):
             # mask_list[i]: *soft* mask (weights) at the i-th scale.
-            # merged_img_list[i]: average of 0.5->0 and 0.5->1 warped images.
-            merged_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
-                                 warped_imgs_list[i][1] * (1 - mask_list[i])
+            # crude_img_list[i]: average of 0.5->0 and 0.5->1 warped images.
+            crude_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
+                                warped_imgs_list[i][1] * (1 - mask_list[i])
                                 
             if is_training:
                 # dual_teaching_loss: the student can also teach the teacher, 
                 # when the student is more accurate.
                 # Distilling both merged flow and global mask score leads to slightly worse performance.
                 loss_distill += dual_teaching_loss(gt, 
-                                                   merged_img_list[i], flow_list[i], 
+                                                   crude_img_list[i], flow_list[i], 
                                                    merged_tea,         flow_tea,     
                                                   )
 
@@ -370,15 +359,37 @@ class IFNet(nn.Module):
         # multimask_score0, multimask_score1: first/second half of multimask_score (except the global score).
         multiflow0, multiflow1              = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
         multimask_score0, multimask_score1  = multimask_score[:, :M], multimask_score[:, M:2*M]
+
         if self.esti_sofi:
+            # Ms: multi, i.e., different scales in each layer.
+            # First use 2*(middle->0, middle->1) to approximate the flow (1->0, 0->1).
+            # db: double (flow)
+            img0_warped_db, img1_warped_db = \
+                multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
+            imgs = torch.cat((img0, img0_warped_db, img1, img1_warped_db), 1)
+            # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
+            # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
+            # which is not used in SOFI.
+            multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
+            # multiflow_sofi: refined flow (1->0, 0->1).
+            multiflow_sofi = multiflow_sofi_d + multiflow * 2
+            img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
+            # Note the order: img 0, img 1.
+            # img1_warped_sofi is to approximate img0, so it appears first.
+            crude_img_list[3]  = img1_warped_sofi
+            crude_img_list[4]  = img0_warped_sofi
+
             multiflow0_sofi, multiflow1_sofi                = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score0_sofi, multimask_score1_sofi    = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
             flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
         else:
+            multiflow_sofi, multimask_score_sofi         = None, None
             multiflow0_sofi, multiflow1_sofi             = None, None
             multimask_score0_sofi, multimask_score1_sofi = None, None
             flow_sofi = None
+
+        flow_list.append(flow_sofi) 
 
         # contextnet generates warped features of the input image. 
         # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.
@@ -395,25 +406,24 @@ class IFNet(nn.Module):
             ctx0, ctx0_sofi = ctx0
             ctx1, ctx1_sofi = ctx1
 
-        # unet is to refine the warped image merged_img_list[2] with its output img_residual.
+        # unet is to refine the crude image crude_img_list[2] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
         img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, ctx0, ctx1)
         # unet activation function changes from softmax to tanh. No need to scale anymore.
+        merged_img = self.clamp(crude_img_list[2] + img_residual)
+        # refined_img_list[0~1] are always None, to make the indices consistent with crude_img_list.
+        refined_img_list[2] = merged_img
 
         if self.esti_sofi:        
+            # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.
+            # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
             img1_residual = self.sofi_unet0(img0, img0_warped_sofi, flow_sofi, ctx0_sofi)
             img0_residual = self.sofi_unet1(img1, img1_warped_sofi, flow_sofi, ctx1_sofi)
-            # img0_warped_sofi is to approximate img1, so it's added with img1_residual.
-            merged_img1 = self.clamp(img0_warped_sofi + img1_residual)
-            merged_img0 = self.clamp(img1_warped_sofi + img0_residual)
-            merged_img_list[3] = merged_img0
-            merged_img_list[4] = merged_img1
-
-        merged_img = self.clamp(merged_img_list[2] + img_residual)
-        merged_img_list[2] = merged_img
-        # If not esti_sofi, flow_sofi is None.
-        # Otherwise, flow_sofi is the bi-flow (1->0, 0->1).
-        flow_list.append(flow_sofi) 
+            # img1_warped_sofi is to approximate img0, so it's added with img0_residual.
+            refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
+            refined_img1  = self.clamp(img0_warped_sofi + img1_residual)
+            refined_img_list[3] = refined_img0
+            refined_img_list[4] = refined_img1
 
         # flow_list, mask_list: flow and mask in 3 different scales.
-        return flow_list, mask_list[2], merged_img_list, flow_tea, merged_tea, loss_distill
+        return flow_list, mask_list[2], crude_img_list, refined_img_list, flow_tea, merged_tea, loss_distill

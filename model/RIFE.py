@@ -111,13 +111,15 @@ class Model:
     def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]        
-        flow_list, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
-        stu_pred = merged_img_list[2]
+        flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
+            merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
+        stu_pred = refined_img_list[2]
         if TTA == False:
             return stu_pred
         else:
-            flow_list2, mask2, merged_img_list2, flow_teacher2, merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
-            return (stu_pred + merged_img_list2[2].flip(2).flip(3)) / 2
+            flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
+                merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
+            return (stu_pred + refined_img_list2[2].flip(2).flip(3)) / 2
     
     def update(self, imgs, gt, learning_rate=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
@@ -131,7 +133,8 @@ class Model:
             self.eval()
         
         with autocast(enabled=self.mixed_precision):
-            flow_list, mask, merged_img_list, flow_teacher, merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
+            flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
+                merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
                     flow_list=flow_list, flow_teacher=flow_teacher, num_loss_on_flows=3,
@@ -153,20 +156,18 @@ class Model:
             mean_tidbit = 0
             loss_distill2 = 0
             
-        only_calc_final_loss = True
-        if only_calc_final_loss:
-            stu_pred = merged_img_list[2]
-            loss_stu = (self.lap(stu_pred, gt)).mean()
-        else:
-            loss_stu = 0
-            for stu_pred in merged_img_list:
+        only_calc_refined_loss = True
+        stu_pred = refined_img_list[2]
+        loss_stu = (self.lap(stu_pred, gt)).mean()
+        if not only_calc_refined_loss:
+            for stu_crude_pred in crude_img_list[:3]:
                 # lap: laplacian pyramid loss.
-                loss_stu += (self.lap(stu_pred, gt)).mean()
-            loss_stu = loss_stu / len(merged_img_list)
+                loss_stu += (self.lap(stu_crude_pred, gt)).mean()
+            loss_stu = loss_stu / 4
 
         if self.esti_sofi:
-            img0_pred = merged_img_list[3]
-            img1_pred = merged_img_list[4]
+            img0_pred = refined_img_list[3]
+            img1_pred = refined_img_list[4]
             loss_img0 = (self.lap(img0_pred, img0)).mean()
             loss_img1 = (self.lap(img1_pred, img1)).mean()
             loss_sofi = loss_img0 + loss_img1
@@ -191,15 +192,18 @@ class Model:
         else:
             flow_teacher = flow_list[2]
 
-        return stu_pred, {
+        return refined_img_list[2], {
                 'merged_tea': merged_teacher,
                 'mask': mask,
                 'mask_tea': mask,
                 'flow': flow_list[2][:, :2],            # :2 means only one direction of the flow is passed.
                 'flow_tea': flow_teacher,
                 'flow_sofi': flow_list[-1],             # Keep both directions of sofi flow.
-                'merged_img0': merged_img_list[3],      # if not esti_sofi, merged_img0, merged_img1 are None.
-                'merged_img1': merged_img_list[4],
+                # if not esti_sofi, crude_img0, crude_img1, refined_img0, refined_img1 are all None.
+                'crude_img0': crude_img_list[3],
+                'crude_img1': crude_img_list[4],
+                'refined_img0': refined_img_list[3],    
+                'refined_img1': refined_img_list[4],
                 'loss_stu': loss_stu,
                 'loss_tea': loss_tea,
                 'loss_sofi': torch.tensor(loss_sofi),
