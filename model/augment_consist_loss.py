@@ -296,11 +296,11 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scale, 
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scales, 
                            shift_sigmas, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
     # sofi flow is always placed right after rift flows.
-    sofi_idx = num_rift_scale
+    sofi_idx = num_rift_scales
 
     if tidbit is not None:
         imgsa = torch.cat((img0a, img1a), 1)
@@ -314,7 +314,7 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
         # Should not compute loss on 0-1 flow, as the image shifting needs 
         # different transformation to the new flow, which involves too many 
         # intermediate variables, and may not worth the trouble.
-        for s in range(num_rift_scale):
+        for s in range(num_rift_scales):
             loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
         # gradient can both pass to the teacher (flow of original images) 
@@ -324,9 +324,9 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
 
         if flow_list[sofi_idx] is not None:
             loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
-            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scale + 1) + loss_consist_tea) / 2
+            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
         else:
-            loss_consist = (loss_consist_stu / num_rift_scale + loss_consist_tea) / 2
+            loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
 
         if not isinstance(tidbit, str):
             if isinstance(tidbit, int):
