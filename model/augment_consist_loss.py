@@ -46,9 +46,13 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     if random.random() > 0.5:
         dx = np.random.laplace(0, u_shift_sigma / 4)
         dy = np.random.laplace(0, v_shift_sigma)
+        dx = min(dx, 40)
+        dy = min(dy, 40)
     else:
         dx = np.random.laplace(0, u_shift_sigma)
         dy = np.random.laplace(0, v_shift_sigma / 4)
+        dx = min(dx, 40)
+        dy = min(dy, 40)
 
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
