@@ -136,8 +136,9 @@ class Model:
             flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
                 merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
+        # flow_list is of length 4.
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_flow=3,
+                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=3,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
@@ -174,7 +175,7 @@ class Model:
             img1_pred = refined_img_list[4]
             loss_img0 = (self.lap(img0_pred, img0)).mean()
             loss_img1 = (self.lap(img1_pred, img1)).mean()
-            loss_sofi = loss_img0 + loss_img1
+            loss_sofi = (loss_img0 + loss_img1) / 2
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
 

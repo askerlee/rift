@@ -254,13 +254,14 @@ class IFNet(nn.Module):
         stu_blocks = [self.block0, self.block1, self.block2]
         loss_distill = 0
 
-        flow_list = []
+        # 3 scales of interpolation flow + sofi flow.
+        flow_list = [None, None, None, None]
         # 3 scales of backwarped middle frame (each scale has two images of two directions).
         warped_imgs_list = []
         # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
         crude_img_list   = [None, None, None, None, None]
         # 3 scales of estimated middle frame + reconstructed img0 + reconstructed img1
-        refined_img_list  = [None, None, None, None, None]
+        refined_img_list = [None, None, None, None, None]
         mask_list = []
         for i in range(3):
             if i == 0:
@@ -306,7 +307,7 @@ class IFNet(nn.Module):
 
             # flow: single bi-flow merged from multiflow.
             flow = multimerge_flow(multiflow, multimask_score, self.Ms[i])
-            flow_list.append(flow)
+            flow_list[i] = flow
             img0_warped, img1_warped = \
                 multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
             warped_imgs = (img0_warped, img1_warped)
@@ -351,7 +352,7 @@ class IFNet(nn.Module):
                 # Distilling both merged flow and global mask score leads to slightly worse performance.
                 loss_distill += dual_teaching_loss(gt, 
                                                    crude_img_list[i], flow_list[i], 
-                                                   merged_tea,         flow_tea,     
+                                                   merged_tea,        flow_tea,     
                                                   )
 
         M = self.Ms[-1]
@@ -379,7 +380,7 @@ class IFNet(nn.Module):
             crude_img_list[3]  = img1_warped_sofi
             crude_img_list[4]  = img0_warped_sofi
 
-            multiflow0_sofi, multiflow1_sofi                = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
+            multiflow0_sofi,       multiflow1_sofi          = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score0_sofi, multimask_score1_sofi    = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
             flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
@@ -388,7 +389,7 @@ class IFNet(nn.Module):
             multimask_score_sofi, multimask_score0_sofi, multimask_score1_sofi  = None, None, None
             flow_sofi = None
 
-        flow_list.append(flow_sofi) 
+        flow_list[3] = flow_sofi
 
         # contextnet generates warped features of the input image. 
         # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.

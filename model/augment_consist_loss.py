@@ -43,16 +43,21 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
     # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
+    MAX_SHIFT = 50
     if random.random() > 0.5:
         dx = np.random.laplace(0, u_shift_sigma / 4)
         dy = np.random.laplace(0, v_shift_sigma)
-        dx = min(dx, 40)
-        dy = min(dy, 40)
+        # Cap the shift in either direction to 40, to avoid abnormal gradients
+        # Sometimes the model output becomes rubbish and would never recover. 
+        # The reason may be occasional large shifts (could be > 70).
+        # Especially for sofi, the shift is doubled, therefore could be catasrophic.
+        dx = min(dx, MAX_SHIFT)
+        dy = min(dy, MAX_SHIFT)
     else:
         dx = np.random.laplace(0, u_shift_sigma)
         dy = np.random.laplace(0, v_shift_sigma / 4)
-        dx = min(dx, 40)
-        dy = min(dy, 40)
+        dx = min(dx, MAX_SHIFT)
+        dy = min(dy, MAX_SHIFT)
 
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
@@ -202,13 +207,14 @@ def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     for i, flow in enumerate(flow_list2):
         if i == sofi_idx:
             if flow is None:
-                flow_list2_a.append(None)
+                flow_a = None
                 continue
             else:
-                # 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
+                # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
                 flow_a = flow + 2 * offset
         else:
             flow_a = flow + offset
+
         flow_list2_a.append(flow_a)
     
     flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
@@ -249,7 +255,7 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     # Flow values should be transformed accordingly.
     theta = np.radians(angle)
     R0 = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
-                      [  np.sin(theta), np.cos(theta)  ]], 
+                       [  np.sin(theta),  np.cos(theta) ]], 
                       dtype=flow_teacher.dtype, 
                       device=flow_teacher.device)
     # Repeat for the flow of two directions.
@@ -290,11 +296,11 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_flow, 
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scale, 
                            shift_sigmas, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
     # sofi flow is always placed right after rift flows.
-    sofi_idx = num_rift_flow
+    sofi_idx = num_rift_scale
 
     if tidbit is not None:
         imgsa = torch.cat((img0a, img1a), 1)
@@ -308,7 +314,7 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
         # Should not compute loss on 0-1 flow, as the image shifting needs 
         # different transformation to the new flow, which involves too many 
         # intermediate variables, and may not worth the trouble.
-        for s in range(num_rift_flow):
+        for s in range(num_rift_scale):
             loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
         # gradient can both pass to the teacher (flow of original images) 
@@ -318,9 +324,9 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
 
         if flow_list[sofi_idx] is not None:
             loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
-            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_flow + 1) + loss_consist_tea) / 2
+            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scale + 1) + loss_consist_tea) / 2
         else:
-            loss_consist = (loss_consist_stu / num_rift_flow + loss_consist_tea) / 2
+            loss_consist = (loss_consist_stu / num_rift_scale + loss_consist_tea) / 2
 
         if not isinstance(tidbit, str):
             if isinstance(tidbit, int):
