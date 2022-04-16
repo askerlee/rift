@@ -9,7 +9,7 @@ import random
 import argparse
 from datetime import datetime
 
-from model.RIFE import Model
+from model.RIFT import RIFT
 from dataset import *
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
-    model = Model(args.local_rank, 
+    model = RIFT(args.local_rank, 
                   esti_sofi=args.esti_sofi,
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,

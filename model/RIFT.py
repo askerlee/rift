@@ -31,7 +31,7 @@ except:
         def __exit__(self, *args):
             pass
 
-class Model:
+class RIFT:
     def __init__(self, local_rank=-1, use_old_model=False, 
                  esti_sofi=False,
                  grad_clip=-1, 
