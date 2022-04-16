@@ -72,7 +72,7 @@ class RIFT:
         if local_rank != -1 and (not debug):
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
-                               find_unused_parameters=False)
+                               find_unused_parameters=not esti_sofi)
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
         self.cons_shift_prob = cons_shift_prob
