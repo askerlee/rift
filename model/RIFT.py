@@ -242,7 +242,7 @@ class SOFI_Wrapper(IFNet):
             breakpoint()
 
         scale_list = [4, 2, 1]        
-        imgs = torch.cat([image0, image1], dim=1)
+        imgs = torch.cat([image0, image1], dim=1) / 255.0
         flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
             merged_teacher, loss_distill = super().forward(imgs, scale_list, timestep=0.5)
 
