@@ -80,7 +80,8 @@ class Model:
         self.cons_flip_prob = cons_flip_prob
         self.cons_rot_prob = cons_rot_prob
         self.consist_loss_weight = consist_loss_weight
-        self.crude_loss_weight = 0.01
+        # Even if crude_loss_weight=0.01, it still slightly reduces performance.
+        self.crude_loss_weight = 0.0   
         self.mixed_precision = mixed_precision
 
     def train(self):
@@ -178,7 +179,7 @@ class Model:
             crude_img1          = crude_img_list[4]
             loss_refined_img0   = (self.lap(refined_img0, img0)).mean()
             loss_refined_img1   = (self.lap(refined_img1, img1)).mean()
-            
+
             if self.crude_loss_weight > 0:
                 loss_crude_img0     = (self.lap(crude_img0, img0)).mean()
                 loss_crude_img1     = (self.lap(crude_img1, img1)).mean()
