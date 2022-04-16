@@ -40,24 +40,29 @@ def visualize_flow(flow, save_name):
 def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
+    
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
     # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
     MAX_SHIFT = 50
-    if random.random() > 0.5:
-        dx = np.random.laplace(0, u_shift_sigma / 4)
-        dy = np.random.laplace(0, v_shift_sigma)
-        # Cap the shift in either direction to 40, to avoid abnormal gradients
-        # Sometimes the model output becomes rubbish and would never recover. 
-        # The reason may be occasional large shifts (could be > 70).
-        # Especially for sofi, the shift is doubled, therefore could be catasrophic.
-        dx = min(dx, MAX_SHIFT)
-        dy = min(dy, MAX_SHIFT)
-    else:
-        dx = np.random.laplace(0, u_shift_sigma)
-        dy = np.random.laplace(0, v_shift_sigma / 4)
-        dx = min(dx, MAX_SHIFT)
-        dy = min(dy, MAX_SHIFT)
+    dx, dy = 0, 0
+
+    # Avoid (0,0) offset.
+    while abs(dx) + abs(dy) == 0:
+        if random.random() > 0.5:
+            dx = np.random.laplace(0, u_shift_sigma / 4)
+            dy = np.random.laplace(0, v_shift_sigma)
+            # Cap the shift in either direction to 40, to avoid abnormal gradients
+            # Sometimes the model output becomes rubbish and would never recover. 
+            # The reason may be occasional large shifts (could be > 70).
+            # Especially for sofi, the shift is doubled, therefore could be catasrophic.
+            dx = min(dx, MAX_SHIFT)
+            dy = min(dy, MAX_SHIFT)
+        else:
+            dx = np.random.laplace(0, u_shift_sigma)
+            dy = np.random.laplace(0, v_shift_sigma / 4)
+            dx = min(dx, MAX_SHIFT)
+            dy = min(dy, MAX_SHIFT)
 
     # Make sure dx and dy are even numbers.
     dx = (int(dx) // 2) * 2
