@@ -80,6 +80,7 @@ class Model:
         self.cons_flip_prob = cons_flip_prob
         self.cons_rot_prob = cons_rot_prob
         self.consist_loss_weight = consist_loss_weight
+        self.crude_loss_weight = 0.01
         self.mixed_precision = mixed_precision
 
     def train(self):
@@ -171,11 +172,18 @@ class Model:
             loss_stu = loss_stu / 4
 
         if self.esti_sofi:
-            img0_pred = refined_img_list[3]
-            img1_pred = refined_img_list[4]
-            loss_img0 = (self.lap(img0_pred, img0)).mean()
-            loss_img1 = (self.lap(img1_pred, img1)).mean()
-            loss_sofi = (loss_img0 + loss_img1) / 2
+            refined_img0        = refined_img_list[3]
+            refined_img1        = refined_img_list[4]
+            crude_img0          = crude_img_list[3]
+            crude_img1          = crude_img_list[4]
+            loss_refined_img0   = (self.lap(refined_img0, img0)).mean()
+            loss_refined_img1   = (self.lap(refined_img1, img1)).mean()
+            loss_crude_img0     = (self.lap(crude_img0, img0)).mean()
+            loss_crude_img1     = (self.lap(crude_img1, img1)).mean()
+            # crude_loss_weight = 0.01. loss on crude images is highly inaccurate. So assign a tiny weight.
+            loss_sofi           = (loss_refined_img0 + loss_refined_img1 + 
+                                   (loss_crude_img0 + loss_crude_img1)* self.crude_loss_weight
+                                  ) / 2
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
 
