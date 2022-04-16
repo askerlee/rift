@@ -178,8 +178,13 @@ class Model:
             crude_img1          = crude_img_list[4]
             loss_refined_img0   = (self.lap(refined_img0, img0)).mean()
             loss_refined_img1   = (self.lap(refined_img1, img1)).mean()
-            loss_crude_img0     = (self.lap(crude_img0, img0)).mean()
-            loss_crude_img1     = (self.lap(crude_img1, img1)).mean()
+            
+            if self.crude_loss_weight > 0:
+                loss_crude_img0     = (self.lap(crude_img0, img0)).mean()
+                loss_crude_img1     = (self.lap(crude_img1, img1)).mean()
+            else:
+                loss_crude_img0, loss_crude_img1 = 0, 0
+
             # crude_loss_weight = 0.01. loss on crude images is highly inaccurate. So assign a tiny weight.
             loss_sofi           = (loss_refined_img0 + loss_refined_img1 + 
                                    (loss_crude_img0 + loss_crude_img1)* self.crude_loss_weight

@@ -207,7 +207,7 @@ def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     for i, flow in enumerate(flow_list2):
         if i == sofi_idx:
             if flow is None:
-                flow_a = None
+                flow_list2_a.append(None)
                 continue
             else:
                 # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
