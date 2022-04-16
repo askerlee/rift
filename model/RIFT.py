@@ -230,3 +230,23 @@ class RIFT:
                 'loss_consist_str': loss_consist_str,
                 'mean_tidbit':  mean_tidbit
                }
+
+class SOFI_Wrapper(nn.Module):
+    def __init__(self, multi=(8,8,4)):
+        super(SOFI_Wrapper, self).__init__()
+        self.flownet = IFNet(multi, esti_sofi=True)
+
+    # Simulate the interface of CRAFT.
+    def forward(self, image0, image1, iters=12, flow_init=None, upsample=True, test_mode=1):
+        # Only support test_mode = 1.
+        if test_mode != 1:
+            breakpoint()
+
+        scale_list = [4, 2, 1]        
+        imgs = torch.cat([image0, image1], dim=1)
+        flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
+            merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=0.5)
+
+        flow_sofi = flow_list[3]
+        flow_01   = flow_sofi[:, 2:4]
+        return None, flow_01
