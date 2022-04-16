@@ -244,7 +244,7 @@ class SOFI_Wrapper(IFNet):
         scale_list = [4, 2, 1]        
         imgs = torch.cat([image0, image1], dim=1)
         flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = super()(imgs, scale_list, timestep=0.5)
+            merged_teacher, loss_distill = super().forward(imgs, scale_list, timestep=0.5)
 
         flow_sofi = flow_list[3]
         flow_01   = flow_sofi[:, 2:4]
