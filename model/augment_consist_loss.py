@@ -314,9 +314,10 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_sofi, num_rift_scales, 
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
     sofi_idx = num_rift_scales
+    flow_sofi = flow_list[sofi_idx]
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, flow_sofi, shift_sigmas)
     if isinstance(tidbit, dict):
         # Unfold tidbit.

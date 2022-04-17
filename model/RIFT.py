@@ -141,8 +141,7 @@ class RIFT:
         num_rift_scales = 3
         # flow_list is of length 4.
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, flow_sofi=flow_list[num_rift_scales],
-                    num_rift_scales=num_rift_scales,
+                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=num_rift_scales,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
