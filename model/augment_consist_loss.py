@@ -163,10 +163,10 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
 
-    return img0a, img1a, gta, mask, { 'dxy': dxy, 'flow_sofi_a': flow_sofi_a } 
+    return img0a, img1a, gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a } 
 
 
-def _hflip(img0, img1, gt):
+def _hflip(img0, img1, gt, flow_sofi=None):
     # B, C, H, W
     img0a = hflip(img0.clone())
     img1a = hflip(img1.clone())
@@ -181,7 +181,7 @@ def _hflip(img0, img1, gt):
     # cv2.imwrite('0.png', temp1*255)
     return img0a, img1a, gta, mask, 'h'
 
-def _vflip(img0, img1, gt):
+def _vflip(img0, img1, gt, flow_sofi=None):
     # B, C, H, W
     img0a = vflip(img0.clone())
     img1a = vflip(img1.clone())
@@ -192,14 +192,14 @@ def _vflip(img0, img1, gt):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, gta, mask, 'v'
 
-def random_flip(img0, img1, gt, shift_sigmas=None):
+def random_flip(img0, img1, gt, flow_sofi=None, shift_sigmas=None):
     if random.random() > 0.5:
         img0a, img1a, gta, smask, sxy = _hflip(img0, img1, gt)
     else:
         img0a, img1a, gta, smask, sxy = _vflip(img0, img1, gt)
     return img0a, img1a, gta, smask, sxy
 
-def random_rotate(img0, img1, gt, shift_sigmas=None):
+def random_rotate(img0, img1, gt, flow_sofi=None, shift_sigmas=None):
     if random.random() < 1/3.:
         angle = 90
     elif random.random() < 2/3.:
@@ -314,12 +314,12 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scales, 
+def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_sofi, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
-    if aug_type == 'shift':
-        dxy, flow_sofi_a = tidbit['dxy'], tidbit['flow_sofi_a']
-        tidbit = dxy
+    if isinstance(tidbit, dict):
+        # Unfold tidbit.
+        tidbit, flow_sofi_a = tidbit['tidbit'], tidbit['flow_sofi_a']
     else:
         flow_sofi_a = None
     # sofi flow is always placed right after rift flows.
