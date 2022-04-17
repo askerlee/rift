@@ -316,7 +316,7 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_sofi, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
-    img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
+    img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, flow_sofi, shift_sigmas)
     if isinstance(tidbit, dict):
         # Unfold tidbit.
         tidbit, flow_sofi_a = tidbit['tidbit'], tidbit['flow_sofi_a']
