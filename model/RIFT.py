@@ -138,18 +138,23 @@ class RIFT:
             flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
                 merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
 
+        num_rift_scales = 3
         # flow_list is of length 4.
         args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=3,
+                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=num_rift_scales,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
+            args["aug_type"] = "shift"
             args["aug_handler"]  = random_shift
             args["flow_handler"] = flow_adder
+            args["flow_sofi"]    = flow_list[num_rift_scales]
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
+            args["aug_type"] = "flip"
             args["aug_handler"]  = random_flip
             args["flow_handler"] = flow_flipper
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
+            args["aug_type"] = "rot"
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
         else:

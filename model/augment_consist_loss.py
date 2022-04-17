@@ -37,14 +37,14 @@ def visualize_flow(flow, save_name):
 
 
 # img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
+def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
     # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
-    MAX_SHIFT = 50
+    MAX_SHIFT = 60
     dx, dy = 0, 0
 
     # Avoid (0,0) offset.
@@ -143,6 +143,18 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
     gta   = F.pad(gta,   (dx2, dx2, dy2, dy2))
 
+    if flow_sofi is not None:
+        flow10, flow01 = flow_sofi.split(2, dim=1)
+        # flow10 is cropped in the same way as img1.
+        flow10a = flow10[:, :, T2:B2, L2:R2]
+        # flow01 is cropped in the same way as img0.
+        flow01a = flow01[:, :, T1:B1, L1:R1]
+        flow_sofi_a = torch.cat([flow10a, flow01a], dim=1)
+        # flow_sofi_a is smaller than original. Pad flow_sofi_a in the same way as img0a, img1a.
+        flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
+    else:
+        flow_sofi_a = None
+
     dxy = dxy.view(1, 4, 1, 1)
 
     mask_shape = list(img0.shape)
@@ -150,7 +162,8 @@ def random_shift(img0, img1, gt, shift_sigmas=(16, 10)):
     # mask for the middle frame. Both directions have the same mask.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
-    return img0a, img1a, gta, mask, dxy
+
+    return img0a, img1a, gta, mask, { 'dxy': dxy, 'flow_sofi_a': flow_sofi_a } 
 
 
 def _hflip(img0, img1, gt):
@@ -205,7 +218,7 @@ def random_rotate(img0, img1, gt, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, gta, mask, angle
 
-
+# TODO: shift flow as well.
 def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
@@ -302,51 +315,56 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
 
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scales, 
-                           shift_sigmas, aug_handler, flow_handler, mixed_precision):
+                           shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, shift_sigmas)
+    if aug_type == 'shift':
+        dxy, flow_sofi_a = tidbit['dxy'], tidbit['flow_sofi_a']
+        tidbit = dxy
+    else:
+        flow_sofi_a = None
     # sofi flow is always placed right after rift flows.
     sofi_idx = num_rift_scales
 
-    if tidbit is not None:
-        imgsa = torch.cat((img0a, img1a), 1)
-        flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit, sofi_idx)
-        with autocast(enabled=mixed_precision):
-            flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
-                merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+    imgsa = torch.cat((img0a, img1a), 1)            
+    flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit, sofi_idx)
+    with autocast(enabled=mixed_precision):
+        flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
+            merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
 
-        loss_consist_stu = 0
-        # s enumerates all (middle frame flow) scales.
-        # Should not compute loss on 0-1 flow, as the image shifting needs 
-        # different transformation to the new flow, which involves too many 
-        # intermediate variables, and may not worth the trouble.
-        for s in range(num_rift_scales):
-            loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
+    loss_consist_stu = 0
+    # s enumerates all (middle frame flow) scales.
+    # Should not compute loss on 0-1 flow, as the image shifting needs 
+    # different transformation to the new flow, which involves too many 
+    # intermediate variables, and may not worth the trouble.
+    for s in range(num_rift_scales):
+        loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
-        # gradient can both pass to the teacher (flow of original images) 
-        # and the student (flow of the augmented images).
-        # So that they can correct each other.
-        loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
+    # gradient can both pass to the teacher (flow of original images) 
+    # and the student (flow of the augmented images).
+    # So that they can correct each other.
+    loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
 
-        if flow_list[sofi_idx] is not None:
-            loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
-            loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
-        else:
-            loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
-
-        if not isinstance(tidbit, str):
-            if isinstance(tidbit, int):
-                mean_tidbit = str(tidbit)
-            else:
-                if isinstance(tidbit, torch.Tensor):
-                    mean_tidbit = tidbit.abs().float().mean().item()
-                else:
-                    mean_tidbit = np.abs(np.array(tidbit)).astype(float).mean().item()
-                mean_tidbit = f"{mean_tidbit:.2f}"
-        else:
-            mean_tidbit = tidbit
+    if flow_list[sofi_idx] is not None:
+        # When aug is shift, flow_sofi_a is the shifted flow_sofi.
+        # Otherwise, use the original flow_sofi to compute the loss.
+        if flow_sofi_a is None:
+            flow_sofi_a = flow_list[sofi_idx]
+        loss_consist_sofi = torch.abs(flow_sofi_a - flow_list2[sofi_idx])[smask].mean()
+        loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
     else:
-        loss_consist = 0
-        mean_tidbit = 0
-        loss_distill2 = 0
+        loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
+
+    if not isinstance(tidbit, str):
+        if isinstance(tidbit, int):
+            mean_tidbit = str(tidbit)
+        else:
+            if isinstance(tidbit, torch.Tensor):
+                mean_tidbit = tidbit.abs().float().mean().item()
+            else:
+                mean_tidbit = np.abs(np.array(tidbit)).astype(float).mean().item()
+            mean_tidbit = f"{mean_tidbit:.2f}"
+    else:
+        mean_tidbit = tidbit
+
 
     return loss_consist, loss_distill2, mean_tidbit
