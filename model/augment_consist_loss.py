@@ -132,6 +132,7 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
     dx2, dy2 = abs(dx2), abs(dy2)
     # TM, BM, LM, RM: new boundary of the middle frame.
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
+    # |T1-T2| = |B1-B2| = dy, |L1-L2| = |R1-R2| = dx.
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
     gta   = gt[:, :, TM:BM, LM:RM]
@@ -327,7 +328,8 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
         # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
         # in case flow_sofi in flow_list is used outside of this function.
         flow_list_a = [ _ for _ in flow_list ]
-        flow_list_a[sofi_idx] = flow_sofi_a
+        if flow_sofi_a is not None:
+            flow_list_a[sofi_idx] = flow_sofi_a
     else:
         flow_list_a = flow_list
         flow_sofi_a = None
