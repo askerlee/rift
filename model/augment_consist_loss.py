@@ -320,13 +320,20 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_
     if isinstance(tidbit, dict):
         # Unfold tidbit.
         tidbit, flow_sofi_a = tidbit['tidbit'], tidbit['flow_sofi_a']
+        # Update flow_list with flow_sofi_a. Otherwise flow_sofi is shifted, 
+        # but not added with the offset in flow_adder.
+        # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
+        # in case flow_sofi in flow_list is used outside of this function.
+        flow_list_a = [ _ for _ in flow_list ]
+        flow_list_a[flow_sofi] = flow_sofi_a
     else:
+        flow_list_a = flow_list
         flow_sofi_a = None
     # sofi flow is always placed right after rift flows.
     sofi_idx = num_rift_scales
 
     imgsa = torch.cat((img0a, img1a), 1)            
-    flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit, sofi_idx)
+    flow_list_a, flow_teacher_a = flow_handler(flow_list_a, flow_teacher, tidbit, sofi_idx)
     with autocast(enabled=mixed_precision):
         flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
             merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
@@ -348,7 +355,7 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_
         # When aug is shift, flow_sofi_a is the shifted flow_sofi.
         # Otherwise, use the original flow_sofi to compute the loss.
         if flow_sofi_a is None:
-            flow_sofi_a = flow_list[sofi_idx]
+            flow_sofi_a = flow_list_a[sofi_idx]
         loss_consist_sofi = torch.abs(flow_sofi_a - flow_list2[sofi_idx])[smask].mean()
         loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
     else:
