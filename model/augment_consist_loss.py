@@ -316,6 +316,7 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_sofi, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
+    sofi_idx = num_rift_scales
     img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, flow_sofi, shift_sigmas)
     if isinstance(tidbit, dict):
         # Unfold tidbit.
@@ -325,12 +326,11 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, flow_
         # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
         # in case flow_sofi in flow_list is used outside of this function.
         flow_list_a = [ _ for _ in flow_list ]
-        flow_list_a[flow_sofi] = flow_sofi_a
+        flow_list_a[sofi_idx] = flow_sofi_a
     else:
         flow_list_a = flow_list
         flow_sofi_a = None
     # sofi flow is always placed right after rift flows.
-    sofi_idx = num_rift_scales
 
     imgsa = torch.cat((img0a, img1a), 1)            
     flow_list_a, flow_teacher_a = flow_handler(flow_list_a, flow_teacher, tidbit, sofi_idx)
