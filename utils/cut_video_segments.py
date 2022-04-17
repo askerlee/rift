@@ -67,8 +67,25 @@ def cut_video_timestamp(video_path:str, timestamps:list, save_root:str):
         end = str(datetime.timedelta(milliseconds=t))
         print('Cut video from {} to {}'.format(start, end))
         save_file = os.path.join(save_dir, str(i)+ext)
-        os.system("ffmpeg -i {} -ss {} -to {} -async 1 {} -y".format(video_path, start, end, save_file))
+        if os.path.exists(save_file):
+            start = end
+            continue
+        os.system("ffmpeg -i {} -ss {} -to {} -acodec copy -vcodec copy {} -y".format(video_path, start, end, save_file))
         start = end
+
+
+def cut_video_ending(video_path:str, timestamp:str):
+    v_path = video_path.split('/')[-1]
+    _, ext = os.path.splitext(v_path)
+    save_dir = video_path[:len(v_path)]
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_file = os.path.join(save_dir, 'Sintel_720_without_ending'+ext)
+    if os.path.exists(save_file):
+        return save_file
+    os.system("ffmpeg -i {} -ss {} -to {} -acodec copy -vcodec copy {} -y".format(video_path, '00:00:00', timestamp, save_file))
+    print('Saved file', save_file)
+    return save_file
 
 
 def main(args):
@@ -80,8 +97,10 @@ def main(args):
         video_path = args.video_path
     else:
         video_path = os.path.join('..', os.getcwd(), 'demo.mp4')
-    timestamps = video_scene_transition(video_path, model, loss_thres=args.loss_thres)
-    cut_video_timestamp(video_path, timestamps, args.save_root)
+    
+    cut_video = cut_video_ending(video_path, '00:12:23')
+    timestamps = video_scene_transition(cut_video, model, loss_thres=args.loss_thres)
+    cut_video_timestamp(cut_video, timestamps, args.save_root)
 
 
 if __name__=='__main__':
