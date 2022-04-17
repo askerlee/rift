@@ -353,11 +353,7 @@ def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_r
     loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
 
     if flow_list[sofi_idx] is not None:
-        # When aug is shift, flow_sofi_a is the shifted flow_sofi.
-        # Otherwise, use the original flow_sofi to compute the loss.
-        if flow_sofi_a is None:
-            flow_sofi_a = flow_list_a[sofi_idx]
-        loss_consist_sofi = torch.abs(flow_sofi_a - flow_list2[sofi_idx])[smask].mean()
+        loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
         loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
     else:
         loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
