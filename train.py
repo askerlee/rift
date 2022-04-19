@@ -75,7 +75,11 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
     if args.flowstage is not None:
         sys.path.append('../craft/core')
         import datasets
-        flow_args = edict({'stage': args.flowstage, 'shift_aug_prob': args.cons_shift_prob,
+        # Disable shift aug implemented within the flow dataset, 
+        # which needs flow groundtruth to work. 
+        # Otherwise image1 and image2 are a shifted pair, 
+        # and would be too difficult for sofi estimation.
+        flow_args = edict({'stage': args.flowstage, 'shift_aug_prob': 0,
                            'shift_sigmas': args.shift_sigmas, 'image_size': (224, 224),
                            'batch_size': args.batch_size, 'num_workers': 4, 'ddp': not args.debug
                            })
