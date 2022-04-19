@@ -105,6 +105,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                     flow_epoch += 1
                     if not args.debug:
                         flow_loader.sampler.set_epoch(flow_epoch)
+
                     flow_iter = iter(flow_loader)
                     data_blob = next(flow_iter)
                     image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
@@ -270,7 +271,7 @@ if __name__ == "__main__":
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
     parser.add_argument('--flowstage', help="determines which dataset to use for training")
-    parser.add_argument('--flowprob', type=float, default=0.3, 
+    parser.add_argument('--flowprob', type=float, default=0.2, 
                         help="Probability of using flow data")
 
     parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
