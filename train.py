@@ -95,6 +95,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
         for bi, data in enumerate(train_loader):
             # Use flow data (no middle-frame, no flow gt) to train the model.
             if flow_iter is not None and random.random() < flowprob:
+                is_flow_iter = True
                 try:
                     data_blob = next(flow_iter)
                     image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
@@ -110,6 +111,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                 mid_gt  = imgs[:, :0]   
             # Use 3 frames to train the model.
             else:
+                is_flow_iter = False
                 data_gpu = data.to(device, non_blocking=True) / 255.
                 imgs    = data_gpu[:, :6]
                 mid_gt  = data_gpu[:, 6:9]
@@ -146,8 +148,15 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                 else:
                     loss_sofi = "-"
             
+                if is_flow_iter:
+                    loss_stu  = '-     '
+                    loss_dist = '-     '
+                else:
+                    loss_stu = f"{info['loss_stu']:.4f}"
+                    loss_dist = f"{info['loss_distill']:.4f}"
+
                 print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"stu {info['loss_stu']:.4f} dist {info['loss_distill']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
+                      f"stu {loss_stu} dist {loss_dist} sofi {loss_sofi} cons {info['loss_consist_str']}",
                       flush=True)
 
             time_stamp = time.time()
