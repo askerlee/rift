@@ -81,6 +81,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                            })
 
         flow_loader = datasets.fetch_dataloader(flow_args)
+        flow_loader.sampler.set_epoch(0)
         flow_epoch = 0
         flow_iter = iter(flow_loader)
     else:
@@ -101,7 +102,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                     image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
                 except StopIteration:
                     flow_epoch += 1
-                    flow_loader.set_epoch(flow_epoch)
+                    flow_loader.sampler.set_epoch(flow_epoch)
                     flow_iter = iter(flow_loader)
                     data_blob = next(flow_iter)
                     image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
