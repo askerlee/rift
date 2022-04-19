@@ -245,6 +245,15 @@ class SOFI_Wrapper(nn.Module):
         self.flownet = flownet
         self.flownet.eval()
 
+    def load_state_dict(self, checkpoint, strict=False):
+        checkpoint2 = {}
+        for k, v in checkpoint.items():
+            if k.startswith('module.'):
+                checkpoint2[k[7:]] = v
+
+        msg = self.flownet.load_state_dict(checkpoint, strict=strict)
+        return msg
+
     # Simulate the interface of CRAFT.
     def forward(self, image0, image1, iters=12, flow_init=None, upsample=True, test_mode=1):
         # Only support test_mode = 1.
