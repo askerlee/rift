@@ -132,7 +132,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
                 writer.add_scalar('loss/distill', info['loss_distill'], step)
                 writer.add_scalar('loss/sofi', info['loss_sofi'], step)
 
-            if step % 1000 == 1 and local_rank == 0:
+            if step % 1000 == 1 and local_rank == 0 and not is_flow_iter:
                 mid_gt = (mid_gt.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 mask = (torch.cat((info['mask'], info['mask_tea']), 3).permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 pred = (pred.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
