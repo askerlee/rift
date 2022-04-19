@@ -52,7 +52,7 @@ def flow2rgb(flow_map_np):
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
 def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, 
-          esti_sofi=False, flowstage=None, flowprob=0.3):
+          esti_sofi=False, flowstage=None, flowprob=0.3, flowstartep=10):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -96,7 +96,8 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
         time_stamp = time.time()
         for bi, data in enumerate(train_loader):
             # Use flow data (no middle-frame, no flow gt) to train the model.
-            if flow_iter is not None and random.random() < flowprob:
+            # Note flowstartep is numbered from 0, the same as epoch.
+            if (flow_iter is not None) and (epoch >= flowstartep) and (random.random() < flowprob):
                 is_flow_iter = True
                 try:
                     data_blob = next(flow_iter)
@@ -273,6 +274,8 @@ if __name__ == "__main__":
     parser.add_argument('--flowstage', help="determines which dataset to use for training")
     parser.add_argument('--flowprob', type=float, default=0.2, 
                         help="Probability of using flow data")
+    parser.add_argument('--flowstartep', type=int, default=10, 
+                        help="The first epoch to begin using flow data")
 
     parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
@@ -335,5 +338,5 @@ if __name__ == "__main__":
 
     train(model, args.local_rank, args.base_lr, 
           args.aug_shift_prob, args.shift_sigmas, 
-          args.esti_sofi, args.flowstage, args.flowprob)
+          args.esti_sofi, args.flowstage, args.flowprob, args.flowstartep)
         
