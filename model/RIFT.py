@@ -251,7 +251,7 @@ class SOFI_Wrapper(nn.Module):
             if k.startswith('module.'):
                 checkpoint2[k[7:]] = v
 
-        msg = self.flownet.load_state_dict(checkpoint, strict=strict)
+        msg = self.flownet.load_state_dict(checkpoint2, strict=strict)
         return msg
 
     # Simulate the interface of CRAFT.
