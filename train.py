@@ -10,7 +10,7 @@ import argparse
 from datetime import datetime
 from easydict import EasyDict as edict
 
-from model.RIFT import RIFT
+from model.RIFT import RIFT, SOFI_Wrapper
 from dataset import *
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
@@ -52,7 +52,9 @@ def flow2rgb(flow_map_np):
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
 def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, 
-          esti_sofi=False, flowstage=None, flowprob=0.3, flowstartep=10):
+          esti_sofi=False, flow_train_stage=None, flow_val_stage=None, 
+          flowprob=0.3, flowstartep=10):
+
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -72,14 +74,14 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
     dataset_val = VimeoDataset('validation')
     val_loader = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
 
-    if args.flowstage is not None:
+    if args.flow_train_stage is not None:
         sys.path.append('../craft/core')
         import datasets
         # Disable shift aug implemented within the flow dataset, 
         # which needs flow groundtruth to work. 
         # Otherwise image1 and image2 are a shifted pair, 
         # and would be too difficult for sofi estimation.
-        flow_args = edict({'stage': args.flowstage, 'shift_aug_prob': 0,
+        flow_args = edict({'stage': args.flow_train_stage, 'shift_aug_prob': 0,
                            'shift_sigmas': args.shift_sigmas, 'image_size': (224, 224),
                            'batch_size': args.batch_size, 'num_workers': 4, 'ddp': not args.debug
                            })
@@ -174,11 +176,13 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
 
         model.save_model(checkpoint_dir, epoch, local_rank)
         if nr_eval % 1 == 0:
-            evaluate(model, val_loader, epoch, step, local_rank, writer_val, esti_sofi)
+            evaluate(model, val_loader, epoch, step, local_rank, writer_val,
+                     esti_sofi, flow_val_stage)
           
         dist.barrier()
 
-def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val, esti_sofi=False):
+def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val, 
+             esti_sofi=False, flow_val_stage=None):
     loss_stu_list       = []
     loss_distill_list   = []
     loss_tea_list       = []
@@ -240,7 +244,24 @@ def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val, esti_sof
                 imgs = np.concatenate((tea_pred[j], pred[j], mid_gt[j]), 1)[:, :, ::-1]
                 writer_val.add_image(str(j) + '/img', imgs.copy(), nr_eval, dataformats='HWC')
                 writer_val.add_image(str(j) + '/flow', flow2rgb(flow0[j][:, :, ::-1]), nr_eval, dataformats='HWC')
-    
+
+    if esti_sofi and (flow_val_stage is not None):
+        sys.path.append('../craft')
+        import evaluate
+        sofi_wrapper = model.flownet
+        orig_class = sofi_wrapper.__class__
+        sofi_wrapper.__class__ = SOFI_Wrapper
+        if flow_val_stage == 'chairs':
+            evaluate.validate_chairs(sofi_wrapper, 1)
+        if flow_val_stage == 'things':
+            evaluate.validate_things(sofi_wrapper, 1)        
+        elif flow_val_stage == 'sintel':
+            evaluate.validate_sintel(sofi_wrapper, 1)
+        elif flow_val_stage == 'kitti':
+            evaluate.validate_kitti(sofi_wrapper,  1)
+
+        model.flownet.__class__ = orig_class
+
     eval_time_interval = time.time() - time_stamp
 
     if local_rank != 0:
@@ -275,7 +296,10 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
-    parser.add_argument('--flowstage', help="determines which dataset to use for training")
+    parser.add_argument('--flowts', dest='flow_train_stage', default=None, 
+                        help="Which flow dataset to use for training")
+    parser.add_argument('--flowvs', dest='flow_val_stage',   default=None, 
+                        help="Which flow dataset to use for validation")
     parser.add_argument('--flowprob', type=float, default=0.2, 
                         help="Probability of using flow data")
     parser.add_argument('--flowstartep', type=int, default=10, 
@@ -342,5 +366,6 @@ if __name__ == "__main__":
 
     train(model, args.local_rank, args.base_lr, 
           args.aug_shift_prob, args.shift_sigmas, 
-          args.esti_sofi, args.flowstage, args.flowprob, args.flowstartep)
+          args.esti_sofi, args.flow_train_stage, args.flow_val_stage,
+          args.flowprob, args.flowstartep)
         
