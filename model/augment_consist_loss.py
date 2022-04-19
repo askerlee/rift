@@ -218,13 +218,12 @@ def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
     for i, flow in enumerate(flow_list2):
+        if flow is None:
+            flow_list2_a.append(None)
+            continue
         if i == sofi_idx:
-            if flow is None:
-                flow_list2_a.append(None)
-                continue
-            else:
-                # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
-                flow_a = flow + 2 * offset
+            # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
+            flow_a = flow + 2 * offset
         else:
             flow_a = flow + offset
 
@@ -249,7 +248,7 @@ def flow_flipper(flow_list, flow_teacher, flip_direction, sofi_idx=-1):
 
     flow_list2_a = []
     for i, flow in enumerate(flow_list2):
-        if i == sofi_idx and flow is None:
+        if flow is None:
             flow_list2_a.append(None)
             continue
 
@@ -288,7 +287,7 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
 
     flow_list2_a = []
     for i, flow in enumerate(flow_list2):
-        if i == sofi_idx and flow is None:
+        if flow is None:
             flow_list2_a.append(None)
             continue
 
