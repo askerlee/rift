@@ -251,8 +251,10 @@ class SOFI_Wrapper(IFNet):
 
         scale_list = [4, 2, 1]        
         imgs = torch.cat([image0, image1], dim=1) / 255.0
+        # Provide an empty tensor as mid_gt, just to make the model happy.
+        mid_gt  = imgs[:, :0]           
         flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = super().forward(imgs, None, scale_list)
+            merged_teacher, loss_distill = super().forward(imgs, mid_gt, scale_list)
 
         flow_sofi = flow_list[3]
         flow_01   = flow_sofi[:, 2:4]
