@@ -276,8 +276,7 @@ def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val,
     if esti_sofi and (flow_val_stage is not None):
         sys.path.append('../craft')
         import evaluate
-        sofi_wrapper = SOFI_Wrapper()
-        sofi_wrapper.pass_flownet(model.flownet)
+        sofi_wrapper = SOFI_Wrapper(model.flownet)
         if flow_val_stage == 'chairs':
             evaluate.validate_chairs(sofi_wrapper, 1)
         if flow_val_stage == 'things':

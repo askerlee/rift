@@ -240,10 +240,8 @@ class RIFT:
                }
 
 class SOFI_Wrapper(nn.Module):
-    def __init__(self):
+    def __init__(self, flownet):
         super().__init__()
-
-    def pass_flownet(self, flownet):
         self.flownet = flownet
         self.flownet.eval()
 
