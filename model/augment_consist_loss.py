@@ -236,10 +236,10 @@ def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
 def flow_flipper(flow_list, flow_teacher, flip_direction, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
     if flip_direction == 'h':
-        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_teacher.device)
+        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_list[0].device)
         OP = hflip  
     elif flip_direction == 'v':
-        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow_teacher.device)
+        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow_list[0].device)
         OP = vflip
     else:
         breakpoint()
@@ -268,10 +268,10 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     theta = np.radians(angle)
     R0 = torch.tensor([[  np.cos(theta), -np.sin(theta) ],
                        [  np.sin(theta),  np.cos(theta) ]], 
-                      dtype=flow_teacher.dtype, 
-                      device=flow_teacher.device)
+                      dtype=flow_list[0].dtype, 
+                      device=flow_list[0].device)
     # Repeat for the flow of two directions.
-    R = torch.zeros(4, 4, dtype=flow_teacher.dtype, device=flow_teacher.device)
+    R = torch.zeros(4, 4, dtype=flow_list[0].dtype, device=flow_list[0].device)
     R[:2, :2] = R0
     R[2:, 2:] = R0
 
