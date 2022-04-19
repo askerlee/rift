@@ -348,10 +348,13 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     for s in range(num_rift_scales):
         loss_consist_stu += torch.abs(flow_list_a[s] - flow_list2[s])[smask].mean()
 
-    # gradient can both pass to the teacher (flow of original images) 
-    # and the student (flow of the augmented images).
-    # So that they can correct each other.
-    loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
+    if flow_teacher_a is not None:
+        # gradient can both pass to the teacher (flow of original images) 
+        # and the student (flow of the augmented images).
+        # So that they can correct each other.
+        loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
+    else:
+        loss_consist_tea = 0
 
     if flow_list[sofi_idx] is not None:
         loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
