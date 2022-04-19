@@ -36,8 +36,8 @@ def visualize_flow(flow, save_name):
     cv2.imwrite(save_name, bgr)
 
 
-# img0, img1, gt are 4D tensors of (B, 3, 256, 448). gt are the middle frames.
-def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
+# img0, img1, mid_gt are 4D tensors of (B, 3, 256, 448). mid_gt are the middle frames.
+def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     
@@ -99,14 +99,10 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
 
     # Swapping the shifts to img0 and img1, to increase diversity.
     reversed_01 = random.random() > 0.5
-    # Make the shifted img0, img1, gt shifted copies of the same image. Performs slightly worse.
-    do_identity_shift = False
-    
+
     # dxy is the motion of the middle frame. It's always half of the relative motion between frames 0 and 1.
     if reversed_01:
         img0_bound, img1_bound = img1_bound, img0_bound
-        if do_identity_shift:
-            img0, img1, gt = img1, img1, img1
         # Shifting to img0 & img1 are swapped.
         # dxy: offsets (from old to new flow) for two directions.
         # Note the middle frame is shifted by *half* of dx, dy.
@@ -114,9 +110,7 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
         # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
         dxy = torch.tensor([-dx2, -dy2,  dx2,  dy2], dtype=float, device=img0.device)
-    else:
-        if do_identity_shift:
-            img0, img1, gt = img0, img0, img0        
+    else:     
         # Note the middle frame is shifted by *half* of dx, dy.
         # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
         # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
@@ -135,14 +129,14 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
     # |T1-T2| = |B1-B2| = dy, |L1-L2| = |R1-R2| = dx.
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
-    gta   = gt[:, :, TM:BM, LM:RM]
+    mid_gta   = mid_gt[:, :, TM:BM, LM:RM]
 
-    # Pad img0a, img1a, gta by half of (dy, dx), to the original size.
+    # Pad img0a, img1a, mid_gta by half of (dy, dx), to the original size.
     # Note the pads are ordered as (x1, x2, y1, y2) instead of (y1, y2, x1, x2). 
     # The order is different from np.pad().
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
-    gta   = F.pad(gta,   (dx2, dx2, dy2, dy2))
+    mid_gta   = F.pad(mid_gta,   (dx2, dx2, dy2, dy2))
 
     if flow_sofi is not None:
         flow10, flow01 = flow_sofi.split(2, dim=1)
@@ -164,14 +158,14 @@ def random_shift(img0, img1, gt, flow_sofi=None, shift_sigmas=(16, 10)):
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
 
-    return img0a, img1a, gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a } 
+    return img0a, img1a, mid_gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a } 
 
 
-def _hflip(img0, img1, gt, flow_sofi=None):
+def _hflip(img0, img1, mid_gt, flow_sofi=None):
     # B, C, H, W
     img0a = hflip(img0.clone())
     img1a = hflip(img1.clone())
-    gta = hflip(gt.clone())
+    mid_gta = hflip(mid_gt.clone())
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
@@ -180,27 +174,27 @@ def _hflip(img0, img1, gt, flow_sofi=None):
     # cv2.imwrite('flip0.png', temp0*255)
     # temp1 = img0[0].permute(1, 2, 0).cpu().numpy()
     # cv2.imwrite('0.png', temp1*255)
-    return img0a, img1a, gta, mask, 'h'
+    return img0a, img1a, mid_gta, mask, 'h'
 
-def _vflip(img0, img1, gt, flow_sofi=None):
+def _vflip(img0, img1, mid_gt, flow_sofi=None):
     # B, C, H, W
     img0a = vflip(img0.clone())
     img1a = vflip(img1.clone())
-    gta = vflip(gt.clone())
+    mid_gta = vflip(mid_gt.clone())
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, gta, mask, 'v'
+    return img0a, img1a, mid_gta, mask, 'v'
 
-def random_flip(img0, img1, gt, flow_sofi=None, shift_sigmas=None):
+def random_flip(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     if random.random() > 0.5:
-        img0a, img1a, gta, smask, sxy = _hflip(img0, img1, gt)
+        img0a, img1a, mid_gta, smask, sxy = _hflip(img0, img1, mid_gt)
     else:
-        img0a, img1a, gta, smask, sxy = _vflip(img0, img1, gt)
-    return img0a, img1a, gta, smask, sxy
+        img0a, img1a, mid_gta, smask, sxy = _vflip(img0, img1, mid_gt)
+    return img0a, img1a, mid_gta, smask, sxy
 
-def random_rotate(img0, img1, gt, flow_sofi=None, shift_sigmas=None):
+def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     if random.random() < 1/3.:
         angle = 90
     elif random.random() < 2/3.:
@@ -211,13 +205,13 @@ def random_rotate(img0, img1, gt, flow_sofi=None, shift_sigmas=None):
     # angle: value in degrees, counter-clockwise.
     img0a = rotate(img0.clone(), angle=angle)
     img1a = rotate(img1.clone(), angle=angle)
-    gta   = rotate(gt.clone(),   angle=angle)
+    mid_gta   = rotate(mid_gt.clone(),   angle=angle)
     # mask has the same shape as the rotated image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     # TODO: If images height != width, then rotation will crop images, and mask will contain 0s.
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, gta, mask, angle
+    return img0a, img1a, mid_gta, mask, angle
 
 # TODO: shift flow as well.
 def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
@@ -315,31 +309,37 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
     return flow_list_a, flow_teacher_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, gt, flow_list, flow_teacher, num_rift_scales, 
+def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
     sofi_idx = num_rift_scales
     flow_sofi = flow_list[sofi_idx]
-    img0a, img1a, gta, smask, tidbit = aug_handler(img0, img1, gt, flow_sofi, shift_sigmas)
+    img0a, img1a, mid_gta, smask, tidbit = aug_handler(img0, img1, mid_gt, flow_sofi, shift_sigmas)
+    # Composite tidbit is only applicable to shift.
     if isinstance(tidbit, dict):
         # Unfold tidbit.
         tidbit, flow_sofi_a = tidbit['tidbit'], tidbit['flow_sofi_a']
-        # Update flow_list with flow_sofi_a. Otherwise flow_sofi is shifted, 
-        # but not added with the offset in flow_adder.
-        # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
-        # in case flow_sofi in flow_list is used outside of this function.
-        flow_list_a = [ _ for _ in flow_list ]
+        # Update flow_list with flow_sofi_a for flow_handler. 
+        # Otherwise flow_sofi is shifted, but not added with the offset in flow_adder.
         if flow_sofi_a is not None:
+            # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
+            # Do not replace flow_sofi in flow_list, in case (the original) flow_sofi in flow_list is 
+            # used outside of this function.
+            flow_list_a = flow_list[:]
             flow_list_a[sofi_idx] = flow_sofi_a
+        else:
+            flow_list_a = flow_list
     else:
         flow_list_a = flow_list
         flow_sofi_a = None
     # sofi flow is always placed right after rift flows.
 
     imgsa = torch.cat((img0a, img1a), 1)            
+    # flow_sofi_a may have been transformed in aug_handler (only if it's shift), 
+    # and then it will be transformed in flow_handler here.
     flow_list_a, flow_teacher_a = flow_handler(flow_list_a, flow_teacher, tidbit, sofi_idx)
     with autocast(enabled=mixed_precision):
         flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
-            merged_teacher2, loss_distill2 = model(torch.cat((imgsa, gta), 1), scale_list=[4, 2, 1])
+            merged_teacher2, loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
 
     loss_consist_stu = 0
     # s enumerates all (middle frame flow) scales.

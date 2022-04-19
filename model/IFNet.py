@@ -50,7 +50,7 @@ def debug():
         dist.barrier()
 
 # Dual teaching helps slightly.
-def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
+def dual_teaching_loss(mid_gt, img_stu, flow_stu, img_tea, flow_tea):
     loss_distill = 0
     # Ws[0]: weight of teacher -> student.
     # Ws[1]: weight of student -> teacher.
@@ -66,8 +66,8 @@ def dual_teaching_loss(gt, img_stu, flow_stu, img_tea, flow_tea):
         loss_fun = nn.L1Loss(reduction='none')
 
     for i in range(2):
-        student_error = loss_fun(img_stu, gt).mean(1, True)
-        teacher_error = loss_fun(img_tea, gt).mean(1, True)
+        student_error = loss_fun(img_stu, mid_gt).mean(1, True)
+        teacher_error = loss_fun(img_tea, mid_gt).mean(1, True)
         # distill_mask indicates where the warped images according to student's prediction 
         # is worse than that of the teacher.
         # If at some points, the warped image of the teacher is better than the student,
@@ -215,7 +215,7 @@ class IFNet(nn.Module):
                                     multi=self.Ms[1])
         self.block2 =       IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
                                     multi=self.Ms[2])
-        # block_tea takes gt (the middle frame) as extra input. 
+        # block_tea takes mid_gt (the middle frame) as extra input. 
         self.block_tea =    IFBlock('block_tea',  c=block_widths[2], img_chans=6, nonimg_chans=8,
                                     multi=self.Ms[2])
         
@@ -241,13 +241,12 @@ class IFNet(nn.Module):
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
-    def forward(self, x, scale_list=[4,2,1], timestep=0.5):
-        img0 = x[:, :3]
-        img1 = x[:, 3:6]
-        # During inference, gt is an empty tensor.
-        gt = x[:, 6:] 
-        # gt is provided, i.e., in the training stage.
-        is_training = gt.shape[1] == 3
+    def forward(self, imgs, mid_gt, scale_list=[4,2,1], timestep=0.5):
+        img0 = imgs[:, :3]
+        img1 = imgs[:, 3:6]
+        # During inference, mid_gt is an empty tensor.
+        # If mid_gt is provided (in the training stage), then do distillation.
+        do_distillation = (mid_gt.shape[1] == 3)
 
         img0_warped, img1_warped = None, None
 
@@ -313,19 +312,19 @@ class IFNet(nn.Module):
             warped_imgs = (img0_warped, img1_warped)
             warped_imgs_list.append(warped_imgs)
 
-        if is_training:
+        if do_distillation:
             # multiflow and multimask_score are from block2, 
             # which always have the same M as the teacher.
             multiflow_skip       = multiflow
 
             # teacher only works at the last scale, i.e., the full image.
-            # block_tea ~ block2, except that block_tea takes gt (the middle frame) as extra input.
+            # block_tea ~ block2, except that block_tea takes mid_gt (the middle frame) as extra input.
             # block_tea input: torch.cat: [1, 13, 256, 448], flow: [1, 4, 256, 448].
             # multiflow_d / multimask_score_d: flow / mask score difference 
             # between the teacher and the student (or residual of the teacher). 
             # The teacher only predicts the residual.
             imgs   = torch.cat((img0, img0_warped, img1, img1_warped), 1)
-            nonimg = torch.cat((global_mask_score, gt), 1)
+            nonimg = torch.cat((global_mask_score, mid_gt), 1)
             multiflow_tea_d, multimask_score_tea = self.block_tea(imgs, nonimg, flow, scale=1)
 
             # Removing this residual connection makes the teacher perform much worse.                      
@@ -346,11 +345,11 @@ class IFNet(nn.Module):
             crude_img_list[i] = warped_imgs_list[i][0] * mask_list[i] + \
                                 warped_imgs_list[i][1] * (1 - mask_list[i])
                                 
-            if is_training:
+            if do_distillation:
                 # dual_teaching_loss: the student can also teach the teacher, 
                 # when the student is more accurate.
                 # Distilling both merged flow and global mask score leads to slightly worse performance.
-                loss_distill += dual_teaching_loss(gt, 
+                loss_distill += dual_teaching_loss(mid_gt, 
                                                    crude_img_list[i], flow_list[i], 
                                                    merged_tea,        flow_tea,     
                                                   )
@@ -440,4 +439,5 @@ class IFNet(nn.Module):
             refined_img_list[4] = refined_img1
 
         # flow_list, mask_list: flow and mask in 3 different scales.
+        # If mid_gt is None, loss_distill = 0.
         return flow_list, mask_list[2], crude_img_list, refined_img_list, flow_tea, merged_tea, loss_distill

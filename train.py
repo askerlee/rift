@@ -1,5 +1,5 @@
 import os
-import cv2
+import sys
 import math
 import time
 import torch
@@ -8,6 +8,7 @@ import numpy as np
 import random
 import argparse
 from datetime import datetime
+from easydict import EasyDict as edict
 
 from model.RIFT import RIFT
 from dataset import *
@@ -50,7 +51,8 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
+def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, 
+          esti_sofi=False, flowstage=None, flowprob=0.3):
     if local_rank == 0:
         writer = SummaryWriter('train')
         writer_val = SummaryWriter('validate')
@@ -63,12 +65,26 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
     dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas)
     if not args.debug:
         sampler = DistributedSampler(dataset)
-        train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
+        train_loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
     else:
-        train_data = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, shuffle=True)
-    args.steps_per_epoch = train_data.__len__()
+        train_loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, shuffle=True)
+    args.steps_per_epoch = train_loader.__len__()
     dataset_val = VimeoDataset('validation')
-    val_data = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
+    val_loader = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
+
+    if args.flowstage is not None:
+        sys.path.append('../craft/core')
+        import datasets
+        flow_args = edict({'stage': args.flowstage, 'shift_aug_prob': args.cons_shift_prob,
+                           'shift_sigmas': args.shift_sigmas, 'image_size': (224, 224),
+                           'batch_size': args.batch_size, 'num_workers': 4, 'ddp': not args.debug
+                           })
+
+        flow_loader = datasets.fetch_dataloader(flow_args)
+        flow_epoch = 0
+        flow_iter = iter(flow_loader)
+    else:
+        flow_iter = None
 
     print('training...')
     for epoch in range(args.total_epochs):
@@ -76,14 +92,32 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
             sampler.set_epoch(epoch)
 
         time_stamp = time.time()
-        for bi, data in enumerate(train_data):
+        for bi, data in enumerate(train_loader):
+            # Use flow data (no middle-frame, no flow gt) to train the model.
+            if flow_iter is not None and random.random() < flowprob:
+                try:
+                    data_blob = next(flow_iter)
+                    image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
+                except StopIteration:
+                    flow_epoch += 1
+                    flow_loader.set_epoch(flow_epoch)
+                    flow_iter = iter(flow_loader)
+                    data_blob = next(flow_iter)
+                    image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
+                
+                imgs    = torch.cat([image1, image2], dim=1) / 255.
+                # Provide an empty tensor as mid_gt, just to make the model happy.
+                mid_gt  = imgs[:, :0]   
+            # Use 3 frames to train the model.
+            else:
+                data_gpu = data.to(device, non_blocking=True) / 255.
+                imgs    = data_gpu[:, :6]
+                mid_gt  = data_gpu[:, 6:9]
+
             data_time_interval = time.time() - time_stamp
             time_stamp = time.time()
-            data_gpu = data.to(device, non_blocking=True) / 255.
-            imgs = data_gpu[:, :6]
-            gt = data_gpu[:, 6:9]
             learning_rate = get_learning_rate(base_lr, step)
-            pred, info = model.update(imgs, gt, learning_rate, training=True)
+            pred, info = model.update(imgs, mid_gt, learning_rate, training=True)
             train_time_interval = time.time() - time_stamp
             if step % 200 == 1 and local_rank == 0:
                 writer.add_scalar('learning_rate', learning_rate, step)
@@ -93,14 +127,14 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                 writer.add_scalar('loss/sofi', info['loss_sofi'], step)
 
             if step % 1000 == 1 and local_rank == 0:
-                gt = (gt.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
+                mid_gt = (mid_gt.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 mask = (torch.cat((info['mask'], info['mask_tea']), 3).permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 pred = (pred.permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 tea_pred = (info['merged_tea'].permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 flow0 = info['flow'].permute(0, 2, 3, 1).detach().cpu().numpy()
                 flow1 = info['flow_tea'].permute(0, 2, 3, 1).detach().cpu().numpy()
                 for i in range(5):
-                    imgs = np.concatenate((tea_pred[i], pred[i], gt[i]), 1)[:, :, ::-1]
+                    imgs = np.concatenate((tea_pred[i], pred[i], mid_gt[i]), 1)[:, :, ::-1]
                     writer.add_image(str(i) + '/img', imgs, step, dataformats='HWC')
                     writer.add_image(str(i) + '/flow', np.concatenate((flow2rgb(flow0[i]), flow2rgb(flow1[i])), 1), step, dataformats='HWC')
                     writer.add_image(str(i) + '/mask', mask[i], step, dataformats='HWC')
@@ -110,10 +144,10 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
                 if esti_sofi:
                     loss_sofi = f"{info['loss_sofi']:.4f}"
                 else:
-                    loss_sofi = "0"
+                    loss_sofi = "-"
             
                 print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"loss_stu {info['loss_stu']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
+                      f"stu {info['loss_stu']:.4f} dist {info['loss_distill']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
                       flush=True)
 
             time_stamp = time.time()
@@ -122,11 +156,11 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, esti_sofi):
 
         model.save_model(checkpoint_dir, epoch, local_rank)
         if nr_eval % 1 == 0:
-            evaluate(model, val_data, epoch, step, local_rank, writer_val, esti_sofi)
+            evaluate(model, val_loader, epoch, step, local_rank, writer_val, esti_sofi)
           
         dist.barrier()
 
-def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=False):
+def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val, esti_sofi=False):
     loss_stu_list       = []
     loss_distill_list   = []
     loss_tea_list       = []
@@ -139,16 +173,16 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     psnr_sofi_refined1_list = []
     time_stamp = time.time()
 
-    for i, data in enumerate(val_data):
+    for i, data in enumerate(val_loader):
         # scale images to [0, 1].
         data_gpu = data.cuda() / 255.
         imgs = data_gpu[:, :6]
-        gt = data_gpu[:, 6:9]
+        mid_gt = data_gpu[:, 6:9]
         with torch.no_grad():
-            pred, info = model.update(imgs, gt, training=False)
-            tea_pred = info['merged_tea']
-            crude_img0 = info['crude_img0']
-            crude_img1 = info['crude_img1']
+            pred, info  = model.update(imgs, mid_gt, training=False)
+            tea_pred    = info['merged_tea']
+            crude_img0  = info['crude_img0']
+            crude_img1  = info['crude_img1']
             refined_img0 = info['refined_img0']
             refined_img1 = info['refined_img1']
 
@@ -157,10 +191,10 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
         loss_distill_list.append(info['loss_distill'].cpu().numpy())
         loss_sofi_list.append(info['loss_sofi'].cpu().numpy())
 
-        for j in range(gt.shape[0]):
-            psnr = -10 * math.log10(torch.mean((gt[j] - pred[j]) * (gt[j] - pred[j])).cpu().data)
+        for j in range(mid_gt.shape[0]):
+            psnr = -10 * math.log10(torch.mean((mid_gt[j] - pred[j]) * (mid_gt[j] - pred[j])).cpu().data)
             psnr_list.append(psnr)
-            psnr = -10 * math.log10(torch.mean((tea_pred[j] - gt[j]) * (tea_pred[j] - gt[j])).cpu().data)
+            psnr = -10 * math.log10(torch.mean((tea_pred[j] - mid_gt[j]) * (tea_pred[j] - mid_gt[j])).cpu().data)
             psnr_teacher_list.append(psnr)
 
             if esti_sofi:
@@ -178,14 +212,14 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
             psnr_sofi_refined0_list.append(psnr_refined_img0)
             psnr_sofi_refined1_list.append(psnr_refined_img1)
 
-        gt = (gt.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
+        mid_gt = (mid_gt.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         pred = (pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         tea_pred = (tea_pred.permute(0, 2, 3, 1).cpu().numpy() * 255).astype('uint8')
         flow0 = info['flow'].permute(0, 2, 3, 1).cpu().numpy()
         flow1 = info['flow_tea'].permute(0, 2, 3, 1).cpu().numpy()
         if i == 0 and local_rank == 0:
             for j in range(6):
-                imgs = np.concatenate((tea_pred[j], pred[j], gt[j]), 1)[:, :, ::-1]
+                imgs = np.concatenate((tea_pred[j], pred[j], mid_gt[j]), 1)[:, :, ::-1]
                 writer_val.add_image(str(j) + '/img', imgs.copy(), nr_eval, dataformats='HWC')
                 writer_val.add_image(str(j) + '/flow', flow2rgb(flow0[j][:, :, ::-1]), nr_eval, dataformats='HWC')
     
@@ -210,7 +244,7 @@ def evaluate(model, val_data, epoch, nr_eval, local_rank, writer_val, esti_sofi=
     if esti_sofi:
         psnr_sofi = f"{psnr_sofi_crude0:.2f},{psnr_sofi_crude1:.2f}/{psnr_sofi_refined0:.2f},{psnr_sofi_refined1:.2f}"
     else:
-        psnr_sofi = "NA"
+        psnr_sofi = "-"
 
     print('ep {}, {}, stu {:.2f}, tea {:.2f} dstl {:.2f}, sofi {}'.format( \
           epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi),
@@ -223,9 +257,12 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
+    parser.add_argument('--flowstage', help="determines which dataset to use for training")
+    parser.add_argument('--flowprob', type=float, default=0.3, 
+                        help="Probability of using flow data")
+
     parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 
                         help='initial weight decay (default: 1e-3)')
-    
     parser.add_argument('--distillweight', dest='distill_loss_weight', type=float, default=0.02)
     parser.add_argument('--clip', default=0.1, type=float,
                         metavar='C', help='gradient clip to C (Set to -1 to disable)')
@@ -284,5 +321,6 @@ if __name__ == "__main__":
         model.load_model(args.cp, 1)
 
     train(model, args.local_rank, args.base_lr, 
-          args.aug_shift_prob, args.shift_sigmas, args.esti_sofi)
+          args.aug_shift_prob, args.shift_sigmas, 
+          args.esti_sofi, args.flowstage, args.flowprob)
         

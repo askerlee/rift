@@ -123,7 +123,7 @@ class RIFT:
                 merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
             return (stu_pred + refined_img_list2[2].flip(2).flip(3)) / 2
     
-    def update(self, imgs, gt, learning_rate=0, mul=1, training=True, flow_gt=None):
+    def update(self, imgs, mid_gt, learning_rate=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
             param_group['lr'] = learning_rate
             
@@ -136,11 +136,11 @@ class RIFT:
         
         with autocast(enabled=self.mixed_precision):
             flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-                merged_teacher, loss_distill = self.flownet(torch.cat((imgs, gt), 1), scale_list=[4, 2, 1])
+                merged_teacher, loss_distill = self.flownet(imgs, mid_gt, scale_list=[4, 2, 1])
 
         num_rift_scales = 3
         # flow_list is of length 4.
-        args = dict(model=self.flownet, img0=img0, img1=img1, gt=gt, 
+        args = dict(model=self.flownet, img0=img0, img1=img1, mid_gt=mid_gt, 
                     flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=num_rift_scales,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
@@ -169,12 +169,18 @@ class RIFT:
             
         only_calc_refined_loss = True
         stu_pred = refined_img_list[2]
-        loss_stu = (self.lap(stu_pred, gt)).mean()
-        if not only_calc_refined_loss:
-            for stu_crude_pred in crude_img_list[:3]:
-                # lap: laplacian pyramid loss.
-                loss_stu += (self.lap(stu_crude_pred, gt)).mean()
-            loss_stu = loss_stu / 4
+        if mid_gt.shape[1] == 3:
+            loss_stu = (self.lap(stu_pred, mid_gt)).mean()
+            if not only_calc_refined_loss:
+                for stu_crude_pred in crude_img_list[:3]:
+                    # lap: laplacian pyramid loss.
+                    loss_stu += (self.lap(stu_crude_pred, mid_gt)).mean()
+                loss_stu = loss_stu / 4
+            # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
+            loss_tea = (self.lap(merged_teacher, mid_gt)).mean()
+        else:
+            loss_stu = 0
+            loss_tea = 0
 
         if self.esti_sofi:
             refined_img0        = refined_img_list[3]
@@ -192,13 +198,11 @@ class RIFT:
 
             # crude_loss_weight = 0.01. loss on crude images is highly inaccurate. So assign a tiny weight.
             loss_sofi           = (loss_refined_img0 + loss_refined_img1 + 
-                                   (loss_crude_img0 + loss_crude_img1)* self.crude_loss_weight
+                                   (loss_crude_img0 + loss_crude_img1) * self.crude_loss_weight
                                   ) / 2
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
 
-        # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
-        loss_tea = (self.lap(merged_teacher, gt)).mean()
         if training:
             self.optimG.zero_grad()
             CONS_DISTILL_DISCOUNT = 2
@@ -248,7 +252,7 @@ class SOFI_Wrapper(IFNet):
         scale_list = [4, 2, 1]        
         imgs = torch.cat([image0, image1], dim=1) / 255.0
         flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = super().forward(imgs, scale_list, timestep=0.5)
+            merged_teacher, loss_distill = super().forward(imgs, None, scale_list)
 
         flow_sofi = flow_list[3]
         flow_01   = flow_sofi[:, 2:4]
