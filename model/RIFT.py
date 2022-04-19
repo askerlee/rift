@@ -239,9 +239,13 @@ class RIFT:
                 'mean_tidbit':  mean_tidbit
                }
 
-class SOFI_Wrapper(IFNet):
-    def __init__(self, multi=(8,8,4)):
-        super(SOFI_Wrapper, self).__init__(multi, esti_sofi=True)
+class SOFI_Wrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def pass_flownet(self, flownet):
+        self.flownet = flownet
+        self.flownet.eval()
 
     # Simulate the interface of CRAFT.
     def forward(self, image0, image1, iters=12, flow_init=None, upsample=True, test_mode=1):
@@ -254,7 +258,7 @@ class SOFI_Wrapper(IFNet):
         # Provide an empty tensor as mid_gt, just to make the model happy.
         mid_gt  = imgs[:, :0]           
         flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = super().forward(imgs, mid_gt, scale_list)
+            merged_teacher, loss_distill = self.flownet(imgs, mid_gt, scale_list)
 
         flow_sofi = flow_list[3]
         flow_01   = flow_sofi[:, 2:4]

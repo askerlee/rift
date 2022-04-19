@@ -183,6 +183,10 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
 
 def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val, 
              esti_sofi=False, flow_val_stage=None):
+
+    if local_rank != 0:
+        return
+
     loss_stu_list       = []
     loss_distill_list   = []
     loss_tea_list       = []
@@ -245,27 +249,7 @@ def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val,
                 writer_val.add_image(str(j) + '/img', imgs.copy(), nr_eval, dataformats='HWC')
                 writer_val.add_image(str(j) + '/flow', flow2rgb(flow0[j][:, :, ::-1]), nr_eval, dataformats='HWC')
 
-    if esti_sofi and (flow_val_stage is not None):
-        sys.path.append('../craft')
-        import evaluate
-        sofi_wrapper = model.flownet
-        orig_class = sofi_wrapper.__class__
-        sofi_wrapper.__class__ = SOFI_Wrapper
-        if flow_val_stage == 'chairs':
-            evaluate.validate_chairs(sofi_wrapper, 1)
-        if flow_val_stage == 'things':
-            evaluate.validate_things(sofi_wrapper, 1)        
-        elif flow_val_stage == 'sintel':
-            evaluate.validate_sintel(sofi_wrapper, 1)
-        elif flow_val_stage == 'kitti':
-            evaluate.validate_kitti(sofi_wrapper,  1)
-
-        model.flownet.__class__ = orig_class
-
     eval_time_interval = time.time() - time_stamp
-
-    if local_rank != 0:
-        return
 
     psnr = np.array(psnr_list).mean()
     psnr_teacher = np.array(psnr_teacher_list).mean()
@@ -288,6 +272,20 @@ def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val,
     print('ep {}, {}, stu {:.2f}, tea {:.2f} dstl {:.2f}, sofi {}'.format( \
           epoch, nr_eval, psnr, psnr_teacher, loss_distill, psnr_sofi),
           flush=True)
+
+    if esti_sofi and (flow_val_stage is not None):
+        sys.path.append('../craft')
+        import evaluate
+        sofi_wrapper = SOFI_Wrapper()
+        sofi_wrapper.pass_flownet(model.flownet)
+        if flow_val_stage == 'chairs':
+            evaluate.validate_chairs(sofi_wrapper, 1)
+        if flow_val_stage == 'things':
+            evaluate.validate_things(sofi_wrapper, 1)        
+        elif flow_val_stage == 'sintel':
+            evaluate.validate_sintel(sofi_wrapper, 1)
+        elif flow_val_stage == 'kitti':
+            evaluate.validate_kitti(sofi_wrapper,  1)
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
