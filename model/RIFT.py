@@ -172,7 +172,10 @@ class RIFT:
 
         if do_consist_loss:
             loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
-            loss_consist_str = f"{loss_consist:.2f}/{mean_tidbit}"
+            if args["aug_type"] == "jitter":
+                loss_consist_str = f"{loss_consist:.4f}/{mean_tidbit}"
+            else:
+                loss_consist_str = f"{loss_consist:.2f}/{mean_tidbit}"
             
         only_calc_refined_loss = True
         stu_pred = refined_img_list[2]
