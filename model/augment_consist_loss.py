@@ -218,7 +218,7 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
-    same_aug = True
+    same_aug = False
 
     if same_aug:
         if mid_gt.shape[1] == 3:
@@ -232,14 +232,10 @@ def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
             img0a, img1a = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
             mid_gta = mid_gt
     else:
-        if torch.rand(1)[0] < 0.5:
-            img0a = color_fun(img0)
-            img1a = color_fun(img1)
-        else:
-            img0a = img0
-            img1a = color_fun(img1)
+        img0a = color_fun(img0)
+        img1a = color_fun(img1)
 
-        if mid_gt.shape[1] == 3 and torch.rand(1)[0] < 0.5:
+        if mid_gt.shape[1] == 3:
             mid_gta   = color_fun(mid_gt)
         else:
             mid_gta   = mid_gt
