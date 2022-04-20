@@ -5,6 +5,7 @@ import random
 import numpy as np
 import torch.nn.functional as F
 from torchvision.transforms.functional import hflip, vflip, rotate
+from torchvision.transforms import ColorJitter
 import cv2
 
 try:
@@ -20,6 +21,8 @@ except:
 
         def __exit__(self, *args):
             pass
+
+color_fun = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
 
 def visualize_flow(flow, save_name):
     # https://stackoverflow.com/questions/28898346/visualize-optical-flow-with-color-model
@@ -215,15 +218,26 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
-    img0a = img0.clone()
-    img1a = img1.clone()
-    mid_gta = mid_gt.clone()
+    if mid_gt.shape[1] == 3:
+        pseudo_batch = torch.cat([img0, img1, mid_gt], dim=0)
+        pseudo_batch_a = color_fun(pseudo_batch)
+        img0a, img1a, mid_gta = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
+    else:
+        # mid_gt is an empty tensor.
+        pseudo_batch = torch.cat([img0, img1], dim=0)
+        pseudo_batch_a = color_fun(pseudo_batch)
+        img0a, img1a = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
+        mid_gta = mid_gt
+
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, mid_gta, mask, 'c'
-    
+    return img0a, img1a, mid_gta, mask, 'j'
+
+def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):
+    return flow_list, flow_teacher
+
 # TODO: shift flow as well.
 def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
