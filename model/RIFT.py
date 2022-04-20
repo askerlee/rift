@@ -251,7 +251,8 @@ class SOFI_Wrapper(nn.Module):
         for k, v in checkpoint.items():
             if k.startswith('module.'):
                 checkpoint2[k[7:]] = v
-
+            else:
+                checkpoint2[k] = v
         msg = self.flownet.load_state_dict(checkpoint2, strict=strict)
         return msg
 

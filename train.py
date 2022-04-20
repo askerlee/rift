@@ -297,9 +297,9 @@ if __name__ == "__main__":
                         help="Which flow dataset to use for training")
     parser.add_argument('--flowvs', dest='flow_val_stage',   default=None, 
                         help="Which flow dataset to use for validation")
-    parser.add_argument('--flowprob', type=float, default=0.2, 
+    parser.add_argument('--flowprob', type=float, default=0.1, 
                         help="Probability of using flow data")
-    parser.add_argument('--flowstartep', type=int, default=10, 
+    parser.add_argument('--flowstartep', type=int, default=20, 
                         help="The first epoch to begin using flow data")
 
     parser.add_argument('--decay', dest='weight_decay', type=float, default=1e-3, 

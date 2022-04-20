@@ -213,6 +213,17 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, mask, angle
 
+def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
+    # B, C, H, W
+    img0a = img0.clone()
+    img1a = img1.clone()
+    mid_gta = mid_gt.clone()
+    # mask has the same shape as the flipped image.
+    mask_shape = list(img0a.shape)
+    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+    return img0a, img1a, mid_gta, mask, 'c'
+    
 # TODO: shift flow as well.
 def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
     flow_list2 = flow_list + [flow_teacher]
