@@ -218,25 +218,17 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
-    img0a = color_fun(img0)
-    img1a = color_fun(img1)
-    if mid_gt.shape[1] == 3:
+    if np.random.random() < 0.5:
+        img0a = color_fun(img0)
+        img1a = color_fun(img1)
+    else:
+        img0a = img0
+        img1a = color_fun(img1)
+
+    if mid_gt.shape[1] == 3 and np.random.random() < 0.5:
         mid_gta   = color_fun(mid_gt)
     else:
         mid_gta   = mid_gt
-
-    '''
-    if mid_gt.shape[1] == 3:
-        pseudo_batch = torch.cat([img0, img1, mid_gt], dim=0)
-        pseudo_batch_a = color_fun(pseudo_batch)
-        img0a, img1a, mid_gta = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
-    else:
-        # mid_gt is an empty tensor.
-        pseudo_batch = torch.cat([img0, img1], dim=0)
-        pseudo_batch_a = color_fun(pseudo_batch)
-        img0a, img1a = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
-        mid_gta = mid_gt
-    '''
 
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
