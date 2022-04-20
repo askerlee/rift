@@ -218,14 +218,14 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
-    if np.random.random() < 0.5:
+    if torch.rand(1)[0] < 0.5:
         img0a = color_fun(img0)
         img1a = color_fun(img1)
     else:
         img0a = img0
         img1a = color_fun(img1)
 
-    if mid_gt.shape[1] == 3 and np.random.random() < 0.5:
+    if mid_gt.shape[1] == 3 and torch.rand(1)[0] < 0.5:
         mid_gta   = color_fun(mid_gt)
     else:
         mid_gta   = mid_gt
