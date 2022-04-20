@@ -242,7 +242,6 @@ def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    breakpoint()
     return img0a, img1a, mid_gta, mask, 'j'
 
 def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):
