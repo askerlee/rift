@@ -80,6 +80,7 @@ class RIFT:
         self.shift_sigmas = shift_sigmas
         self.cons_flip_prob = cons_flip_prob
         self.cons_rot_prob = cons_rot_prob
+        self.cons_jitter_prob = cons_jitter_prob
         self.consist_loss_weight = consist_loss_weight
         # Even if crude_loss_weight=0.01, it still slightly reduces performance.
         self.crude_loss_weight = 0.0   
