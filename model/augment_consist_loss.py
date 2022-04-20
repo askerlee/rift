@@ -218,6 +218,14 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
+    img0a = color_fun(img0)
+    img1a = color_fun(img1)
+    if mid_gt.shape[1] == 3:
+        mid_gta   = color_fun(mid_gt)
+    else:
+        mid_gta   = mid_gt
+
+    '''
     if mid_gt.shape[1] == 3:
         pseudo_batch = torch.cat([img0, img1, mid_gt], dim=0)
         pseudo_batch_a = color_fun(pseudo_batch)
@@ -228,11 +236,13 @@ def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
         pseudo_batch_a = color_fun(pseudo_batch)
         img0a, img1a = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
         mid_gta = mid_gt
+    '''
 
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+    breakpoint()
     return img0a, img1a, mid_gta, mask, 'j'
 
 def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):

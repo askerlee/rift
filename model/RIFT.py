@@ -158,7 +158,8 @@ class RIFT:
             args["aug_type"] = "rot"
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
-        elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
+        # Use np.random.random() here for reproducible comparison with no color jitter.
+        elif self.cons_jitter_prob > 0 and np.random.random() < self.cons_jitter_prob:
             args["aug_type"] = "jitter"
             args["aug_handler"]  = color_jitter
             args["flow_handler"] = flow_nochange
