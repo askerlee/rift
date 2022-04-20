@@ -240,11 +240,11 @@ class RIFT:
                }
 
 class SOFI_Wrapper(nn.Module):
-    def __init__(self, flownet):
+    def __init__(self, flownet, sofi_mode='dual'):
         super().__init__()
         self.flownet = flownet
         self.flownet.eval()
-        self.esti_mode = 'dual' # 'LR', 'RL', 'dual'
+        self.sofi_mode = sofi_mode # 'LR', 'RL', 'dual'
 
     def load_state_dict(self, checkpoint, strict=False):
         checkpoint2 = {}
@@ -262,13 +262,13 @@ class SOFI_Wrapper(nn.Module):
             breakpoint()
 
         scale_list = [4, 2, 1]        
-        if self.esti_mode == 'LR':
+        if self.sofi_mode == 'LR':
             imgs_LR = torch.cat([image0, image1], dim=1) / 255.0
             imgs    = imgs_LR
-        elif self.esti_mode == 'RL':
+        elif self.sofi_mode == 'RL':
             imgs_RL = torch.cat([image1, image0], dim=1) / 255.0
             imgs    = imgs_RL
-        elif self.esti_mode == 'dual':
+        elif self.sofi_mode == 'dual':
             imgs_LR = torch.cat([image0, image1], dim=1) / 255.0
             imgs_RL = torch.cat([image1, image0], dim=1) / 255.0
             # Put imgs_LR and imgs_RL in the same batch to avoid two different batches.
@@ -282,11 +282,11 @@ class SOFI_Wrapper(nn.Module):
         flow_sofi = flow_list[3]
         flow_01   = flow_sofi[:, 2:4]
         flow_10   = flow_sofi[:, 0:2]
-        if self.esti_mode == 'LR':
+        if self.sofi_mode == 'LR':
             flow = flow_01
-        elif self.esti_mode == 'RL':
+        elif self.sofi_mode == 'RL':
             flow = flow_10
-        elif self.esti_mode == 'dual':
+        elif self.sofi_mode == 'dual':
             # flow_01[:2]: 0->1 flow of images_LR, 
             # flow_10[2:]: 1->0 flow of images_RL. Still 0->1 flow, but estimated with the reverse image order.
             # Take the average of the two directions.
