@@ -158,8 +158,8 @@ class RIFT:
             args["aug_type"] = "rot"
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
-        # Use np.random.random() here for reproducible comparison with no color jitter.
-        elif self.cons_jitter_prob > 0 and np.random.random() < self.cons_jitter_prob:
+        # Use torch.rand() here for reproducible comparison with no color jitter.
+        elif self.cons_jitter_prob > 0 and torch.rand(1)[0] < self.cons_jitter_prob:
             args["aug_type"] = "jitter"
             args["aug_handler"]  = color_jitter
             args["flow_handler"] = flow_nochange
@@ -217,7 +217,7 @@ class RIFT:
             self.optimG.zero_grad()
             CONS_DISTILL_DISCOUNT = 2
             # loss_distill: L1 loss between the teacher's flow and the student's flow.
-            # loss_distill2: the distillation loss when the input is shifted. 
+            # loss_distill2: the distillation loss when the input is randomly augmented. 
             # Discounted by 2, so the effective weight is 0.01.
             loss_G = loss_stu + loss_tea + (loss_distill + loss_distill2 / CONS_DISTILL_DISCOUNT) * self.distill_loss_weight \
                      + loss_consist * self.consist_loss_weight + loss_sofi
