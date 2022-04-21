@@ -10,5 +10,5 @@ test/
 
 *.zip
 
-HD_dataset
-data/cut
+data
+*.txt
