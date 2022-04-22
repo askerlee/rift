@@ -316,7 +316,7 @@ if __name__ == "__main__":
     parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.1, type=float,
                         help='Probability of color jittering augmentation (differnt from color jitter consistency loss)')
 
-    parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.1, type=float,
+    parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.2, type=float,
                         help='Probability of shifting consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
                         help='Stds of shifts for shifting consistency loss')
