@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.2, type=float,
                         help='Probability of shifting consistency loss')
-    parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
+    parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="24,16", type=str,
                         help='Stds of shifts for shifting consistency loss')
     parser.add_argument('--consflipprob', dest='cons_flip_prob', default=0.1, type=float,
                         help='Probability of flipping consistency loss')
