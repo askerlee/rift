@@ -256,7 +256,7 @@ def flow_shifter(flow_list, flow_teacher, offset_dict, sofi_idx=-1):
                 # T, B, L, R: top, bottom, left, right boundary.
                 T0, B0, L0, R0 = img0_bound
                 T1, B1, L1, R1 = img1_bound
-                dx2, dy2 = offset[0], offset[1]
+                dx2, dy2 = offset.flatten()[0], offset.flatten()[1]
                 flow10, flow01 = flow_sofi.split(2, dim=1)
                 # flow10 is cropped in the same way as img1.
                 flow10a = flow10[:, :, T1:B1, L1:R1]
