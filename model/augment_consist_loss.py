@@ -152,7 +152,8 @@ def random_shift(img0, img1, mid_gt, shift_sigmas=(16, 10)):
 
     dxy = dxy.view(1, 4, 1, 1)
 
-    return img0a, img1a, mid_gta, mask, { 'dxy': dxy, 'img_bounds': [img0_bound, img1_bound] } 
+    return img0a, img1a, mid_gta, mask, \
+                { 'dxy': dxy, 'img_bounds': [img0_bound, img1_bound], 'pad': [dx2, dy2] } 
 
 
 def _hflip(img0, img1, mid_gt):
@@ -241,7 +242,7 @@ def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):
     return flow_list, flow_teacher
 
 def flow_shifter(flow_list, flow_teacher, offset_dict, sofi_idx=-1):
-    offset, img_bounds = offset_dict['dxy'], offset_dict['img_bounds']
+    offset, img_bounds, pad_xy = offset_dict['dxy'], offset_dict['img_bounds'], offset_dict['pad']
 
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
@@ -256,7 +257,7 @@ def flow_shifter(flow_list, flow_teacher, offset_dict, sofi_idx=-1):
                 # T, B, L, R: top, bottom, left, right boundary.
                 T0, B0, L0, R0 = img0_bound
                 T1, B1, L1, R1 = img1_bound
-                dx2, dy2 = offset.flatten()[0], offset.flatten()[1]
+                dx2, dy2 = pad_xy
                 flow10, flow01 = flow_sofi.split(2, dim=1)
                 # flow10 is cropped in the same way as img1.
                 flow10a = flow10[:, :, T1:B1, L1:R1]
