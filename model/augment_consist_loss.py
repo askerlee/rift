@@ -362,7 +362,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     imgsa = torch.cat((img0a, img1a), 1)            
     # flow_sofi_a may have been transformed in aug_handler (only if it's shift), 
     # and then it will be transformed in flow_handler here.
-    flow_list_a, flow_teacher_a = flow_handler(flow_list_a, flow_teacher, tidbit, sofi_idx)
+    flow_list_a, flow_teacher_a = flow_handler(flow_list, flow_teacher, tidbit, sofi_idx)
     if aug_type == 'shift':
         tidbit = tidbit['dxy']
 
