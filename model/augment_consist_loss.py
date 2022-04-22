@@ -159,7 +159,7 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
         flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
     else:
         flow_sofi_a = None
-        mask_sofi = None
+    mask_sofi = None
 
     dxy = dxy.view(1, 4, 1, 1)
 
