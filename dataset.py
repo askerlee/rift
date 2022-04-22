@@ -220,7 +220,10 @@ class VimeoDataset(Dataset):
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
         gt = torch.from_numpy(gt.copy()).permute(2, 0, 1)
-        imgs = torch.cat((img0, img1, gt), 0)
         if self.aug_jitter_prob > 0 and random.random() < self.aug_jitter_prob:
+            imgs = torch.stack((img0, img1, gt), 0)
             imgs = self.color_fun(imgs)
+            img0, img1, gt = imgs[0], imgs[1], imgs[2]
+
+        imgs = torch.cat((img0, img1, gt), 0)    
         return imgs
