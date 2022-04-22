@@ -158,8 +158,7 @@ class RIFT:
             args["aug_type"] = "rot"
             args["aug_handler"]  = random_rotate
             args["flow_handler"] = flow_rotator
-        # Use torch.rand() here for reproducible comparison with no color jitter.
-        elif self.cons_jitter_prob > 0 and torch.rand(1)[0] < self.cons_jitter_prob:
+        elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
             args["aug_type"] = "jitter"
             args["aug_handler"]  = color_jitter
             args["flow_handler"] = flow_nochange
