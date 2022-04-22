@@ -149,7 +149,7 @@ class RIFT:
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
             args["aug_type"] = "shift"
             args["aug_handler"]  = random_shift
-            args["flow_handler"] = flow_adder
+            args["flow_handler"] = flow_shifter
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
             args["aug_type"] = "flip"
             args["aug_handler"]  = random_flip

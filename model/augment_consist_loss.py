@@ -40,7 +40,7 @@ def visualize_flow(flow, save_name):
 
 
 # img0, img1, mid_gt are 4D tensors of (B, 3, 256, 448). mid_gt are the middle frames.
-def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
+def random_shift(img0, img1, mid_gt, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     
@@ -120,16 +120,16 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
         dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
     # T, B, L, R: top, bottom, left, right boundary.
-    T1, B1, L1, R1 = img0_bound
-    T2, B2, L2, R2 = img1_bound
+    T0, B0, L0, R0 = img0_bound
+    T1, B1, L1, R1 = img1_bound
     # For the middle frame, the numbers of cropped pixels at the left and right, or the up and the bottom are equal.
     # Therefore, after padding, the middle frame doesn't shift. It's just cropped at the center and 
     # zero-padded at the four sides.
     # This property makes it easy to compare the flow before and after shifting.
     dx2, dy2 = abs(dx2), abs(dy2)
-    # |T1-T2| = |B1-B2| = dy, |L1-L2| = |R1-R2| = dx.
-    img0a = img0[:, :, T1:B1, L1:R1]
-    img1a = img1[:, :, T2:B2, L2:R2]
+    # |T0-T1| = |B0-B1| = dy, |L0-L1| = |R0-R1| = dx.
+    img0a = img0[:, :, T0:B0, L0:R0]
+    img1a = img1[:, :, T1:B1, L1:R1]
     # TM, BM, LM, RM: new boundary (valid area) of the middle frame. 
     # The invalid boundary is half of the invalid boundary of img0 and img1.
     TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
@@ -144,29 +144,18 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
 
     mask_shape = list(img0.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    # mask removes the padded zeros.
     # mask for the middle frame. Both directions have the same mask.
+    # The same mask is used for flow_sofi_a.
     mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
     mask[:, :, TM:BM, LM:RM] = True
 
-    if flow_sofi is not None:
-        flow10, flow01 = flow_sofi.split(2, dim=1)
-        # flow10 is cropped in the same way as img1.
-        flow10a = flow10[:, :, T2:B2, L2:R2]
-        # flow01 is cropped in the same way as img0.
-        flow01a = flow01[:, :, T1:B1, L1:R1]
-        flow_sofi_a = torch.cat([flow10a, flow01a], dim=1)
-        # flow_sofi_a is smaller than original. Pad flow_sofi_a in the same way as img0a, img1a.
-        flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
-    else:
-        flow_sofi_a = None
-    mask_sofi = None
-
     dxy = dxy.view(1, 4, 1, 1)
 
-    return img0a, img1a, mid_gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a, 'mask_sofi': mask_sofi } 
+    return img0a, img1a, mid_gta, mask, { 'dxy': dxy, 'img_bounds': [img0_bound, img1_bound] } 
 
 
-def _hflip(img0, img1, mid_gt, flow_sofi=None):
+def _hflip(img0, img1, mid_gt):
     # B, C, H, W
     img0a = hflip(img0.clone())
     img1a = hflip(img1.clone())
@@ -181,7 +170,7 @@ def _hflip(img0, img1, mid_gt, flow_sofi=None):
     # cv2.imwrite('0.png', temp1*255)
     return img0a, img1a, mid_gta, mask, 'h'
 
-def _vflip(img0, img1, mid_gt, flow_sofi=None):
+def _vflip(img0, img1, mid_gt):
     # B, C, H, W
     img0a = vflip(img0.clone())
     img1a = vflip(img1.clone())
@@ -192,14 +181,14 @@ def _vflip(img0, img1, mid_gt, flow_sofi=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, mask, 'v'
 
-def random_flip(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
+def random_flip(img0, img1, mid_gt, shift_sigmas=None):
     if random.random() > 0.5:
         img0a, img1a, mid_gta, smask, sxy = _hflip(img0, img1, mid_gt)
     else:
         img0a, img1a, mid_gta, smask, sxy = _vflip(img0, img1, mid_gt)
     return img0a, img1a, mid_gta, smask, sxy
 
-def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
+def random_rotate(img0, img1, mid_gt, shift_sigmas=None):
     if random.random() < 1/3.:
         angle = 90
     elif random.random() < 2/3.:
@@ -218,7 +207,7 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, mask, angle
 
-def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
+def color_jitter(img0, img1, mid_gt, shift_sigmas=None):
     # B, C, H, W
     same_aug = True
 
@@ -251,8 +240,9 @@ def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):
     return flow_list, flow_teacher
 
-# TODO: shift flow as well.
-def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
+def flow_shifter(flow_list, flow_teacher, offset_dict, sofi_idx=-1):
+    offset, img_bounds = offset_dict['dxy'], offset_dict['img_bounds']
+
     flow_list2 = flow_list + [flow_teacher]
     flow_list2_a = []
     for i, flow in enumerate(flow_list2):
@@ -260,12 +250,29 @@ def flow_adder(flow_list, flow_teacher, offset, sofi_idx=-1):
             flow_list2_a.append(None)
             continue
         if i == sofi_idx:
+            flow_sofi = flow
+            if flow_sofi is not None:
+                img0_bound, img1_bound = img_bounds
+                # T, B, L, R: top, bottom, left, right boundary.
+                T0, B0, L0, R0 = img0_bound
+                T1, B1, L1, R1 = img1_bound
+                dx2, dy2 = offset[0], offset[1]
+                flow10, flow01 = flow_sofi.split(2, dim=1)
+                # flow10 is cropped in the same way as img1.
+                flow10a = flow10[:, :, T1:B1, L1:R1]
+                # flow01 is cropped in the same way as img0.
+                flow01a = flow01[:, :, T0:B0, L0:R0]
+                flow_sofi_a = torch.cat([flow10a, flow01a], dim=1)
+                flow_sofi_a = flow_sofi_a + 2 * offset
+                # flow_sofi_a is smaller than original. Pad flow_sofi_a in the same way as img0a, img1a.
+                flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
+            else:
+                flow_sofi_a = None
             # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
-            flow_a = flow + 2 * offset
+            flow_list2_a.append(flow_sofi_a)
         else:
             flow_a = flow + offset
-
-        flow_list2_a.append(flow_a)
+            flow_list2_a.append(flow_a)
     
     flow_list_a, flow_teacher_a = flow_list2_a[:-1], flow_list2_a[-1]
     return flow_list_a, flow_teacher_a
@@ -349,31 +356,16 @@ def flow_rotator(flow_list, flow_teacher, angle, sofi_idx=-1):
 def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, num_rift_scales, 
                            shift_sigmas, aug_type, aug_handler, flow_handler, mixed_precision):
     sofi_idx = num_rift_scales
-    flow_sofi = flow_list[sofi_idx]
-    img0a, img1a, mid_gta, smask, tidbit = aug_handler(img0, img1, mid_gt, flow_sofi, shift_sigmas)
-    # Composite tidbit is only applicable to shift.
-    if isinstance(tidbit, dict):
-        # Unfold tidbit.
-        tidbit, flow_sofi_a = tidbit['tidbit'], tidbit['flow_sofi_a']
-        # Update flow_list with flow_sofi_a for flow_handler. 
-        # Otherwise flow_sofi is shifted, but not added with the offset in flow_adder.
-        if flow_sofi_a is not None:
-            # Copy to a new list flow_list_a, to keep the original flow_sofi in the original flow_list,
-            # Do not replace flow_sofi in flow_list, in case (the original) flow_sofi in flow_list is 
-            # used outside of this function.
-            flow_list_a = flow_list[:]
-            flow_list_a[sofi_idx] = flow_sofi_a
-        else:
-            flow_list_a = flow_list
-    else:
-        flow_list_a = flow_list
-        flow_sofi_a = None
-    # sofi flow is always placed right after rift flows.
+    # When aug_type is shift, tidbit is a dict.
+    img0a, img1a, mid_gta, smask, tidbit = aug_handler(img0, img1, mid_gt, shift_sigmas)
 
     imgsa = torch.cat((img0a, img1a), 1)            
     # flow_sofi_a may have been transformed in aug_handler (only if it's shift), 
     # and then it will be transformed in flow_handler here.
     flow_list_a, flow_teacher_a = flow_handler(flow_list_a, flow_teacher, tidbit, sofi_idx)
+    if aug_type == 'shift':
+        tidbit = tidbit['dxy']
+
     with autocast(enabled=mixed_precision):
         flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
             merged_teacher2, loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
@@ -411,6 +403,5 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
             mean_tidbit = f"{mean_tidbit:.2f}"
     else:
         mean_tidbit = tidbit
-
 
     return loss_consist, loss_distill2, mean_tidbit
