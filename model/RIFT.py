@@ -251,7 +251,7 @@ class SOFI_Wrapper(nn.Module):
         super().__init__()
         self.flownet = flownet
         self.flownet.eval()
-        self.sofi_mode = sofi_mode # 'LR', 'RL', 'dual'
+        self.sofi_mode = sofi_mode # 'LR', 'RL', 'dual', 'mid'
 
     def load_state_dict(self, checkpoint, strict=False):
         checkpoint2 = {}
@@ -288,6 +288,8 @@ class SOFI_Wrapper(nn.Module):
             merged_teacher, loss_distill = self.flownet(imgs, mid_gt, scale_list)
 
         flow_sofi = flow_list[3]
+        # flow_list[2] * 2 is the mid flow, which is around 0.1 AEPE worse than flow_sofi.
+        #flow_sofi = flow_list[2] * 2
         flow_01   = flow_sofi[:, 2:4]
         flow_10   = flow_sofi[:, 0:2]
         if self.sofi_mode == 'LR':

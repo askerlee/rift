@@ -51,9 +51,9 @@ def flow2rgb(flow_map_np):
 
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
-def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, 
+def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_prob,
           esti_sofi=False, flow_train_stage=None, flow_val_stage=None, 
-          flowprob=0.3, flowstartep=10):
+          flowprob=0, flowstartep=20):
 
     if local_rank == 0:
         writer = SummaryWriter('train')
@@ -64,7 +64,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas,
 
     step = 0
     nr_eval = 0
-    dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas)
+    dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
     if not args.debug:
         sampler = DistributedSampler(dataset)
         train_loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
@@ -297,7 +297,7 @@ if __name__ == "__main__":
                         help="Which flow dataset to use for training")
     parser.add_argument('--flowvs', dest='flow_val_stage',   default=None, 
                         help="Which flow dataset to use for validation")
-    parser.add_argument('--flowprob', type=float, default=0.1, 
+    parser.add_argument('--flowprob', type=float, default=0, 
                         help="Probability of using flow data")
     parser.add_argument('--flowstartep', type=int, default=20, 
                         help="The first epoch to begin using flow data")
@@ -312,6 +312,9 @@ if __name__ == "__main__":
                         help='Output M groups of flow')
     parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
+    parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.1, type=float,
+                        help='Probability of color jittering augmentation (differnt from color jitter consistency loss)')
+
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.1, type=float,
                         help='Probability of shifting consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="16,10", type=str,
@@ -366,7 +369,7 @@ if __name__ == "__main__":
         model.load_model(args.cp, 1)
 
     train(model, args.local_rank, args.base_lr, 
-          args.aug_shift_prob, args.shift_sigmas, 
+          args.aug_shift_prob, args.shift_sigmas, args.aug_jitter_prob,
           args.esti_sofi, args.flow_train_stage, args.flow_val_stage,
           args.flowprob, args.flowstartep)
         

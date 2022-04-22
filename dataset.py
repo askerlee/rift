@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Dataset
 import imgaug.augmenters as iaa
 import imgaug as ia
 from torchvision import transforms
+from torchvision.transforms import ColorJitter
 
 cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -80,7 +81,7 @@ def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
     return img0a, img1a, gta
 
 class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8)):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0):
         self.batch_size = batch_size
         self.dataset_name = dataset_name        
         self.h = 256
@@ -137,9 +138,11 @@ class VimeoDataset(Dataset):
                             # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
                         ])
                         
-        self.aug_shift_prob = aug_shift_prob
-        self.shift_sigmas = shift_sigmas
-                        
+        self.aug_shift_prob     = aug_shift_prob
+        self.shift_sigmas       = shift_sigmas
+        self.aug_jitter_prob    = aug_jitter_prob
+        self.color_fun          = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
+                
     def __len__(self):
         return len(self.meta_data)
 
@@ -217,4 +220,7 @@ class VimeoDataset(Dataset):
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
         gt = torch.from_numpy(gt.copy()).permute(2, 0, 1)
-        return torch.cat((img0, img1, gt), 0)
+        imgs = torch.cat((img0, img1, gt), 0)
+        if self.aug_jitter_prob > 0 and random.random() < self.aug_jitter_prob:
+            imgs = self.color_fun(imgs)
+        return imgs

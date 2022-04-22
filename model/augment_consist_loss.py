@@ -47,7 +47,7 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
     # Make sure at most one of dx, dy is large. Otherwise the shift is too difficult.
-    MAX_SHIFT = 60
+    MAX_SHIFT = 200 #60
     dx, dy = 0, 0
 
     # Avoid (0,0) offset.
@@ -127,11 +127,12 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
     # zero-padded at the four sides.
     # This property makes it easy to compare the flow before and after shifting.
     dx2, dy2 = abs(dx2), abs(dy2)
-    # TM, BM, LM, RM: new boundary of the middle frame.
-    TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     # |T1-T2| = |B1-B2| = dy, |L1-L2| = |R1-R2| = dx.
     img0a = img0[:, :, T1:B1, L1:R1]
     img1a = img1[:, :, T2:B2, L2:R2]
+    # TM, BM, LM, RM: new boundary (valid area) of the middle frame. 
+    # The invalid boundary is half of the invalid boundary of img0 and img1.
+    TM, BM, LM, RM = dy2, H - dy2, dx2, W - dx2
     mid_gta   = mid_gt[:, :, TM:BM, LM:RM]
 
     # Pad img0a, img1a, mid_gta by half of (dy, dx), to the original size.
@@ -140,6 +141,12 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
     img0a = F.pad(img0a, (dx2, dx2, dy2, dy2))
     img1a = F.pad(img1a, (dx2, dx2, dy2, dy2))
     mid_gta   = F.pad(mid_gta,   (dx2, dx2, dy2, dy2))
+
+    mask_shape = list(img0.shape)
+    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    # mask for the middle frame. Both directions have the same mask.
+    mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
+    mask[:, :, TM:BM, LM:RM] = True
 
     if flow_sofi is not None:
         flow10, flow01 = flow_sofi.split(2, dim=1)
@@ -152,16 +159,11 @@ def random_shift(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=(16, 10)):
         flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
     else:
         flow_sofi_a = None
+        mask_sofi = None
 
     dxy = dxy.view(1, 4, 1, 1)
 
-    mask_shape = list(img0.shape)
-    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
-    # mask for the middle frame. Both directions have the same mask.
-    mask = torch.zeros(mask_shape, device=img0.device, dtype=bool)
-    mask[:, :, TM:BM, LM:RM] = True
-
-    return img0a, img1a, mid_gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a } 
+    return img0a, img1a, mid_gta, mask, { 'tidbit': dxy, 'flow_sofi_a': flow_sofi_a, 'mask_sofi': mask_sofi } 
 
 
 def _hflip(img0, img1, mid_gt, flow_sofi=None):
@@ -218,7 +220,7 @@ def random_rotate(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
 
 def color_jitter(img0, img1, mid_gt, flow_sofi=None, shift_sigmas=None):
     # B, C, H, W
-    same_aug = False
+    same_aug = True
 
     if same_aug:
         if mid_gt.shape[1] == 3:
