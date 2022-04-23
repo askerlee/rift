@@ -148,10 +148,6 @@ class RIFT:
             args["aug_type"]        = "shift"
             args["aug_handler"]     = random_shift
             args["flow_handler"]    = flow_shifter
-        elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
-            args["aug_type"]        = "erase"
-            args["aug_handler"]     = random_erase
-            args["flow_handler"]    = flow_nochange
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
             args["aug_type"]        = "flip"
             args["aug_handler"]     = random_flip
@@ -163,6 +159,10 @@ class RIFT:
         elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
             args["aug_type"]        = "jitter"
             args["aug_handler"]     = color_jitter
+            args["flow_handler"]    = flow_nochange
+        elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
+            args["aug_type"]        = "erase"
+            args["aug_handler"]     = random_erase
             args["flow_handler"]    = flow_nochange
         else:
             loss_consist        = 0
