@@ -258,7 +258,7 @@ def random_erase(img0, img1, mid_gt, shift_sigmas=None):
     mean_color = changed_img.mean(dim=3, keepdim=True).mean(dim=2, keepdim=True)
     erased_pixel_count = 0
 
-    for _ in range(np.random.randint(1, 3)):
+    for _ in range(np.random.randint(2, 4)):
         x0 = np.random.randint(0, wd)
         y0 = np.random.randint(0, ht)
         dx = np.random.randint(hw_bounds[0], hw_bounds[1])
