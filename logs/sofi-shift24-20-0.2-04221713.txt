@@ -146,3 +146,7 @@ ep 70, 108133, stu 35.63, tea 39.28 dstl 0.22, sofi 30.30,30.02/39.19,38.57
 Validation Chairs EPE: 4.910713
 ep 71, 109656, stu 35.68, tea 39.32 dstl 0.22, sofi 30.26,30.01/39.15,38.92
 Validation Chairs EPE: 4.932797
+ep 72, 111179, stu 35.68, tea 39.34 dstl 0.22, sofi 30.28,30.01/39.19,39.02
+Validation Chairs EPE: 4.790572
+ep 73, 112702, stu 35.65, tea 39.21 dstl 0.22, sofi 30.29,30.03/38.98,38.58
+
