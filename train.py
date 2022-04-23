@@ -326,6 +326,8 @@ if __name__ == "__main__":
                         help='Probability of rotating consistency loss')
     parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.2, type=float,
                         help='Probability of color jitter consistency loss')
+    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.5, type=float,
+                        help='Probability of block erasing consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
@@ -352,18 +354,24 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.benchmark = True
+
+    consistency_args = {
+        'shift_sigmas': args.shift_sigmas,
+        'shift_prob': args.cons_shift_prob,
+        'flip_prob': args.cons_flip_prob,
+        'rot_prob': args.cons_rot_prob,
+        'jitter_prob': args.cons_jitter_prob,
+        'erase_prob': args.cons_erase_prob,
+        'consist_loss_weight': args.consist_loss_weight,
+    }
+
     model = RIFT(args.local_rank, 
                   esti_sofi=args.esti_sofi,
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
                   multi=args.multi,
                   weight_decay=args.weight_decay,
-                  cons_shift_prob=args.cons_shift_prob, 
-                  shift_sigmas=args.shift_sigmas,
-                  cons_flip_prob=args.cons_flip_prob,
-                  cons_rot_prob=args.cons_rot_prob,
-                  cons_jitter_prob=args.cons_jitter_prob,
-                  consist_loss_weight=args.consist_loss_weight,
+                  consistency_args=consistency_args,
                   mixed_precision=args.mixed_precision,
                   debug=args.debug)
     if args.cp is not None:

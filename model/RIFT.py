@@ -38,12 +38,7 @@ class RIFT:
                  distill_loss_weight=0.02, 
                  multi=(8,8,4), 
                  weight_decay=1e-3,
-                 cons_shift_prob=0,
-                 shift_sigmas=(16,10),
-                 cons_flip_prob=0,
-                 cons_rot_prob=0,
-                 cons_jitter_prob=0,
-                 consist_loss_weight=0.02,
+                 consistency_args={},
                  mixed_precision=False,
                  debug=False):
 
@@ -76,12 +71,15 @@ class RIFT:
                                find_unused_parameters=True)
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
-        self.cons_shift_prob = cons_shift_prob
-        self.shift_sigmas = shift_sigmas
-        self.cons_flip_prob = cons_flip_prob
-        self.cons_rot_prob = cons_rot_prob
-        self.cons_jitter_prob = cons_jitter_prob
-        self.consist_loss_weight = consist_loss_weight
+        self.cons_shift_prob    = consistency_args.get("shift_prob", 0.2)
+        self.shift_sigmas       = consistency_args.get("shift_sigmas", [24, 16])
+        self.cons_flip_prob     = consistency_args.get("flip_prob", 0.1)
+        self.cons_rot_prob      = consistency_args.get("rot_prob", 0.1)
+        self.cons_jitter_prob   = consistency_args.get("jitter_prob", 0.2)
+        self.cons_erase_prob    = consistency_args.get("erase_prob", 0.5)
+        self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
+        self.consistency_args   = consistency_args
+
         # Even if crude_loss_weight=0.01, it still slightly reduces performance.
         self.crude_loss_weight = 0.0   
         self.mixed_precision = mixed_precision
@@ -147,27 +145,31 @@ class RIFT:
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
-            args["aug_type"] = "shift"
-            args["aug_handler"]  = random_shift
-            args["flow_handler"] = flow_shifter
+            args["aug_type"]        = "shift"
+            args["aug_handler"]     = random_shift
+            args["flow_handler"]    = flow_shifter
+        elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
+            args["aug_type"]        = "erase"
+            args["aug_handler"]     = random_erase
+            args["flow_handler"]    = flow_nochange
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
-            args["aug_type"] = "flip"
-            args["aug_handler"]  = random_flip
-            args["flow_handler"] = flow_flipper
+            args["aug_type"]        = "flip"
+            args["aug_handler"]     = random_flip
+            args["flow_handler"]    = flow_flipper
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
-            args["aug_type"] = "rot"
-            args["aug_handler"]  = random_rotate
-            args["flow_handler"] = flow_rotator
+            args["aug_type"]        = "rot"
+            args["aug_handler"]     = random_rotate
+            args["flow_handler"]    = flow_rotator
         elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
-            args["aug_type"] = "jitter"
-            args["aug_handler"]  = color_jitter
-            args["flow_handler"] = flow_nochange
+            args["aug_type"]        = "jitter"
+            args["aug_handler"]     = color_jitter
+            args["flow_handler"]    = flow_nochange
         else:
-            loss_consist = 0
-            mean_tidbit = 0
-            loss_distill2 = 0
-            loss_consist_str = '-'
-            do_consist_loss = False
+            loss_consist        = 0
+            mean_tidbit         = 0
+            loss_distill2       = 0
+            loss_consist_str    = '-'
+            do_consist_loss     = False
 
         if do_consist_loss:
             loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)

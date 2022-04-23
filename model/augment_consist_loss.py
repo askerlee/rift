@@ -241,6 +241,47 @@ def color_jitter(img0, img1, mid_gt, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, mask, 'j'
 
+# B, C, H, W
+def random_erase(img0, img1, mid_gt, shift_sigmas=None):
+    # Randomly choose a rectangle region to erase.
+    # Erased height/width is within this range.
+    hw_bounds = [50, 100]
+
+    ht, wd = img0.shape[2:]
+    if np.random.rand() < 0.5:
+        changed_img = img0.clone()
+        changed_img_idx = 0
+    else:
+        changed_img = img1.clone()
+        changed_img_idx = 1
+    # mean_color: B, C
+    mean_color = changed_img.mean(dim=3).mean(dim=2)
+    erased_pixel_count = 0
+
+    for _ in range(np.random.randint(1, 3)):
+        x0 = np.random.randint(0, wd)
+        y0 = np.random.randint(0, ht)
+        dx = np.random.randint(hw_bounds[0], hw_bounds[1])
+        dy = np.random.randint(hw_bounds[0], hw_bounds[1])
+        changed_img[:, :, y0:y0+dy, x0:x0+dx] = mean_color
+        # y0+dy, x0+dx may go out of bounds. Therefore erased pixel count may be < dx*dy.
+        erased_pixel_count += changed_img[0, 0, y0:y0+dy, x0:x0+dx].numel()
+
+    if changed_img_idx == 0:
+        img0a = changed_img
+        img1a = img1
+        mid_gta = mid_gt
+    else:
+        img0a = img0
+        img1a = changed_img
+        mid_gta = mid_gt
+
+    # mask has the same shape as the flipped image.
+    mask_shape = list(img0a.shape)
+    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+    return img0a, img1a, mid_gta, mask, f'e{erased_pixel_count}'
+
 def flow_nochange(flow_list, flow_teacher, tidbit, sofi_idx=-1):
     return flow_list, flow_teacher
 
