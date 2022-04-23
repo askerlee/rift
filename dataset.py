@@ -13,8 +13,8 @@ from torchvision.transforms import ColorJitter
 cv2.setNumThreads(1)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# img0, img1, gt are 3D np arrays of (H, W, 3).
-def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
+# img0, img1, mid_gt are 3D np arrays of (H, W, 3).
+def random_shift(img0, img1, mid_gt, shift_sigmas=(10,8)):
     u_shift_sigma, v_shift_sigma = shift_sigmas
     # 90% of dx and dy are within [-2*u_shift_sigma, 2*u_shift_sigma] 
     # and [-2*v_shift_sigma, 2*v_shift_sigma].
@@ -69,16 +69,16 @@ def random_shift(img0, img1, gt, shift_sigmas=(10,8)):
     # TM, BM, LM, RM: new boundary of the middle frame.
     TM, BM, LM, RM = dy2, img0.shape[0] - dy2, dx2, img0.shape[1] - dx2
 
-    img0a = img0[T1:B1, L1:R1]
-    img1a = img1[T2:B2, L2:R2]
-    gta   = gt[TM:BM, LM:RM]
+    img0a   = img0[T1:B1, L1:R1]
+    img1a   = img1[T2:B2, L2:R2]
+    mid_gta = mid_gt[TM:BM, LM:RM]
 
-    # Pad img0a, img1a, gta by half of (dy, dx), to the original size.
+    # Pad img0a, img1a, mid_gta by half of (dy, dx), to the original size.
     img0a   = np.pad(img0a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
     img1a   = np.pad(img1a,  ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
-    gta     = np.pad(gta,    ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
+    mid_gta = np.pad(mid_gta,    ((dy2, dy2), (dx2, dx2), (0, 0)), 'constant')
 
-    return img0a, img1a, gta
+    return img0a, img1a, mid_gta
 
 class VimeoDataset(Dataset):
     def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0):
@@ -141,6 +141,7 @@ class VimeoDataset(Dataset):
         self.aug_shift_prob     = aug_shift_prob
         self.shift_sigmas       = shift_sigmas
         self.aug_jitter_prob    = aug_jitter_prob
+        self.asym_jitter_prob   = 0.2
         self.color_fun          = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
                 
     def __len__(self):
@@ -156,14 +157,14 @@ class VimeoDataset(Dataset):
             self.meta_data = self.trainlist[cnt:]
             
     # random crop
-    def aug(self, img0, gt, img1, h, w):
+    def aug(self, img0, mid_gt, img1, h, w):
         ih, iw, _ = img0.shape
         x = np.random.randint(0, ih - h + 1)
         y = np.random.randint(0, iw - w + 1)
         img0 = img0[x:x+h, y:y+w, :]
         img1 = img1[x:x+h, y:y+w, :]
-        gt = gt[x:x+h, y:y+w, :]
-        return img0, gt, img1
+        mid_gt = mid_gt[x:x+h, y:y+w, :]
+        return img0, mid_gt, img1
 
     def getimg(self, index):
         imgpath = os.path.join(self.image_root, self.meta_data[index])
@@ -171,59 +172,69 @@ class VimeoDataset(Dataset):
 
         # Load images
         img0 = cv2.imread(imgpaths[0])
-        gt = cv2.imread(imgpaths[1])
+        mid_gt = cv2.imread(imgpaths[1])
         img1 = cv2.imread(imgpaths[2])
-        return img0, gt, img1
+        return img0, mid_gt, img1
             
     def __getitem__(self, index):        
-        img0, gt, img1 = self.getimg(index)
+        img0, mid_gt, img1 = self.getimg(index)
         if self.dataset_name == 'train':
             if self.aug_scheme == 'old':
-                img0, gt, img1 = self.aug(img0, gt, img1, 224, 224)
+                img0, mid_gt, img1 = self.aug(img0, mid_gt, img1, 224, 224)
                 # reverse the order of the RGB channels
                 if random.uniform(0, 1) < 0.5:
                     img0 = img0[:, :, ::-1]
                     img1 = img1[:, :, ::-1]
-                    gt = gt[:, :, ::-1]
+                    mid_gt = mid_gt[:, :, ::-1]
                 # vertical flip
                 if random.uniform(0, 1) < 0.5:
                     img0 = img0[::-1]
                     img1 = img1[::-1]
-                    gt = gt[::-1]
+                    mid_gt = mid_gt[::-1]
                 # horizontal flip
                 if random.uniform(0, 1) < 0.5:
                     img0 = img0[:, ::-1]
                     img1 = img1[:, ::-1]
-                    gt = gt[:, ::-1]
+                    mid_gt = mid_gt[:, ::-1]
                 # swap img0 and img1
                 if random.uniform(0, 1) < 0.5:
                     img0, img1 = img1, img0
             else:                        
-                # A fake 9-channel image, so as to apply the same geometric augmentation to img0, img1 and gt.
-                comb_img = np.concatenate((img0, gt, img1), axis=2)
+                # A fake 9-channel image, so as to apply the same geometric augmentation to img0, img1 and mid_gt.
+                comb_img = np.concatenate((img0, mid_gt, img1), axis=2)
                 comb_img = self.geo_aug_func.augment_image(comb_img)
                 # Separate the fake 9-channel image into 3 normal images.
-                img0, gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
+                img0, mid_gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
                 # reverse the order of the RGB channels
                 if random.uniform(0, 1) < 0.5:
                     img0 = img0[:, :, ::-1]
                     img1 = img1[:, :, ::-1]
-                    gt = gt[:, :, ::-1]
+                    mid_gt = mid_gt[:, :, ::-1]
 
                 # swap img0 and img1
                 if random.uniform(0, 1) < 0.5:
                     img0, img1 = img1, img0
 
         if self.aug_shift_prob > 0 and random.random() < self.aug_shift_prob:
-            img0, img1, gt = random_shift(img0, img1, gt, self.shift_sigmas)
+            img0, img1, mid_gt = random_shift(img0, img1, mid_gt, self.shift_sigmas)
 
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
-        gt = torch.from_numpy(gt.copy()).permute(2, 0, 1)
-        if self.aug_jitter_prob > 0 and random.random() < self.aug_jitter_prob:
-            imgs = torch.stack((img0, img1, gt), 0)
-            imgs = self.color_fun(imgs)
-            img0, img1, gt = imgs[0], imgs[1], imgs[2]
+        mid_gt = torch.from_numpy(mid_gt.copy()).permute(2, 0, 1)
 
-        imgs = torch.cat((img0, img1, gt), 0)    
+        # A small probability to do individual jittering. 
+        # More challenging, therefore smaller prob.        
+        if self.aug_jitter_prob > 0 and random.random() < self.aug_jitter_prob:
+            if random.random() < self.asym_jitter_prob:
+                img0 = self.color_fun(img0)
+                img1 = self.color_fun(img1)
+
+                if mid_gt.shape[1] == 3:
+                    mid_gt   = self.color_fun(mid_gt)
+            else:
+                imgs = torch.stack((img0, img1, mid_gt), 0)
+                imgs = self.color_fun(imgs)
+                img0, img1, mid_gt = imgs[0], imgs[1], imgs[2]
+
+        imgs = torch.cat((img0, img1, mid_gt), 0)    
         return imgs

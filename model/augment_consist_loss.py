@@ -208,9 +208,12 @@ def random_rotate(img0, img1, mid_gt, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, mask, angle
 
+# B, C, H, W
 def color_jitter(img0, img1, mid_gt, shift_sigmas=None):
-    # B, C, H, W
-    same_aug = True
+    # A small probability to do individual jittering. 
+    # More challenging, therefore smaller prob.
+    asym_jitter_prob = 0.2
+    same_aug = random.random() > asym_jitter_prob
 
     if same_aug:
         if mid_gt.shape[1] == 3:
