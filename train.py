@@ -313,7 +313,7 @@ if __name__ == "__main__":
                         help='Output M groups of flow')
     parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
-    parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.3, type=float,
+    parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.5, type=float,
                         help='Probability of color jittering augmentation (differnt from color jitter consistency loss)')
 
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.2, type=float,
@@ -324,7 +324,7 @@ if __name__ == "__main__":
                         help='Probability of flipping consistency loss')
     parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.1, type=float,
                         help='Probability of rotating consistency loss')
-    parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.2, type=float,
+    parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.1, type=float,
                         help='Probability of color jitter consistency loss')
     parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.5, type=float,
                         help='Probability of block erasing consistency loss')
