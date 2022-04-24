@@ -144,26 +144,22 @@ class RIFT:
                     flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=num_rift_scales,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
+        # 0.2
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
-            args["aug_type"]        = "shift"
             args["aug_handler"]     = random_shift
-            args["flow_handler"]    = flow_shifter
+        # 0.8 * 0.1 = 0.08
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
-            args["aug_type"]        = "flip"
             args["aug_handler"]     = random_flip
-            args["flow_handler"]    = flow_flipper
+        # 0.72 * 0.1 = 0.072
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
-            args["aug_type"]        = "rot"
             args["aug_handler"]     = random_rotate
-            args["flow_handler"]    = flow_rotator
+        # 0.648 * 0.1 = 0.0648
         elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
-            args["aug_type"]        = "jitter"
             args["aug_handler"]     = color_jitter
-            args["flow_handler"]    = flow_nochange
+        # 0.5832 * 0.4 = 0.2333
         elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
-            args["aug_type"]        = "erase"
             args["aug_handler"]     = random_erase
-            args["flow_handler"]    = flow_nochange
+        # 0.35
         else:
             loss_consist        = 0
             mean_tidbit         = 0

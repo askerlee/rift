@@ -146,7 +146,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                 tea_pred = (info['merged_tea'].permute(0, 2, 3, 1).detach().cpu().numpy() * 255).astype('uint8')
                 flow0 = info['flow'].permute(0, 2, 3, 1).detach().cpu().numpy()
                 flow1 = info['flow_tea'].permute(0, 2, 3, 1).detach().cpu().numpy()
-                for i in range(5):
+                for i in range(2):
                     imgs = np.concatenate((tea_pred[i], pred[i], mid_gt[i]), 1)[:, :, ::-1]
                     writer.add_image(str(i) + '/img', imgs, step, dataformats='HWC')
                     writer.add_image(str(i) + '/flow', np.concatenate((flow2rgb(flow0[i]), flow2rgb(flow1[i])), 1), step, dataformats='HWC')
@@ -326,7 +326,7 @@ if __name__ == "__main__":
                         help='Probability of rotating consistency loss')
     parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.1, type=float,
                         help='Probability of color jitter consistency loss')
-    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.5, type=float,
+    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.4, type=float,
                         help='Probability of block erasing consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 

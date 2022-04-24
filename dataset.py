@@ -95,49 +95,47 @@ class VimeoDataset(Dataset):
         with open(test_fn, 'r') as f:
             self.testlist = f.read().splitlines()   
         self.load_data()
-        self.aug_scheme = 'new'
         if self.dataset_name == 'train':
-            if self.aug_scheme == 'new':
-                tgt_height, tgt_width = 224, 224
-                # Mean crop size at any side of the image. delta = 16.
-                delta = (self.h - tgt_height) // 2
-                affine_prob     = 0.1
-                perspect_prob   = 0.1 
+            tgt_height, tgt_width = 224, 224
+            # Mean crop size at any side of the image. delta = 16.
+            delta = (self.h - tgt_height) // 2
+            affine_prob     = 0.1
+            perspect_prob   = 0.1 
 
-                self.geo_aug_func =   iaa.Sequential(
-                        [
-                            # Randomly crop to 256*256.
-                            iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
-                            # Mean crop length is delta (at one side). So the average output image size
-                            # is (self.h - 2*delta) * (self.w - 2*delta).
-                            iaa.Crop(px=(0, 2*delta), keep_size=False),
-                            # resize the image to the shape of orig_input_size
-                            iaa.Resize({'height': tgt_height, 'width': tgt_width}),
-                            # apply the following augmenters to most images
-                            iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
-                            iaa.Flipud(0.5),  # Vertically flip 50% of all images
-                            iaa.Sometimes(0.2, iaa.Rot90((1, 3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
-                            # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
-                            iaa.Sometimes(affine_prob, iaa.Affine(
-                                    rotate=(-45, 45), # rotate by -45 to +45 degrees
-                                    shear=(-16, 16), # shear by -16 to +16 degrees
-                                    order=1,
-                                    cval=(0,255),
-                                    mode='constant'  
-                                    # Previously mode='reflect' and no PerspectiveTransform => worse performance.
-                                    # Which is the culprit? maybe mode='reflect'? 
-                                    # But PerspectiveTransform should also have positive impact, as it simulates
-                                    # a kind of scene changes due to motion.
-                            )),
-                            iaa.Sometimes(perspect_prob, 
-                                          iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
-                            iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
-                            # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
-                            # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
-                            # iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
-                            # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
-                        ])
-                        
+            self.geo_aug_func =   iaa.Sequential(
+                    [
+                        # Randomly crop to 256*256.
+                        iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
+                        # Mean crop length is delta (at one side). So the average output image size
+                        # is (self.h - 2*delta) * (self.w - 2*delta).
+                        iaa.Crop(px=(0, 2*delta), keep_size=False),
+                        # resize the image to the shape of orig_input_size
+                        iaa.Resize({'height': tgt_height, 'width': tgt_width}),
+                        # apply the following augmenters to most images
+                        iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
+                        iaa.Flipud(0.5),  # Vertically flip 50% of all images
+                        iaa.Sometimes(0.2, iaa.Rot90((1, 3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
+                        # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
+                        iaa.Sometimes(affine_prob, iaa.Affine(
+                                rotate=(-45, 45), # rotate by -45 to +45 degrees
+                                shear=(-16, 16), # shear by -16 to +16 degrees
+                                order=1,
+                                cval=(0,255),
+                                mode='constant'  
+                                # Previously mode='reflect' and no PerspectiveTransform => worse performance.
+                                # Which is the culprit? maybe mode='reflect'? 
+                                # But PerspectiveTransform should also have positive impact, as it simulates
+                                # a kind of scene changes due to motion.
+                        )),
+                        iaa.Sometimes(perspect_prob, 
+                                        iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
+                        iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
+                        # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
+                        # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
+                        # iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
+                        # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
+                    ])
+                    
         self.aug_shift_prob     = aug_shift_prob
         self.shift_sigmas       = shift_sigmas
         self.aug_jitter_prob    = aug_jitter_prob
@@ -178,46 +176,26 @@ class VimeoDataset(Dataset):
             
     def __getitem__(self, index):        
         img0, mid_gt, img1 = self.getimg(index)
-        if self.dataset_name == 'train':
-            if self.aug_scheme == 'old':
-                img0, mid_gt, img1 = self.aug(img0, mid_gt, img1, 224, 224)
-                # reverse the order of the RGB channels
-                if random.uniform(0, 1) < 0.5:
-                    img0 = img0[:, :, ::-1]
-                    img1 = img1[:, :, ::-1]
-                    mid_gt = mid_gt[:, :, ::-1]
-                # vertical flip
-                if random.uniform(0, 1) < 0.5:
-                    img0 = img0[::-1]
-                    img1 = img1[::-1]
-                    mid_gt = mid_gt[::-1]
-                # horizontal flip
-                if random.uniform(0, 1) < 0.5:
-                    img0 = img0[:, ::-1]
-                    img1 = img1[:, ::-1]
-                    mid_gt = mid_gt[:, ::-1]
-                # swap img0 and img1
-                if random.uniform(0, 1) < 0.5:
-                    img0, img1 = img1, img0
-            else:                        
-                # A fake 9-channel image, so as to apply the same geometric augmentation to img0, img1 and mid_gt.
-                comb_img = np.concatenate((img0, mid_gt, img1), axis=2)
-                comb_img = self.geo_aug_func.augment_image(comb_img)
-                # Separate the fake 9-channel image into 3 normal images.
-                img0, mid_gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
-                # reverse the order of the RGB channels
-                if random.uniform(0, 1) < 0.5:
-                    img0 = img0[:, :, ::-1]
-                    img1 = img1[:, :, ::-1]
-                    mid_gt = mid_gt[:, :, ::-1]
+        if self.dataset_name == 'train':        
+            # A fake 9-channel image, so as to apply the same geometric augmentation to img0, img1 and mid_gt.
+            comb_img = np.concatenate((img0, mid_gt, img1), axis=2)
+            comb_img = self.geo_aug_func.augment_image(comb_img)
+            # Separate the fake 9-channel image into 3 normal images.
+            img0, mid_gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
+            # reverse the order of the RGB channels
+            if random.uniform(0, 1) < 0.5:
+                img0 = img0[:, :, ::-1]
+                img1 = img1[:, :, ::-1]
+                mid_gt = mid_gt[:, :, ::-1]
 
-                # swap img0 and img1
-                if random.uniform(0, 1) < 0.5:
-                    img0, img1 = img1, img0
+            # swap img0 and img1
+            if random.uniform(0, 1) < 0.5:
+                img0, img1 = img1, img0
 
         if self.aug_shift_prob > 0 and random.random() < self.aug_shift_prob:
             img0, img1, mid_gt = random_shift(img0, img1, mid_gt, self.shift_sigmas)
 
+        # H, W, C => C, H, W
         img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
         img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
         mid_gt = torch.from_numpy(mid_gt.copy()).permute(2, 0, 1)
@@ -232,8 +210,10 @@ class VimeoDataset(Dataset):
                 if mid_gt.shape[1] == 3:
                     mid_gt   = self.color_fun(mid_gt)
             else:
+                # imgs: 3, C, H, W
                 imgs = torch.stack((img0, img1, mid_gt), 0)
                 imgs = self.color_fun(imgs)
+                # img0, img1, mid_gt: C, H, W
                 img0, img1, mid_gt = imgs[0], imgs[1], imgs[2]
 
         imgs = torch.cat((img0, img1, mid_gt), 0)    
