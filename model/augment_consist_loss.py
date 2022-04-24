@@ -284,10 +284,11 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_list_notnone = [ f for f in flow_list if f is not None ]
     # flow_block: B*K, 4, H, W
     flow_block = torch.cat(flow_list_notnone, dim=0)
-    flow_shape_6 = list(flow_block.shape)
-    flow_shape_6[1] = 6
+    flow_pad_shape = list(flow_block.shape)
+    flow_pad_shape[1] = 2
+    flow_pad = torch.zeros(flow_pad_shape, device=img0.device, dtype=flow_block.dtype)
     # flow_block_6: B*K, 6, H, W
-    flow_block_6 = flow_block.resize_(flow_shape_6)
+    flow_block_6 = torch.cat([flow_block, flow_pad], dim=1)
     # flow_block_3: B*K*2, 3, H, W
     flow_block_3 = flow_block_6.view(-1, 3, H, W)
 
@@ -336,7 +337,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     # Scale the flow value accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
     flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
                                                  scale_W, scale_H].reshape(1, 4, 1, 1), device=img0.device)
-                                                 
+
     flow_list_a_notnone = flow_block_a.split(4, dim=1)
     flow_list_a = []
     notnone_idx = 0
