@@ -323,22 +323,23 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     scaled_imgs = scaled_imgs[:, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
-    img0a, img1a = scaled_imgs[0:3], scaled_imgs[3:6]
+    B = img0.shape[0]
+    img0a, img1a = scaled_imgs[0:B], scaled_imgs[B:2*B]
     if mid_gt.shape[1] == 3:
-        mid_gta = scaled_imgs[6:9]
-        flow_start_chan = 9
+        mid_gta = scaled_imgs[2*B:3*B]
+        flow_start_chan = 3*B
     else:
         mid_gta = mid_gt
-        flow_start_chan = 6
+        flow_start_chan = 2*B
 
-    flow_block_3a = scaled_imgs[flow_start_chan:-3]
+    flow_block_3a = scaled_imgs[flow_start_chan:-B]
     flow_block_6a = flow_block_3a.view(-1, 6, H, W)
     flow_block_a  = flow_block_6a[:, :4]
     # Scale the flow value accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
     flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
                                                  scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
-    flow_list_a_notnone = flow_block_a.split(img0.shape[0], dim=0)
+    flow_list_a_notnone = flow_block_a.split(B, dim=0)
     flow_list_a = []
     notnone_idx = 0
     for flow in flow_list:
@@ -348,7 +349,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         else:
             flow_list_a.append(None)
 
-    mask = scaled_imgs[-3:]
+    mask = scaled_imgs[-B:]
     # mask: B, 4, H, W. Same mask for the two directions.
     mask = mask[:, [0]].repeat(1, 4, 1, 1)
     # Convert float mask to bool mask.
