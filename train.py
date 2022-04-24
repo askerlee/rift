@@ -118,7 +118,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                     image1, image2, flow, valid = [x.cuda() for x in data_blob[:4]]
                 
                 imgs    = torch.cat([image1, image2], dim=1) / 255.
-                # Provide an empty tensor as mid_gt, just to make the model happy.
+                # Provide a 0-channel tensor as mid_gt, just to make the model happy.
                 mid_gt  = imgs[:, :0]   
             # Use 3 frames to train the model.
             else:
@@ -328,6 +328,8 @@ if __name__ == "__main__":
                         help='Probability of color jitter consistency loss')
     parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.4, type=float,
                         help='Probability of block erasing consistency loss')
+    parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.3, type=float,
+                        help='Probability of scaling consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
@@ -362,6 +364,7 @@ if __name__ == "__main__":
         'rot_prob': args.cons_rot_prob,
         'jitter_prob': args.cons_jitter_prob,
         'erase_prob': args.cons_erase_prob,
+        'scale_prob': args.cons_scale_prob,
         'consist_loss_weight': args.consist_loss_weight,
     }
 

@@ -211,9 +211,9 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
             img0a, img1a, mid_gta   = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
         else:
             # mid_gt is an empty tensor.
-            pseudo_batch = torch.cat([img0, img1], dim=0)
-            pseudo_batch_a = color_fun(pseudo_batch)
-            img0a, img1a            = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
+            pseudo_batch    = torch.cat([img0, img1], dim=0)
+            pseudo_batch_a  = color_fun(pseudo_batch)
+            img0a, img1a    = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
             mid_gta = mid_gt
     else:
         img0a = color_fun(img0)
@@ -280,7 +280,25 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     scale_H, scale_W = np.random.uniform(scale_bounds[0], scale_bounds[1], 2)
     H2 = int(H * scale_H)
     W2 = int(W * scale_W)
-    imgs = torch.cat([img0, img1, mid_gt], dim=0)
+
+    flow_list_notnone = [ f for f in flow_list if f is not None ]
+    # flow_block: B*K, 4, H, W
+    flow_block = torch.cat(flow_list_notnone, dim=0)
+    flow_shape_6 = list(flow_block.shape)
+    flow_shape_6[1] = 6
+    # flow_block_6: B*K, 6, H, W
+    flow_block_6 = flow_block.resize_(flow_shape_6)
+    # flow_block_3: B*K*2, 3, H, W
+    flow_block_3 = flow_block_6.view(-1, 3, H, W)
+
+    # To be consistent with images, mask has 3 channels. But only 1 channel is really needed.
+    mask = torch.ones(img0.shape, device=img0.device, dtype=img0.dtype)
+
+    if mid_gt.shape[1] == 3:
+        imgs = torch.cat([img0, img1, mid_gt, flow_block_3, mask], dim=0)
+    else:
+        imgs = torch.cat([img0, img1, flow_block_3, mask], dim=0)
+
     scaled_imgs = F.interpolate(imgs, size=(H2, W2), mode='bilinear', align_corners=False)
 
     if H2 < H or W2 < W:
@@ -302,11 +320,39 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     w_end   = w_start + W
         
     scaled_imgs = scaled_imgs[:, :, h_start:h_end, w_start:w_end]
-    img0a, img1a, mid_gta = torch.split(scaled_imgs, img0.shape[0], dim=0)
-    
-    mask_shape = list(img0.shape)
-    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
-    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+    assert scaled_imgs.shape[2:] == (H, W)
+
+    img0a, img1a = scaled_imgs[0:3], scaled_imgs[3:6]
+    if mid_gt.shape[1] == 3:
+        mid_gta = scaled_imgs[6:9]
+        flow_start_chan = 9
+    else:
+        mid_gta = mid_gt
+        flow_start_chan = 6
+
+    flow_block_3a = scaled_imgs[flow_start_chan:-3]
+    flow_block_6a = flow_block_3a.view(-1, 6, H, W)
+    flow_block_a  = flow_block_6a[:, :4]
+    # Scale the flow value accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
+    flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
+                                                 scale_W, scale_H].reshape(1, 4, 1, 1), device=img0.device)
+                                                 
+    flow_list_a_notnone = flow_block_a.split(4, dim=1)
+    flow_list_a = []
+    notnone_idx = 0
+    for flow in flow_list:
+        if flow is not None:
+            flow_list_a.append(flow_list_a_notnone[notnone_idx])
+            notnone_idx += 1
+        else:
+            flow_list_a.append(None)
+
+    mask = scaled_imgs[-3:]
+    # mask: B, 4, H, W. Same mask for the two directions.
+    mask = mask[:, [0]].repeat(1, 4, 1, 1)
+    # Convert float mask to bool mask.
+    mask = (mask >= 0.5)
+
     scale_factor = scale_H * scale_W
     return img0a, img1a, mid_gta, flow_list_a, mask, f's{scale_factor:.2f}'
 
