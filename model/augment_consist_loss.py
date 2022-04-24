@@ -336,7 +336,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_block_a  = flow_block_6a[:, :4]
     # Scale the flow value accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
     flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
-                                                 scale_W, scale_H].reshape(1, 4, 1, 1), device=img0.device)
+                                                 scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
     flow_list_a_notnone = flow_block_a.split(4, dim=1)
     flow_list_a = []
