@@ -1,5 +1,3 @@
-from tkinter import W
-from cv2 import ROTATE_90_CLOCKWISE
 from numpy import imag
 import torch
 import random
