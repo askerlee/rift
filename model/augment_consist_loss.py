@@ -338,7 +338,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
                                                  scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
-    flow_list_a_notnone = flow_block_a.split(4, dim=0)
+    flow_list_a_notnone = flow_block_a.split(img0.shape[0], dim=0)
     flow_list_a = []
     notnone_idx = 0
     for flow in flow_list:
@@ -471,13 +471,12 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
             aug_handler(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas)
 
+    flow_list_a, flow_teacher_a = flow_list_a[:-1], flow_list_a[-1]
     imgsa = torch.cat((img0a, img1a), 1)            
 
     with autocast(enabled=mixed_precision):
         flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
             merged_teacher2, loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
-
-    flow_list_a, flow_teacher_a = flow_list_a[:-1], flow_list_a[-1]
 
     loss_consist_stu = 0
     # s enumerates all (middle frame flow) scales.
