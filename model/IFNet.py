@@ -476,8 +476,8 @@ class IFNet(nn.Module):
             refined_img_list[4] = refined_img1
 
         teacher_dict = { 'flow_teacher': flow_tea, 'merged_teacher': merged_tea, 
-                         'img0_warped_teacher': img0_warped_tea, 
-                         'img1_warped_teacher': img1_warped_tea, 
+                         'img0_warped_sofi_tea': img0_warped_sofi_tea, 
+                         'img1_warped_sofi_tea': img1_warped_sofi_tea, 
                          'flow_sofi_teacher': flow_sofi_tea }
         # flow_list, mask_list: flow and mask in 3 different scales.
         # If mid_gt is None, loss_distill = 0.

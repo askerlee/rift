@@ -81,7 +81,7 @@ class RIFT:
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
         self.consistency_args   = consistency_args
 
-        self.crude_loss_tea_weight = 0.2
+        self.crude_loss_tea_weight = 0.1
         self.mixed_precision = mixed_precision
 
     def train(self):
@@ -201,19 +201,19 @@ class RIFT:
         if self.esti_sofi:
             refined_img0        = refined_img_list[3]
             refined_img1        = refined_img_list[4]
-            crude_img0          = crude_img_list[3]
-            crude_img1          = crude_img_list[4]
+            #crude_img0          = crude_img_list[3]
+            #crude_img1          = crude_img_list[4]
             loss_refined_img0   = (self.lap(refined_img0, img0)).mean()
             loss_refined_img1   = (self.lap(refined_img1, img1)).mean()
-            crude_img0_tea      = teacher_dict['img1_warped_teacher']
-            crude_img1_tea      = teacher_dict['img0_warped_teacher']
-            loss_crude_img0_tea = (self.lap(crude_img0_tea, img0)).mean()
-            loss_crude_img1_tea = (self.lap(crude_img1_tea, img1)).mean()
+            crude_img0_sofi_tea = teacher_dict['img1_warped_sofi_tea']
+            crude_img1_sofi_tea = teacher_dict['img0_warped_sofi_tea']
+            loss_img0_sofi_tea  = (self.lap(crude_img0_sofi_tea, img0)).mean()
+            loss_img1_sofi_tea  = (self.lap(crude_img1_sofi_tea, img1)).mean()
 
             # loss on crude_img0/crude_img1 is highly inaccurate. So disable it.
             # But still compute loss on crude_img0_tea/crude_img1_tea.
             loss_sofi           = (loss_refined_img0 + loss_refined_img1 + 
-                                   (loss_crude_img0_tea + loss_crude_img1_tea) * self.crude_loss_tea_weight
+                                   (loss_img0_sofi_tea + loss_img1_sofi_tea) * self.crude_loss_tea_weight
                                   ) / 2
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
