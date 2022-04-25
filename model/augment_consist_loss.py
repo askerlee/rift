@@ -496,7 +496,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
 
     if aug_type == 'shift':
         dx, dy = tidbit.flatten().tolist()[:2]
-        aug_desc = f"s{dx},{dy}"
+        aug_desc = f"s{dx:.0f},{dy:.0f}"
     elif aug_type == 'rotate':
         aug_desc = f"rot{tidbit}"
     elif aug_type == 'flip':
