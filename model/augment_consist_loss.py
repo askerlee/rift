@@ -224,7 +224,7 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
 def random_erase(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     # Randomly choose a rectangle region to erase.
     # Erased height/width is within this range.
-    hw_bounds = [50, 90]
+    hw_bounds = [40, 80]
 
     ht, wd = img0.shape[2:]
     if np.random.rand() < 0.5:
@@ -275,23 +275,17 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_list_notnone = [ f for f in flow_list if f is not None ]
     # flow_block: B*K, 4, H, W
     flow_block = torch.cat(flow_list_notnone, dim=0)
-    flow_pad_shape = list(flow_block.shape)
-    flow_pad_shape[1] = 2
-    flow_pad = torch.zeros(flow_pad_shape, device=img0.device, dtype=flow_block.dtype)
-    # flow_block_6: B*K, 6, H, W
-    flow_block_6 = torch.cat([flow_block, flow_pad], dim=1)
-    # flow_block_3: B*K*2, 3, H, W
-    flow_block_3 = flow_block_6.view(-1, 3, H, W)
 
     # To be consistent with images, mask has 3 channels. But only 1 channel is really needed.
     mask = torch.ones(img0.shape, device=img0.device, dtype=img0.dtype)
 
     if mid_gt.shape[1] == 3:
-        imgs = torch.cat([img0, img1, mid_gt, flow_block_3, mask], dim=0)
+        imgs = torch.cat([img0, img1, mid_gt, mask], dim=0)
     else:
-        imgs = torch.cat([img0, img1, flow_block_3, mask], dim=0)
+        imgs = torch.cat([img0, img1, mask], dim=0)
 
-    scaled_imgs = F.interpolate(imgs, size=(H2, W2), mode='bilinear', align_corners=False)
+    scaled_imgs         = F.interpolate(imgs,       size=(H2, W2), mode='bilinear', align_corners=False)
+    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='nearest',  align_corners=False)
 
     if H2 < H or W2 < W:
         pad_h  = max(H - H2, 0)
@@ -302,7 +296,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         pad_w2 = pad_w - pad_w1
 
         pads        = (pad_w1, pad_w2, pad_h1, pad_h2)
-        scaled_imgs = F.pad(scaled_imgs, pads, "constant", 0)
+        scaled_imgs         = F.pad(scaled_imgs,        pads, "constant", 0)
+        scaled_flow_block   = F.pad(scaled_flow_block,  pads, "constant", 0)
 
     # After padding, scaled_imgs are at least H*W.
     # Crop extra borders.
@@ -312,7 +307,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     w_start = np.random.randint(W2 - W + 1)
     w_end   = w_start + W
         
-    scaled_imgs = scaled_imgs[:, :, h_start:h_end, w_start:w_end]
+    scaled_imgs         = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
+    scaled_flow_block   = scaled_flow_block[:, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
     B = img0.shape[0]
@@ -324,13 +320,11 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         mid_gta = mid_gt
         flow_start_chan = 2*B
 
-    flow_block_3a = scaled_imgs[flow_start_chan:-B]
-    flow_block_6a = flow_block_3a.view(-1, 6, H, W)
-    flow_block_a  = flow_block_6a[:, :4]
     # Padding and cropping doesn't change the flow magnitude. Only scaling does.
     # Scale the flow magnitudes accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
-    flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
-                                                 scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
+    flow_block_a  = scaled_flow_block * \
+                        torch.tensor([scale_W, scale_H, 
+                                      scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
     flow_list_a_notnone = flow_block_a.split(B, dim=0)
     flow_list_a = []
