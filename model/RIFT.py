@@ -114,8 +114,8 @@ class RIFT:
     def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]        
-        flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = self.flownet(imgs, scale_list, timestep=timestep)
+        flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
+                = self.flownet(imgs, scale_list, timestep=timestep)
         stu_pred = refined_img_list[2]
         if TTA == False:
             return stu_pred
@@ -136,8 +136,11 @@ class RIFT:
             self.eval()
         
         with autocast(enabled=self.mixed_precision):
-            flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-                merged_teacher, loss_distill = self.flownet(imgs, mid_gt, scale_list=[4, 2, 1])
+            flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill = \
+                    self.flownet(imgs, mid_gt, scale_list=[4, 2, 1])
+
+        flow_teacher    = teacher_dict['flow_teacher']
+        merged_teacher  = teacher_dict['merged_teacher']
 
         num_rift_scales = 3
         # flow_list is of length 4.

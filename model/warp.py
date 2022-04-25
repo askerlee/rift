@@ -37,6 +37,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     # m0 means flow from middle to img0, m1 means flow from middle to img1.
     # Each block has 2 channels.
     for i in range(M):
+        # mid -> 0 flow to warp img0, which approximates mid.
         img0_warped = warp(img0, multiflow[:, i*2 : i*2+2])
         img0_warped_list.append(img0_warped)
         # Warp the mask scores. The scores are generated mostly based on
@@ -47,6 +48,7 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
         multimaskm0_score_list.append(maskm0_score_warped)
 
         if img1 is not None:
+            # mid -> 1 flow to warp img1, which approximates mid.
             img1_warped = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
             img1_warped_list.append(img1_warped)
             maskm1_score_warped = warp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])

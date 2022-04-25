@@ -285,7 +285,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         imgs = torch.cat([img0, img1, mask], dim=0)
 
     scaled_imgs         = F.interpolate(imgs,       size=(H2, W2), mode='bilinear', align_corners=False)
-    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='nearest',  align_corners=None)
+    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='bilinear', align_corners=False)
 
     if H2 < H or W2 < W:
         pad_h  = max(H - H2, 0)
@@ -463,8 +463,8 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     imgsa = torch.cat((img0a, img1a), 1)            
 
     with autocast(enabled=mixed_precision):
-        flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
-            merged_teacher2, loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
+        flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict2, \
+            loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
 
     loss_consist_stu = 0
     # s enumerates all (middle frame flow) scales.
@@ -478,6 +478,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
         # gradient can both pass to the teacher (flow of original images) 
         # and the student (flow of the augmented images).
         # So that they can correct each other.
+        flow_teacher2    = teacher_dict2['flow_teacher']
         loss_consist_tea = torch.abs(flow_teacher_a - flow_teacher2)[smask].mean()
     else:
         loss_consist_tea = 0
@@ -494,7 +495,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     elif aug_type == 'rotate':
         aug_desc = f"rot{tidbit}"
     elif aug_type == 'flip':
-        aug_desc = f"flip-{tidbit}"
+        aug_desc = f"{tidbit}flip"
     elif aug_type == 'jitter':
         aug_desc = 'jitter'
     elif aug_type == 'erase':
