@@ -326,9 +326,9 @@ if __name__ == "__main__":
                         help='Probability of rotating consistency loss')
     parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.1, type=float,
                         help='Probability of color jitter consistency loss')
-    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.4, type=float,
+    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.3, type=float,
                         help='Probability of block erasing consistency loss')
-    parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.3, type=float,
+    parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.4, type=float,
                         help='Probability of scaling consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 

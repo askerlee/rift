@@ -99,24 +99,13 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10))
         # img1 is cropped at the bottom-right corner.       img1[:dy,  :dx]
         img1_bound = (0,   H + dy, 0,   W + dx)
 
-    # Swapping the shifts to img0 and img1, to increase diversity.
-    reversed_01 = random.random() > 0.5
-
     # dxy is the motion of the middle frame. It's always half of the relative motion between frames 0 and 1.
-    if reversed_01:
-        img0_bound, img1_bound = img1_bound, img0_bound
-        # Shifting to img0 & img1 are swapped.
-        # dxy: offsets (from old to new flow) for two directions.
-        # Note the middle frame is shifted by *half* of dx, dy.
-        # Note the flows are for backward warping (from middle to 0/1).
-        # From 0.5 -> 0: negative delta (from the old flow). old 0.5->0 flow - (dx, dy) = new 0.5->0 flow.
-        # From 0.5 -> 1: positive delta (from the old flow). old 0.5->1 flow + (dx, dy) = new 0.5->1 flow.
-        dxy = torch.tensor([-dx2, -dy2,  dx2,  dy2], dtype=float, device=img0.device)
-    else:     
-        # Note the middle frame is shifted by *half* of dx, dy.
-        # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
-        # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
-        dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
+    # dxy: offsets (from old to new flow) for two directions.
+    # Note the middle frame is shifted by *half* of dx, dy.
+    # Note the flows are for backward warping (from middle to 0/1).
+    # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
+    # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
+    dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
 
     # T, B, L, R: top, bottom, left, right boundary.
     T0, B0, L0, R0 = img0_bound
@@ -280,6 +269,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     scale_H, scale_W = np.random.uniform(scale_bounds[0], scale_bounds[1], 2)
     H2 = int(H * scale_H)
     W2 = int(W * scale_W)
+    scale_H = H2 / H
+    scale_W = W2 / W
 
     flow_list_notnone = [ f for f in flow_list if f is not None ]
     # flow_block: B*K, 4, H, W
@@ -313,7 +304,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         pads        = (pad_w1, pad_w2, pad_h1, pad_h2)
         scaled_imgs = F.pad(scaled_imgs, pads, "constant", 0)
 
-    # After padding, scaled_imgs are of the equal size or bigger than original images.
+    # After padding, scaled_imgs are at least H*W.
+    # Crop extra borders.
     H2, W2  = scaled_imgs.shape[2:] 
     h_start = np.random.randint(H2 - H + 1)
     h_end   = h_start + H
@@ -352,7 +344,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     mask = scaled_imgs[-B:]
     # mask: B, 4, H, W. Same mask for the two directions.
     mask = mask[:, [0]].repeat(1, 4, 1, 1)
-    # Convert float mask to bool mask.
+    # At padded areas of imgs, mask is also padded with zeros.
+    # Therefore, convert float mask to bool mask by thresholding.
     mask = (mask >= 0.5)
 
     scale_factor = scale_H * scale_W

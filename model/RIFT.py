@@ -157,12 +157,13 @@ class RIFT:
         # 0.648 * 0.1 = 0.0648
         elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
             args["aug_handler"]     = color_jitter
-        # 0.5832 * 0.4 = 0.2333
+        # 0.5832 * 0.3 = 0.175
         elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
             args["aug_handler"]     = random_erase
-        # 0.35
+        # 0.408 * 0.4 = 0.1632
         elif self.cons_scale_prob > 0 and random.random() < self.cons_scale_prob:
             args["aug_handler"]     = random_scale
+        # 0.2448
         else:
             loss_consist        = 0
             mean_tidbit         = 0
