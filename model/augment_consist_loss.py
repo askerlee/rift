@@ -285,7 +285,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
         imgs = torch.cat([img0, img1, mask], dim=0)
 
     scaled_imgs         = F.interpolate(imgs,       size=(H2, W2), mode='bilinear', align_corners=False)
-    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='nearest',  align_corners=False)
+    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='nearest',  align_corners=None)
 
     if H2 < H or W2 < W:
         pad_h  = max(H - H2, 0)
