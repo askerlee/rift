@@ -291,8 +291,8 @@ class SOFI_Wrapper(nn.Module):
 
         # Provide an empty tensor as mid_gt, just to make the model happy.
         mid_gt  = imgs[:, :0]           
-        flow_list, mask, crude_img_list, refined_img_list, flow_teacher, \
-            merged_teacher, loss_distill = self.flownet(imgs, mid_gt, scale_list)
+        flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
+                = self.flownet(imgs, mid_gt, scale_list)
 
         flow_sofi = flow_list[3]
         # flow_list[2] * 2 is the mid flow, which is around 0.1 AEPE worse than flow_sofi.
