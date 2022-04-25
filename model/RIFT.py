@@ -119,8 +119,8 @@ class RIFT:
         if TTA == False:
             return stu_pred
         else:
-            flow_list2, mask2, crude_img_list2, refined_img_list2, flow_teacher2, \
-                merged_teacher2, loss_distill2 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
+            flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict, loss_distill2 \
+                = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
             return (stu_pred + refined_img_list2[2].flip(2).flip(3)) / 2
     
     def update(self, imgs, mid_gt, learning_rate=0, mul=1, training=True, flow_gt=None):
