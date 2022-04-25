@@ -148,21 +148,27 @@ class RIFT:
         # 0.2
         if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
             args["aug_handler"]     = random_shift
+            args["aug_type"]        = "shift"
         # 0.8 * 0.1 = 0.08
         elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
             args["aug_handler"]     = random_flip
+            args["aug_type"]        = "flip"
         # 0.72 * 0.1 = 0.072
         elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
             args["aug_handler"]     = random_rotate
+            args["aug_type"]        = "rotate"
         # 0.648 * 0.1 = 0.0648
         elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
             args["aug_handler"]     = color_jitter
+            args["aug_type"]        = "jitter"
         # 0.5832 * 0.3 = 0.175
         elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
             args["aug_handler"]     = random_erase
+            args["aug_type"]        = "erase"
         # 0.408 * 0.4 = 0.1632
         elif self.cons_scale_prob > 0 and random.random() < self.cons_scale_prob:
             args["aug_handler"]     = random_scale
+            args["aug_type"]        = "scale"
         # 0.2448
         else:
             loss_consist        = 0
@@ -172,8 +178,8 @@ class RIFT:
             do_consist_loss     = False
 
         if do_consist_loss:
-            loss_consist, loss_distill2, mean_tidbit = calculate_consist_loss(**args)
-            loss_consist_str = f"{loss_consist:.3f}/{mean_tidbit}"
+            loss_consist, loss_distill2, aug_desc = calculate_consist_loss(**args)
+            loss_consist_str = f"{loss_consist:.3f}/{aug_desc}"
 
         only_calc_refined_loss = True
         stu_pred = refined_img_list[2]
@@ -244,7 +250,6 @@ class RIFT:
                 'loss_sofi':    loss_sofi,
                 'loss_distill': loss_distill,
                 'loss_consist_str': loss_consist_str,
-                'mean_tidbit':  mean_tidbit
                }
 
 class SOFI_Wrapper(nn.Module):

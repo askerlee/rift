@@ -259,7 +259,7 @@ def random_erase(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-    return img0a, img1a, mid_gta, flow_list, mask, f'e{erased_pixel_count}'
+    return img0a, img1a, mid_gta, flow_list, mask, erased_pixel_count
 
 def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     # Randomly choose a scale factor.
@@ -327,7 +327,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_block_3a = scaled_imgs[flow_start_chan:-B]
     flow_block_6a = flow_block_3a.view(-1, 6, H, W)
     flow_block_a  = flow_block_6a[:, :4]
-    # Scale the flow value accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
+    # Padding and cropping doesn't change the flow magnitude. Only scaling does.
+    # Scale the flow magnitudes accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
     flow_block_a  = flow_block_a * torch.tensor([scale_W, scale_H, 
                                                  scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
@@ -348,8 +349,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     # Therefore, convert float mask to bool mask by thresholding.
     mask = (mask >= 0.5)
 
-    scale_factor = scale_H * scale_W
-    return img0a, img1a, mid_gta, flow_list_a, mask, f's{scale_factor:.2f}'
+    return img0a, img1a, mid_gta, flow_list_a, mask, [scale_H, scale_W]
 
 def flow_shifter(flow_list, offset_dict, sofi_idx=-1):
     offset, img_bounds, pad_xy = offset_dict['dxy'], offset_dict['img_bounds'], offset_dict['pad']
@@ -459,7 +459,7 @@ def flow_rotator(flow_list, angle):
 
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, num_rift_scales, 
-                           shift_sigmas, aug_handler, mixed_precision):
+                           shift_sigmas, aug_handler, aug_type, mixed_precision):
     sofi_idx = num_rift_scales
     flow_list = flow_list + [flow_teacher]
     img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
@@ -494,16 +494,18 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     else:
         loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
 
-    if not isinstance(tidbit, str):
-        if isinstance(tidbit, int):
-            mean_tidbit = str(tidbit)
-        else:
-            if isinstance(tidbit, torch.Tensor):
-                mean_tidbit = tidbit.abs().float().mean().item()
-            else:
-                mean_tidbit = np.abs(np.array(tidbit)).astype(float).mean().item()
-            mean_tidbit = f"{mean_tidbit:.2f}"
-    else:
-        mean_tidbit = tidbit
+    if aug_type == 'shift':
+        dx, dy = tidbit.flatten().tolist()[:2]
+        aug_desc = f"s{dx},{dy}"
+    elif aug_type == 'rotate':
+        aug_desc = f"rot{tidbit}"
+    elif aug_type == 'flip':
+        aug_desc = f"flip-{tidbit}"
+    elif aug_type == 'jitter':
+        aug_desc = 'jitter'
+    elif aug_type == 'erase':
+        aug_desc = f"e{tidbit}"
+    elif aug_type == "scale":
+        aug_desc = f"*{tidbit[0]:.2f},{tidbit[1]:.2f}"
 
-    return loss_consist, loss_distill2, mean_tidbit
+    return loss_consist, loss_distill2, aug_desc
