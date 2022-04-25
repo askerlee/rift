@@ -49,8 +49,8 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10))
     MAX_SHIFT = 120
     dx, dy = 0, 0
 
-    # Avoid (0, 0) offset.
-    while dx == 0 and dy == 0:
+    # Avoid (0, 0) offset. 1 becomes 0 after rounding.
+    while abs(dx) <=1 and abs(dy) <=1:
         if np.random.random() > 0.5:
             dx = np.random.laplace(0, u_shift_sigma / 4)
             dy = np.random.laplace(0, v_shift_sigma)
