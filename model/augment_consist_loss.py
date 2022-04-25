@@ -51,7 +51,7 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10))
 
     # Avoid (0, 0) offset.
     while dx == 0 and dy == 0:
-        if random.random() > 0.5:
+        if np.random.random() > 0.5:
             dx = np.random.laplace(0, u_shift_sigma / 4)
             dy = np.random.laplace(0, v_shift_sigma)
             # Cap the shift in either direction to 40, to avoid abnormal gradients
@@ -145,7 +145,7 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10))
     return img0a, img1a, mid_gta, flow_list_a, mask, dxy
                 
 def random_flip(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
-    if random.random() > 0.5:
+    if np.random.random() > 0.5:
         FLIP_OP = hflip
         flip_direction = 'h'
     else:
@@ -165,9 +165,9 @@ def random_flip(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     return img0a, img1a, mid_gta, flow_list_a, mask, flip_direction
 
 def random_rotate(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
-    if random.random() < 1/3.:
+    if np.random.random() < 1/3.:
         angle = 90
-    elif random.random() < 2/3.:
+    elif np.random.random() < 2/3.:
         angle = 180
     else:
         angle = 270
@@ -191,7 +191,7 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     # A small probability to do individual jittering. 
     # More challenging, therefore smaller prob.
     asym_jitter_prob = 0.2
-    same_aug = random.random() > asym_jitter_prob
+    same_aug = np.random.random() > asym_jitter_prob
 
     if same_aug:
         if mid_gt.shape[1] == 3:
