@@ -70,6 +70,7 @@ class RIFT:
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
                                find_unused_parameters=True)
+        self.use_edge_aware_smooth_loss = True
         self.smooth_loss_weight  = smooth_loss_weight
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
@@ -213,11 +214,13 @@ class RIFT:
             loss_sofi = torch.tensor(0, device=imgs.device)
 
         loss_smooth = 0
-        for flow in flow_list:
+        for flow in flow_list + [flow_teacher]:
             if flow is not None:
-                loss_smooth += flow_smooth_delta(flow)
-        if flow_teacher is not None:
-            loss_smooth += flow_smooth_delta(flow_teacher)
+                if self.use_edge_aware_smooth_loss:
+                    curr_smooth_loss = edge_aware_smoothness_order1(img0, img1, flow)
+                else:
+                    curr_smooth_loss = flow_smooth_delta(flow)
+                loss_smooth += curr_smooth_loss
 
         if training:
             self.optimG.zero_grad()

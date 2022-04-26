@@ -123,8 +123,8 @@ class VGGPerceptualLoss(torch.nn.Module):
 # https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
 def flow_smooth_delta(flow, if_second_order=False):
     def gradient(x):
-        D_dy = x[:, :, 1:] - x[:, :, :-1]
         D_dx = x[:, :, :, 1:] - x[:, :, :, :-1]
+        D_dy = x[:, :, 1:] - x[:, :, :-1]
         return D_dx, D_dy
 
     dx, dy = gradient(flow)
@@ -139,6 +139,56 @@ def flow_smooth_delta(flow, if_second_order=False):
     # smooth_loss = dx.abs().mean() + dy.abs().mean()  # + dx2.abs().mean() + dxdy.abs().mean() + dydx.abs().mean() + dy2.abs().mean()
     # 暂时不上二阶的平滑损失，似乎加上以后就太猛了，无法降低photo loss TODO
     return smooth_loss
+
+# https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
+def edge_aware_smoothness_order1(img0, img1, flow, constant=1.0, weight_type='gauss', error_type='L1'):
+    def weight_fn(x):
+        if weight_type == 'gauss':
+            y = x ** 2
+        elif weight_type == 'exp':
+            y = torch.abs(x)
+        else:
+            raise ValueError('')
+        return y
+
+    def gradient_xy(img):
+        gx = img[:, :, :, :-1] - img[:, :, :, 1:]
+        gy = img[:, :, :-1, :] - img[:, :, 1:, :]
+        return gx, gy
+
+    def gradweight_xy(img0, img1):
+        img0_gx, img0_gy = gradient_xy(img0)
+        img1_gx, img1_gy = gradient_xy(img1)
+
+        img0_wx = torch.exp(-torch.mean(weight_fn(constant * img0_gx), 1, keepdim=True))
+        img0_wy = torch.exp(-torch.mean(weight_fn(constant * img0_gy), 1, keepdim=True))
+        img1_wx = torch.exp(-torch.mean(weight_fn(constant * img1_gx), 1, keepdim=True))
+        img1_wy = torch.exp(-torch.mean(weight_fn(constant * img1_gy), 1, keepdim=True))
+        
+        # First  two flow channels: 1->0 flow. So use img1 weights.
+        # Second two flow channels: 0->1 flow. So use img0 weights.
+        # weights_x and weights_y are for x and y's spatial gradients, respectively.
+        weights_x = torch.cat([img1_wx, img1_wx, img0_wx, img0_wx], dim=1)
+        weights_y = torch.cat([img1_wy, img0_wy, img0_wy, img1_wy], dim=1)
+
+        return weights_x, weights_y
+
+    def error_fn(x):
+        if error_type == 'L1':
+            y = torch.abs(x)
+        elif error_type == 'abs_robust':
+            y = (torch.abs(x) + 0.01).pow(0.4)
+        else:
+            raise ValueError('')
+        return y
+
+    flow_gx, flow_gy        = gradient_xy(flow)
+    weights_x, weights_y    = gradweight_xy(img0, img1)
+
+    smoothness_x = error_fn(flow_gx) * weights_x
+    smoothness_y = error_fn(flow_gy) * weights_y
+    return torch.mean(smoothness_x) + torch.mean(smoothness_y)
+
 
 if __name__ == '__main__':
     img0 = torch.zeros(3, 3, 256, 256).float().to(device)
