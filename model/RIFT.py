@@ -71,7 +71,7 @@ class RIFT:
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
                                find_unused_parameters=True)
-        self.use_edge_aware_smooth_loss = use_edge_aware_smooth_loss
+        self.use_edge_aware_smooth_loss = use_edge_aware_smooth_loss    # default: False, no edge awareness.
         self.smooth_loss_weight  = smooth_loss_weight
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
@@ -217,6 +217,7 @@ class RIFT:
         loss_smooth = 0
         for flow in flow_list + [flow_teacher]:
             if flow is not None:
+                # by default, use flow_smooth_delta
                 if self.use_edge_aware_smooth_loss:
                     curr_smooth_loss = edge_aware_smoothness_order1(img0, img1, flow)
                 else:

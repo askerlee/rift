@@ -372,7 +372,7 @@ class IFNet(nn.Module):
             # which is not used in SOFI.
             multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
             # multiflow_sofi: refined flow (1->0, 0->1).
-            multiflow_sofi = multiflow_sofi_d + multiflow * 2
+            multiflow_sofi = multiflow_sofi_d + multiflow.data * 2
             img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
             # Note the order: img 0, img 1.
             # img1_warped_sofi is to approximate img0, so it appears first.
