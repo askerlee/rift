@@ -226,8 +226,6 @@ class IFNet(nn.Module):
         if self.esti_sofi:
             self.block_sofi     =   IFBlock('block_sofi',       c=block_widths[2], img_chans=6, nonimg_chans=5,
                                             multi=self.Ms[2])
-            self.block_sofi_tea =   IFBlock('block_sofi_tea',   c=block_widths[2], img_chans=6, nonimg_chans=8, 
-                                            multi=self.Ms[2])
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
 
@@ -384,50 +382,11 @@ class IFNet(nn.Module):
             multiflow10_sofi,      multiflow01_sofi         = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
-            flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
-
-            if do_distillation:
-                # multiflow_sofi_skip and multimask_score are from block_sofi, 
-                # which always have the same M as the teacher.
-                multiflow_sofi_skip       = multiflow_sofi
-
-                # teacher only works at the last scale, i.e., the full image.
-                # block_sofi_tea ~ block_sofi, except that block_tea takes mid_gt (the middle frame) as extra input.
-                # block_sofi_tea input: torch.cat: [1, 13, 224, 224], flow: [1, 4, 224, 224].
-                # multiflow_d / multimask_score_d: flow / mask score difference 
-                # between the teacher and the student (or residual of the teacher). 
-                # The teacher only predicts the residual.
-                imgs   = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
-                nonimg = torch.cat((global_mask_score, mid_gt), 1)
-                multiflow_sofi_tea_d, multimask_score_sofi_tea = self.block_sofi_tea(imgs, nonimg, flow_sofi, scale=1)
-
-                # Removing this residual connection makes the teacher perform much worse.                      
-                multiflow_sofi_tea = multiflow_sofi_skip + multiflow_sofi_tea_d
-                img0_warped_sofi_tea, img1_warped_sofi_tea = \
-                    multiwarp(img0, img1, multiflow_sofi_tea_d, multimask_score_sofi_tea, self.Ms[2])
-                flow_sofi_tea = multimerge_flow(multiflow_sofi_tea, multimask_score_sofi_tea, self.Ms[2])
-
-                loss_distill_img0 = dual_teaching_loss(img0, 
-                                                   img1_warped_sofi,     flow_sofi[:, :2], 
-                                                   img1_warped_sofi_tea, flow_sofi_tea[:, :2],     
-                                                  )
-                loss_distill_img1 = dual_teaching_loss(img1, 
-                                                   img0_warped_sofi,     flow_sofi[:, 2:4], 
-                                                   img0_warped_sofi_tea, flow_sofi_tea[:, 2:4],     
-                                                  )
-                loss_distill += loss_distill_img0 + loss_distill_img1
-
-            else:
-                flow_sofi_tea        = None
-                img0_warped_sofi_tea = None
-                img1_warped_sofi_tea = None            
+            flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
         else:
             multiflow_sofi,       multiflow10_sofi,       multiflow01_sofi        = None, None, None
             multimask_score_sofi, multimask_score10_sofi, multimask_score01_sofi  = None, None, None
-            flow_sofi            = None
-            flow_sofi_tea        = None
-            img0_warped_sofi_tea = None
-            img1_warped_sofi_tea = None  
+            flow_sofi            = None 
 
         flow_list[3] = flow_sofi
 
@@ -475,10 +434,7 @@ class IFNet(nn.Module):
             refined_img_list[3] = refined_img0
             refined_img_list[4] = refined_img1
 
-        teacher_dict = { 'flow_teacher': flow_tea, 'merged_teacher': merged_tea, 
-                         'img0_warped_sofi_tea': img0_warped_sofi_tea, 
-                         'img1_warped_sofi_tea': img1_warped_sofi_tea, 
-                         'flow_sofi_teacher':    flow_sofi_tea }
+        teacher_dict = { 'flow_teacher': flow_tea, 'merged_teacher': merged_tea }
         # flow_list, mask_list: flow and mask in 3 different scales.
         # If mid_gt is None, loss_distill = 0.
         return flow_list, mask_list[2], crude_img_list, refined_img_list, teacher_dict, loss_distill

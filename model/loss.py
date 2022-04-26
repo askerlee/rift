@@ -120,6 +120,26 @@ class VGGPerceptualLoss(torch.nn.Module):
                 k += 1
         return loss
 
+# https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
+def flow_smooth_delta(flow, if_second_order=False):
+    def gradient(x):
+        D_dy = x[:, :, 1:] - x[:, :, :-1]
+        D_dx = x[:, :, :, 1:] - x[:, :, :, :-1]
+        return D_dx, D_dy
+
+    dx, dy = gradient(flow)
+    # dx2, dxdy = gradient(dx)
+    # dydx, dy2 = gradient(dy)
+    if if_second_order:
+        dx2, dxdy = gradient(dx)
+        dydx, dy2 = gradient(dy)
+        smooth_loss = dx.abs().mean() + dy.abs().mean() + dx2.abs().mean() + dxdy.abs().mean() + dydx.abs().mean() + dy2.abs().mean()
+    else:
+        smooth_loss = dx.abs().mean() + dy.abs().mean()
+    # smooth_loss = dx.abs().mean() + dy.abs().mean()  # + dx2.abs().mean() + dxdy.abs().mean() + dydx.abs().mean() + dy2.abs().mean()
+    # 暂时不上二阶的平滑损失，似乎加上以后就太猛了，无法降低photo loss TODO
+    return smooth_loss
+
 if __name__ == '__main__':
     img0 = torch.zeros(3, 3, 256, 256).float().to(device)
     img1 = torch.tensor(np.random.normal(

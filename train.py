@@ -333,6 +333,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
+    parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.02, type=float, 
+                        help='Flow smooth loss weight.')
+
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
                         help='use mixed precision')
@@ -372,6 +375,7 @@ if __name__ == "__main__":
                   esti_sofi=args.esti_sofi,
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
+                  smooth_loss_weight=args.smooth_loss_weight,
                   multi=args.multi,
                   weight_decay=args.weight_decay,
                   consistency_args=consistency_args,
