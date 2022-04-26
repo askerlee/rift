@@ -167,7 +167,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                     loss_dist = f"{info['loss_distill']:.4f}"
 
                 print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"stu {loss_stu} dist {loss_dist} sofi {loss_sofi} cons {info['loss_consist_str']}",
+                      f"stu {loss_stu} smo {info['loss_smooth']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
                       flush=True)
 
             time_stamp = time.time()

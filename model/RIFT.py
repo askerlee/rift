@@ -251,6 +251,7 @@ class RIFT:
                 'loss_tea':     loss_tea,
                 'loss_sofi':    loss_sofi,
                 'loss_distill': loss_distill,
+                'loss_smooth':  loss_smooth,
                 'loss_consist_str': loss_consist_str,
                }
 
