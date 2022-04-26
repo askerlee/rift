@@ -334,6 +334,8 @@ if __name__ == "__main__":
                         help='Consistency loss weight.')
     parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.001, type=float, 
                         help='Flow smooth loss weight.')
+    parser.add_argument('--edgesmooth', dest='use_edge_aware_smooth_loss', action='store_true', 
+                        help='Use image edge-aware smooth loss')
 
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
@@ -378,6 +380,7 @@ if __name__ == "__main__":
                   multi=args.multi,
                   weight_decay=args.weight_decay,
                   consistency_args=consistency_args,
+                  use_edge_aware_smooth_loss=args.use_edge_aware_smooth_loss,
                   mixed_precision=args.mixed_precision,
                   debug=args.debug)
     if args.cp is not None:

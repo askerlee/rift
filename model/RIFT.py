@@ -40,6 +40,7 @@ class RIFT:
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
+                 use_edge_aware_smooth_loss=False,
                  mixed_precision=False,
                  debug=False):
 
@@ -70,7 +71,7 @@ class RIFT:
             self.flownet = DDP(self.flownet, device_ids=[local_rank], 
                                output_device=local_rank,
                                find_unused_parameters=True)
-        self.use_edge_aware_smooth_loss = True
+        self.use_edge_aware_smooth_loss = use_edge_aware_smooth_loss
         self.smooth_loss_weight  = smooth_loss_weight
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
