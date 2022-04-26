@@ -127,7 +127,6 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                 imgs    = data_gpu[:, :6]
                 mid_gt  = data_gpu[:, 6:9]
 
-            data_time_interval = time.time() - time_stamp
             time_stamp = time.time()
             learning_rate = get_learning_rate(base_lr, step)
             pred, info = model.update(imgs, mid_gt, learning_rate, training=True)
@@ -166,8 +165,8 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                     loss_stu = f"{info['loss_stu']:.4f}"
                     loss_dist = f"{info['loss_distill']:.4f}"
 
-                print(f"ep {epoch} {bi+1} time {data_time_interval:.2f}+{train_time_interval:.2f} "
-                      f"stu {loss_stu} smo {info['loss_smooth']:.4f} sofi {loss_sofi} cons {info['loss_consist_str']}",
+                print(f"ep {epoch} {bi+1} t{train_time_interval:.2f} "
+                      f"stu {loss_stu} dist {loss_dist} smo {info['loss_smooth']:.4f} sofi {loss_sofi} ~{info['loss_consist_str']}",
                       flush=True)
 
             time_stamp = time.time()
