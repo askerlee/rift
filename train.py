@@ -332,7 +332,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
-    parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.02, type=float, 
+    parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.001 type=float, 
                         help='Flow smooth loss weight.')
 
     # mixed_precision: not recommended. Using mixed precision will lead to nan.

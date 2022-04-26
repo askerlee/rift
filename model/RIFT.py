@@ -36,7 +36,7 @@ class RIFT:
                  esti_sofi=False,
                  grad_clip=-1, 
                  distill_loss_weight=0.02, 
-                 smooth_loss_weight=0.02,
+                 smooth_loss_weight=0.001,
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
