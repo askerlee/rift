@@ -91,8 +91,8 @@ def multimerge_flow(multiflow, multimask_score, M):
         multiflowm0, multiflowm1 = multiflow[:, :2], multiflow[:, 2:4]
         flow = multiflow
     else:
-        multiflowm0 = multiflow[:, :M*2]
-        multiflowm1 = multiflow[:, M*2:]
+        multiflowm0 = multiflow[:, :2*M]
+        multiflowm1 = multiflow[:, 2*M:]
         # multiflow: [16, 4*M, 224, 224]
         mf_unpack_shape = list(multiflow.shape)
         mf_unpack_shape[1:2] = [M, 2]

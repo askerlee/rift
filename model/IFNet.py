@@ -386,7 +386,7 @@ class IFNet(nn.Module):
             crude_img_list[3]  = img1_warped_sofi
             crude_img_list[4]  = img0_warped_sofi
 
-            multiflow10_sofi,      multiflow01_sofi         = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
+            multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
             flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
@@ -398,27 +398,25 @@ class IFNet(nn.Module):
         flow_list[3] = flow_sofi
 
         # contextnet generates warped features of the input image. 
-        # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.
+        # multimask_score* is used in multiwarp, i.e., first warp features according to multiflow*, 
+        # then combine with multimask_score*.
         # ctx0, ctx1: four level conv features of img0 and img1, gradually scaled down. 
-        # If setting M=1, multiwarp falls back to warp, and is equivalent to the traditional RIFE scheme.
-        # But using merged flow seems to perform slightly worse.
-        ctx0 = self.contextnet(img0, M, multiflow0, multimask_score0, 
-                               multiflow10_sofi, multimask_score10_sofi)
-        ctx1 = self.contextnet(img1, M, multiflow1, multimask_score1, 
-                               multiflow01_sofi, multimask_score01_sofi)
-        # ctx0_sofi, ctx1_sofi: contextual features warped according to double of the multiflow.
-        # The double of the (mid -> 0/1) flow is to approximate the (1 -> 0 and 0 -> 1) flow.
-        if self.esti_sofi:
-            ctx0, ctx0_sofi = ctx0
-            ctx1, ctx1_sofi = ctx1
+        # ctx0_sofi, ctx1_sofi: contextual features warped according to the sofi multiflow.
+        # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.
+        # Otherwise, multiflow10_sofi, multimask_score10_sofi are None,
+        # and accordingly, ctx0_sofi, ctx1_sofi are None.
+        ctx0, ctx0_sofi = self.contextnet(img0, M, multiflow0, multimask_score0, 
+                                          multiflow10_sofi, multimask_score10_sofi)
+        ctx1, ctx1_sofi = self.contextnet(img1, M, multiflow1, multimask_score1, 
+                                          multiflow01_sofi, multimask_score01_sofi)
 
         # unet is to refine the crude image crude_img_list[2] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
         img_residual = self.unet(img0, img1, img0_warped, img1_warped, global_mask_score, flow, ctx0, ctx1)
         # unet activation function changes from softmax to tanh. No need to scale anymore.
-        merged_img = self.clamp(crude_img_list[2] + img_residual)
+        refined_img = self.clamp(crude_img_list[2] + img_residual)
         # refined_img_list[0~1] are always None, to make the indices consistent with crude_img_list.
-        refined_img_list[2] = merged_img
+        refined_img_list[2] = refined_img
 
         if self.esti_sofi:        
             # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.

@@ -98,14 +98,17 @@ class Contextnet(nn.Module):
             multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
             g4, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
 
+        fs = [f1, f2, f3, f4]
+        if multiflow2 is not None:
+            gs = [g1, g2, g3, g4]
+        else:
+            gs = None
+
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         # The feature maps in every scale are warped only after the last conv of the corresponding scale, 
         # not in the middle. I.e., here no conv will be applied to warped features.
-        if multiflow2 is not None:
-            return [f1, f2, f3, f4], [g1, g2, g3, g4]
-        else:
-            return [f1, f2, f3, f4]
+        return fs, gs
 
 # Unet: 17 channels of input, 3 channels of output.
 class Unet(nn.Module):
