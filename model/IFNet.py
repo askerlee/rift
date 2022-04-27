@@ -401,8 +401,8 @@ class IFNet(nn.Module):
         # multimask_score* is used in multiwarp, i.e., first warp features according to multiflow*, 
         # then combine with multimask_score*.
         # ctx0, ctx1: four level conv features of img0 and img1, gradually scaled down. 
-        # ctx0_sofi, ctx1_sofi: contextual features warped according to the sofi multiflow.
-        # If esti_sofi, the features will be warped by multiflow and multiflow_sofi, respectively.
+        # If esti_sofi, ctx0_sofi, ctx1_sofi are contextual features warped 
+        # by multiflow10_sofi and multiflow01_sofi, respectively.
         # Otherwise, multiflow10_sofi, multimask_score10_sofi are None,
         # and accordingly, ctx0_sofi, ctx1_sofi are None.
         ctx0, ctx0_sofi = self.contextnet(img0, M, multiflow0, multimask_score0, 
@@ -427,12 +427,15 @@ class IFNet(nn.Module):
             # Align flow10 to image0.
             flow10_warp = warp(flow10, flow01)
             # flow_sofi extended with flow01 aligned to image1.
-            flow_sofi_01w = torch.cat((flow_sofi, flow01_warp), dim=1)
+            #flow_sofi_01w = torch.cat((flow_sofi, flow01_warp), dim=1)
             # flow_sofi extended with flow10 aligned to image0.
-            flow_sofi_10w = torch.cat((flow_sofi, flow10_warp), dim=1)
+            #flow_sofi_10w = torch.cat((flow_sofi, flow10_warp), dim=1)
+            flow_sofi_warped = torch.cat((flow_sofi, flow10_warp, flow01_warp), dim=1)
 
-            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_10w, ctx1_sofi)
-            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_01w, ctx0_sofi)
+            #img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_10w, ctx1_sofi)
+            #img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_01w, ctx0_sofi)
+            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_warped, ctx1_sofi)
+            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_warped, ctx0_sofi)
 
             refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
             refined_img1  = self.clamp(img0_warped_sofi + img1_residual)
