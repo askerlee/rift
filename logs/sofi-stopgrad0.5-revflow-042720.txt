@@ -1,3 +1,8 @@
+ep 0, 1523, stu 31.23, tea 32.08 dstl 0.92, sofi 26.46,26.35/28.29,28.60
+Validation Chairs EPE: 9.836374
+ep 1, 3046, stu 33.45, tea 34.80 dstl 0.73, sofi 29.31,29.31/31.76,31.71
+Validation Chairs EPE: 6.932612
+
 torchrun --nproc_per_node 2 train.py --bs 16 --sofi --flowvs chairs --smoothweight 0.001 --simplesmooth
 WARNING:torch.distributed.run:
 *****************************************
@@ -3230,81 +3235,3 @@ ep 2 161 t0.75 stu 0.0214 dist 0.7347 smo 0.2461 sofi 0.0260 ~-
 ep 2 162 t0.77 stu 0.0223 dist 0.8238 smo 0.2680 sofi 0.0285 ~0.213/*1.17,1.06
 ep 2 163 t0.76 stu 0.0186 dist 0.5576 smo 0.2371 sofi 0.0237 ~-
 ep 2 164 t0.75 stu 0.0180 dist 0.5348 smo 0.2399 sofi 0.0222 ~0.403/e7807
-^CWARNING:torch.distributed.elastic.agent.server.api:Received 2 death signal, shutting down workers
-WARNING:torch.distributed.elastic.multiprocessing.api:Sending process 539648 closing signal SIGINT
-WARNING:torch.distributed.elastic.multiprocessing.api:Sending process 539649 closing signal SIGINT
-Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7f9df69e9040>
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1362, in __del__
-    self._shutdown_workers()
-  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1313, in _shutdown_workers
-    self._workers_done_event.set()
-  File "/usr/lib/python3.8/multiprocessing/synchronize.py", line 338, in set
-    self._cond.notify_all()
-  File "/usr/lib/python3.8/multiprocessing/synchronize.py", line 297, in notify_all
-    self.notify(n=sys.maxsize)
-  File "/usr/lib/python3.8/multiprocessing/synchronize.py", line 284, in notify
-    while sleepers < n and self._sleeping_count.acquire(False):
-KeyboardInterrupt: 
-Traceback (most recent call last):
-  File "train.py", line 393, in <module>
-    train(model, args.local_rank, args.base_lr, 
-  File "train.py", line 132, in train
-    pred, info = model.update(imgs, mid_gt, learning_rate, training=True)
-  File "/home/shaohua/rift/model/RIFT.py", line 187, in update
-    loss_consist, loss_distill2, aug_desc = calculate_consist_loss(**args)
-  File "/home/shaohua/rift/model/augment_consist_loss.py", line 467, in calculate_consist_loss
-    loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
-  File "/usr/local/lib/python3.8/dist-packages/torch/nn/modules/module.py", line 1129, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/usr/local/lib/python3.8/dist-packages/torch/nn/parallel/distributed.py", line 987, in forward
-    output = self.module(*inputs[0], **kwargs[0])
-  File "/usr/local/lib/python3.8/dist-packages/torch/nn/modules/module.py", line 1129, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/home/shaohua/rift/model/IFNet.py", line 410, in forward
-    ctx1, ctx1_sofi = self.contextnet(img1, M, multiflow1, multimask_score1, 
-  File "/usr/local/lib/python3.8/dist-packages/torch/nn/modules/module.py", line 1129, in _call_impl
-    return forward_call(*input, **kwargs)
-  File "/home/shaohua/rift/model/refine.py", line 75, in forward
-    f1, _ = multiwarp(x, None, multiflow, multimask_score, M)
-  File "/home/shaohua/rift/model/warp.py", line 47, in multiwarp
-    maskm0_score_warped = warp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
-  File "/home/shaohua/rift/model/warp.py", line 22, in warp
-    tenFlow[:, 1:2, :, :] / ((tenInput.shape[2] - 1.0) / 2.0)], 1)
-KeyboardInterrupt
-Traceback (most recent call last):
-  File "train.py", line 393, in <module>
-    train(model, args.local_rank, args.base_lr, 
-  File "train.py", line 132, in train
-    pred, info = model.update(imgs, mid_gt, learning_rate, training=True)
-  File "/home/shaohua/rift/model/RIFT.py", line 236, in update
-    loss_G.backward()
-  File "/usr/local/lib/python3.8/dist-packages/torch/_tensor.py", line 396, in backward
-    torch.autograd.backward(self, gradient, retain_graph, create_graph, inputs=inputs)
-  File "/usr/local/lib/python3.8/dist-packages/torch/autograd/__init__.py", line 173, in backward
-    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
-KeyboardInterrupt
-Traceback (most recent call last):
-  File "/usr/local/bin/torchrun", line 8, in <module>
-    sys.exit(main())
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 345, in wrapper
-    return f(*args, **kwargs)
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/run.py", line 761, in main
-    run(args)
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/run.py", line 752, in run
-    elastic_launch(
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/launcher/api.py", line 131, in __call__
-    return launch_agent(self._config, self._entrypoint, list(args))
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/launcher/api.py", line 236, in launch_agent
-    result = agent.run()
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/elastic/metrics/api.py", line 125, in wrapper
-    result = f(*args, **kwargs)
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/elastic/agent/server/api.py", line 709, in run
-    result = self._invoke_run(role)
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/elastic/agent/server/api.py", line 850, in _invoke_run
-    time.sleep(monitor_interval)
-  File "/usr/local/lib/python3.8/dist-packages/torch/distributed/elastic/multiprocessing/api.py", line 60, in _terminate_process_handler
-    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
-torch.distributed.elastic.multiprocessing.api.SignalException: Process 539617 got signal: 2
-^C[2m⏎[m                                                                               ⏎ [K[?2004h]0;fish /home/shaohua/rift[30m[m[32mshaohua[m@[33mMEHDI238[m [32m~/rift[m (sofi)[m [m[31m[[1m[31mSIGINT[m[31m][m[m> [K[41C
-[30m[m[30m[m[?2004l
