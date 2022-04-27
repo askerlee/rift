@@ -203,7 +203,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), esti_sofi=False):
+    def __init__(self, multi=(8,8,4), esti_sofi=False, stopgrad_prob=0.3):
         super(IFNet, self).__init__()
 
         block_widths = [240, 144, 80]
@@ -228,6 +228,7 @@ class IFNet(nn.Module):
                                             multi=self.Ms[2])
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
+            self.stopgrad_prob = 0.3
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -336,7 +337,7 @@ class IFNet(nn.Module):
             merged_tea = img0_warped_tea * mask_tea + img1_warped_tea * (1 - mask_tea)
             flow_tea = multimerge_flow(multiflow_tea, multimask_score_tea, self.Ms[2])
         else:
-            flow_tea = None
+            flow_tea   = None
             merged_tea = None
 
         for i in range(3):
@@ -372,7 +373,13 @@ class IFNet(nn.Module):
             # which is not used in SOFI.
             multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
             # multiflow_sofi: refined flow (1->0, 0->1).
-            multiflow_sofi = multiflow_sofi_d + multiflow.data * 2
+            # stopgrad helps during early stages, but hurts during later stages. 
+            # Therefore make it stochastic with a small prob (default 0.3).
+            if self.stopgrad_prob > 0 and np.random.rand() < self.stopgrad_prob:
+                multiflow_sofi = multiflow_sofi_d + multiflow.data * 2
+            else:
+                multiflow_sofi = multiflow_sofi_d + multiflow * 2
+
             img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
             # Note the order: img 0, img 1.
             # img1_warped_sofi is to approximate img0, so it appears first.

@@ -337,6 +337,9 @@ if __name__ == "__main__":
     parser.add_argument('--simplesmooth', dest='use_edge_aware_smooth_loss', action='store_false', 
                         help='Not to use image edge-aware smooth loss')
 
+    parser.add_argument('--stopgradprob', dest='stopgrad_prob', default=0.3, type=float, 
+                        help='Stopgrad prob (from sofi flow to RIFT flow) for SOFI estimation.')
+
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
                         help='use mixed precision')
@@ -377,6 +380,7 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
                   smooth_loss_weight=args.smooth_loss_weight,
+                  stopgrad_prob=args.stopgrad_prob,
                   multi=args.multi,
                   weight_decay=args.weight_decay,
                   consistency_args=consistency_args,
