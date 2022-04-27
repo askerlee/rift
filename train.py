@@ -333,7 +333,7 @@ if __name__ == "__main__":
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
     parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.0, type=float, 
-                        help='Flow smooth loss weight (default: disabled).')
+                        help='Flow smooth loss weight (0: disabled. If enabling, recommend 0.001).')
     parser.add_argument('--simplesmooth', dest='use_edge_aware_smooth_loss', action='store_false', 
                         help='Not to use image edge-aware smooth loss')
 
