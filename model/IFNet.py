@@ -422,20 +422,19 @@ class IFNet(nn.Module):
             # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.
             # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
             flow10, flow01 = flow_sofi.split(2, dim=1)
-            # Align flow01 to image1.
+            # flow01_warp: flow01 aligned to image1.
             flow01_warp = warp(flow01, flow10)
-            # Align flow10 to image0.
+            # flow10_warp: flow10 aligned to image0.
             flow10_warp = warp(flow10, flow01)
             # flow_sofi extended with flow01 aligned to image1.
-            #flow_sofi_01w = torch.cat((flow_sofi, flow01_warp), dim=1)
+            flow_sofi_01w = torch.cat((flow_sofi, flow01_warp), dim=1)
             # flow_sofi extended with flow10 aligned to image0.
-            #flow_sofi_10w = torch.cat((flow_sofi, flow10_warp), dim=1)
+            flow_sofi_10w = torch.cat((flow_sofi, flow10_warp), dim=1)
             flow_sofi_warped = torch.cat((flow_sofi, flow10_warp, flow01_warp), dim=1)
-
             #img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_10w, ctx1_sofi)
             #img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_01w, ctx0_sofi)
-            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_warped, ctx1_sofi)
-            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_warped, ctx0_sofi)
+            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_01w, ctx1_sofi)
+            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_10w, ctx0_sofi)
 
             refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
             refined_img1  = self.clamp(img0_warped_sofi + img1_residual)
