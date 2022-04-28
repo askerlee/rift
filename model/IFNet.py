@@ -387,7 +387,8 @@ class IFNet(nn.Module):
                 # multiflow_sofi: refined flow (1->0, 0->1).
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
-                if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob):
+                if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
+                  or k > 0:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
