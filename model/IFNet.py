@@ -203,7 +203,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), esti_sofi=False, stopgrad_prob=0):
+    def __init__(self, multi=(8,8,4), esti_sofi=False, sofi_loops=2):
         super(IFNet, self).__init__()
 
         block_widths = [240, 160, 120]
@@ -228,7 +228,8 @@ class IFNet(nn.Module):
                                       multi=self.Ms[2])
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
-            self.stopgrad_prob = stopgrad_prob
+            self.stopgrad_prob = 0
+            self.sofi_loops = sofi_loops
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -365,22 +366,25 @@ class IFNet(nn.Module):
             # Ms: multi, i.e., different scales in each layer.
             # First use 2*(middle->0, middle->1) to approximate the flow (1->0, 0->1).
             # db: double (flow)
-            img0_warped_db, img1_warped_db = \
-                multiwarp(img0, img1, multiflow * 2, multimask_score, self.Ms[-1])
-            imgs = torch.cat((img0, img0_warped_db, img1, img1_warped_db), 1)
-            # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
-            # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
-            # which is not used in SOFI.
-            multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow*2, scale=scale_list[0])
-            # multiflow_sofi: refined flow (1->0, 0->1).
-            # stopgrad helps during early stages, but hurts during later stages. 
-            # Therefore make it stochastic with a small prob (default 0.3).
-            if self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob:
-                multiflow_sofi = multiflow_sofi_d + multiflow.data * 2
-            else:
-                multiflow_sofi = multiflow_sofi_d + multiflow * 2
+            multiflow_sofi = multiflow * 2
+            img0_warped_sofi, img1_warped_sofi = \
+                multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
+            for k in range(self.sofi_loop):
+                imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
+                # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
+                # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
+                # which is not used in SOFI.
+                multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, multiflow_sofi, scale=scale_list[0])
+                # multiflow_sofi: refined flow (1->0, 0->1).
+                # stopgrad helps during early stages, but hurts during later stages. 
+                # Therefore make it stochastic with a small prob (default 0.3).
+                if k == 0 and self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob:
+                    multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
+                else:
+                    multiflow_sofi = multiflow_sofi_d + multiflow_sofi
 
-            img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
+                img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
+
             # Note the order: img 0, img 1.
             # img1_warped_sofi is to approximate img0, so it appears first.
             crude_img_list[3]  = img1_warped_sofi

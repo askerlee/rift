@@ -290,6 +290,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
                         help='Do SOFI estimation')
+    parser.add_argument('--sofiloops', dest='sofi_loops', default=2, type=int)
+
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
@@ -337,9 +339,11 @@ if __name__ == "__main__":
     parser.add_argument('--simplesmooth', dest='use_edge_aware_smooth_loss', action='store_false', 
                         help='Not to use image edge-aware smooth loss')
 
+    '''
     parser.add_argument('--stopgradprob', dest='stopgrad_prob', default=0, type=float, 
                         help='Stopgrad prob (from sofi flow to RIFT flow) for SOFI estimation '
                         'default: 0, seems to hurt).')
+    '''
 
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
@@ -381,7 +385,7 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
                   smooth_loss_weight=args.smooth_loss_weight,
-                  stopgrad_prob=args.stopgrad_prob,
+                  sofi_loops=args.sofi_loops,
                   multi=args.multi,
                   weight_decay=args.weight_decay,
                   consistency_args=consistency_args,
