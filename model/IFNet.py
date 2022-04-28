@@ -209,14 +209,14 @@ class IFNet(nn.Module):
         block_widths = [240, 144, 80]
 
         self.Ms = multi
-        self.block0 =       IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
+        self.block0     =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
                                     multi=self.Ms[0])
-        self.block1 =       IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
+        self.block1     =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
                                     multi=self.Ms[1])
-        self.block2 =       IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
+        self.block2     =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
                                     multi=self.Ms[2])
         # block_tea takes mid_gt (the middle frame) as extra input. 
-        self.block_tea =    IFBlock('block_tea',  c=block_widths[2], img_chans=6, nonimg_chans=8,
+        self.block_tea  =   IFBlock('block_tea',  c=block_widths[2], img_chans=6, nonimg_chans=8,
                                     multi=self.Ms[2])
         
         self.contextnet = Contextnet()
@@ -228,7 +228,7 @@ class IFNet(nn.Module):
                                             multi=self.Ms[2])
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
-            self.stopgrad_prob = 0.3
+            self.stopgrad_prob = stopgrad_prob
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -430,9 +430,8 @@ class IFNet(nn.Module):
             flow_sofi_01a1 = torch.cat((flow_sofi, flow01_align1), dim=1)
             # flow_sofi extended with flow10 aligned to image0.
             flow_sofi_10a0 = torch.cat((flow_sofi, flow10_align0), dim=1)
-            flow_sofi_warp = torch.cat((flow_sofi, flow10_align0, flow01_align1), dim=1)
-            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_warp, ctx1_sofi)
-            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_warp, ctx0_sofi)
+            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_01a1, ctx1_sofi)
+            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_10a0, ctx0_sofi)
 
             refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
             refined_img1  = self.clamp(img0_warped_sofi + img1_residual)

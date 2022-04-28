@@ -339,7 +339,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--stopgradprob', dest='stopgrad_prob', default=0, type=float, 
                         help='Stopgrad prob (from sofi flow to RIFT flow) for SOFI estimation '
-                        '(default: 0, seems to hurt).')
+                        'default: 0, seems to hurt).')
 
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 

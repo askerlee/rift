@@ -37,7 +37,6 @@ class RIFT:
                  grad_clip=-1, 
                  distill_loss_weight=0.02, 
                  smooth_loss_weight=0.001,
-                 stopgrad_prob=0.3,
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
@@ -50,7 +49,7 @@ class RIFT:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, esti_sofi, stopgrad_prob)
+            self.flownet = IFNet(multi, esti_sofi)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
