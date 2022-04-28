@@ -52,7 +52,7 @@ class RIFT:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, is_big_model, esti_sofi, num_sofi_loops)
+            self.flownet = IFNet(multi, is_big_model, esti_sofi, num_sofi_loops, cut_sofi_loop_grad)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
