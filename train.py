@@ -290,7 +290,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
                         help='Do SOFI estimation')
-    parser.add_argument('--sofiloops', dest='sofi_loops', default=2, type=int)
+    parser.add_argument('--sofiloops', dest='num_sofi_loops', default=2, type=int)
 
     parser.add_argument('--big', dest='is_big_model', action='store_true', 
                         help='Use a bigger model (more channels)')    
@@ -388,7 +388,7 @@ if __name__ == "__main__":
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,
                   smooth_loss_weight=args.smooth_loss_weight,
-                  sofi_loops=args.sofi_loops,
+                  num_sofi_loops=args.num_sofi_loops,
                   multi=args.multi,
                   weight_decay=args.weight_decay,
                   consistency_args=consistency_args,

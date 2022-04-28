@@ -203,7 +203,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, sofi_loops=2):
+    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=2):
         super(IFNet, self).__init__()
 
         if is_big_model:
@@ -232,9 +232,9 @@ class IFNet(nn.Module):
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
-            self.sofi_loops = sofi_loops
+            self.num_sofi_loops = num_sofi_loops
         else:
-            self.sofi_loops = 0
+            self.num_sofi_loops = 0
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -262,7 +262,7 @@ class IFNet(nn.Module):
         # 3 scales of interpolation flow. 
         flow_list = [None, None, None]
         # 2 loops of sofi flow.
-        sofi_flow_list = [ None for i in range(self.sofi_loops) ]
+        sofi_flow_list = [ None for i in range(self.num_sofi_loops) ]
         # 3 scales of backwarped middle frame (each scale has two images of two directions).
         warped_imgs_list = []
         # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
@@ -378,7 +378,7 @@ class IFNet(nn.Module):
             global_mask_score_sofi = global_mask_score
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
-            for k in range(self.sofi_loops):
+            for k in range(self.num_sofi_loops):
                 imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
                 # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
