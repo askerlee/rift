@@ -206,7 +206,7 @@ class IFNet(nn.Module):
     def __init__(self, multi=(8,8,4), esti_sofi=False, stopgrad_prob=0):
         super(IFNet, self).__init__()
 
-        block_widths = [240, 144, 80]
+        block_widths = [240, 160, 120]
 
         self.Ms = multi
         self.block0     =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
@@ -224,8 +224,8 @@ class IFNet(nn.Module):
         self.unet = Unet()
         self.esti_sofi = esti_sofi
         if self.esti_sofi:
-            self.block_sofi     =   IFBlock('block_sofi',       c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                            multi=self.Ms[2])
+            self.block_sofi = IFBlock('block_sofi', c=block_widths[2], img_chans=6, nonimg_chans=5,
+                                      multi=self.Ms[2])
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = stopgrad_prob
