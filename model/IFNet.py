@@ -371,6 +371,7 @@ class IFNet(nn.Module):
             # db: double (flow)
             multiflow_sofi = multiflow * 2
             flow_sofi      = flow *2
+            global_mask_score_sofi = global_mask_score
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
             for k in range(self.sofi_loops):
@@ -378,7 +379,7 @@ class IFNet(nn.Module):
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
                 # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
                 # which is not used in SOFI.
-                multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow_sofi, scale=scale_list[0])
+                multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score_sofi, flow_sofi, scale=scale_list[0])
                 # multiflow_sofi: refined flow (1->0, 0->1).
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
@@ -387,7 +388,7 @@ class IFNet(nn.Module):
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
                 flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
-
+                global_mask_score_sofi = multimask_score_sofi[:, [-1]]
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
             # Note the order: img 0, img 1.
