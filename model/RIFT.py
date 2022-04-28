@@ -37,7 +37,7 @@ class RIFT:
                  grad_clip=-1, 
                  distill_loss_weight=0.02, 
                  smooth_loss_weight=0.001,
-                 stopgrad_prob=0.3,
+                 stopgrad_prob=0,
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
