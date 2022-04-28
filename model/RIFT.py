@@ -39,6 +39,7 @@ class RIFT:
                  distill_loss_weight=0.02, 
                  smooth_loss_weight=0.001,
                  num_sofi_loops=2,
+                 cut_sofi_loop_grad=True,
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
