@@ -489,7 +489,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     for sofi_idx in range(num_sofi_loops):
         if sofi_flow_list_a[sofi_idx] is not None:
             loss_consist_sofi += torch.abs(sofi_flow_list_a[sofi_idx] - sofi_flow_list2[sofi_idx])[smask].mean()
-    loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_loops + loss_consist_tea) / 2
+    loss_consist = ((loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_loops) / 2 + loss_consist_tea) / 2
 
     if aug_type == 'shift':
         dx, dy = tidbit.flatten().tolist()[:2]
