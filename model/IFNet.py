@@ -367,6 +367,7 @@ class IFNet(nn.Module):
             # First use 2*(middle->0, middle->1) to approximate the flow (1->0, 0->1).
             # db: double (flow)
             multiflow_sofi = multiflow * 2
+            flow_sofi      = flow *2
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
             for k in range(self.sofi_loops):
@@ -374,7 +375,7 @@ class IFNet(nn.Module):
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
                 # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
                 # which is not used in SOFI.
-                multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, multiflow_sofi, scale=scale_list[0])
+                multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score, flow_sofi, scale=scale_list[0])
                 # multiflow_sofi: refined flow (1->0, 0->1).
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
@@ -382,6 +383,7 @@ class IFNet(nn.Module):
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
+                flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
 
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
@@ -393,7 +395,6 @@ class IFNet(nn.Module):
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
-            flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
         else:
             multiflow_sofi,       multiflow10_sofi,       multiflow01_sofi        = None, None, None
             multimask_score_sofi, multimask_score10_sofi, multimask_score01_sofi  = None, None, None
