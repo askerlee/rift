@@ -386,8 +386,11 @@ class IFNet(nn.Module):
                 # which is not used in SOFI.
                 multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score_sofi, flow_sofi, scale=scale_list[0])
                 # multiflow_sofi: refined flow (1->0, 0->1).
-                # stopgrad helps during early stages, but hurts during later stages. 
-                # Therefore make it stochastic with a small prob (default 0.3).
+                # In the first loop, stopgrad helps during early stages, but hurts during later stages, 
+                # even if it's activated with a small probability like 0.3.
+                # So it's disabled by initializing stopgrad_prob=0.
+                # In later loops, we can choose if to cut the gradient flow to the previously estimated flow or not 
+                # by setting cut_sofi_loop_grad.
                 if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
                   or (k > 0 and self.cut_sofi_loop_grad):
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
