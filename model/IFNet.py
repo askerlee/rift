@@ -203,11 +203,14 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), esti_sofi=False, sofi_loops=2):
+    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, sofi_loops=2):
         super(IFNet, self).__init__()
 
-        block_widths = [240, 160, 120]
-
+        if is_big_model:
+            block_widths = [240, 160, 120]
+        else:
+            block_widths = [240, 144, 80]
+            
         self.Ms = multi
         self.block0     =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
                                     multi=self.Ms[0])

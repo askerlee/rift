@@ -292,6 +292,8 @@ if __name__ == "__main__":
                         help='Do SOFI estimation')
     parser.add_argument('--sofiloops', dest='sofi_loops', default=2, type=int)
 
+    parser.add_argument('--big', dest='is_big_model', action='store_true', 
+                        help='Use a bigger model (more channels)')    
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
@@ -381,6 +383,7 @@ if __name__ == "__main__":
     }
 
     model = RIFT(args.local_rank, 
+                  is_big_model=args.is_big_model,
                   esti_sofi=args.esti_sofi,
                   grad_clip=args.clip,
                   distill_loss_weight=args.distill_loss_weight,

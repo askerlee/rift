@@ -33,6 +33,7 @@ except:
 
 class RIFT:
     def __init__(self, local_rank=-1, use_old_model=False, 
+                 is_big_model=False,
                  esti_sofi=False,
                  grad_clip=-1, 
                  distill_loss_weight=0.02, 
@@ -50,7 +51,7 @@ class RIFT:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, esti_sofi, sofi_loops)
+            self.flownet = IFNet(multi, is_big_model, esti_sofi, sofi_loops)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []
