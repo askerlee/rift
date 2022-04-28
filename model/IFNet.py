@@ -233,7 +233,7 @@ class IFNet(nn.Module):
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
             self.num_sofi_loops = num_sofi_loops
-            self.cut_sofi_loop_grad = True
+            self.cut_sofi_loop_grad = False
         else:
             self.num_sofi_loops = 0
 
@@ -389,7 +389,7 @@ class IFNet(nn.Module):
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
                 if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
-                  or k > 0 and self.cut_sofi_loop_grad:
+                  or (k > 0 and self.cut_sofi_loop_grad):
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
