@@ -39,7 +39,7 @@ def visualize_flow(flow, save_name):
 
 
 # img0, img1, mid_gt are 4D tensors of (B, 3, 224, 224). mid_gt are the middle frames.
-def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10)):
+def random_shift(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=(16, 10)):
     B, C, H, W = img0.shape
     u_shift_sigma, v_shift_sigma = shift_sigmas
     
@@ -141,10 +141,10 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=(16, 10))
     dxy = dxy.view(1, 4, 1, 1)
 
     offset_dict = { 'dxy': dxy, 'img_bounds': [img0_bound, img1_bound], 'pad': [dx2, dy2] }
-    flow_list_a = flow_shifter(flow_list, offset_dict, sofi_idx)
+    flow_list_a = flow_shifter(flow_list, offset_dict, sofi_start_idx)
     return img0a, img1a, mid_gta, flow_list_a, mask, dxy
                 
-def random_flip(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
+def random_flip(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     if np.random.random() > 0.5:
         FLIP_OP = hflip
         flip_direction = 'h'
@@ -164,7 +164,7 @@ def random_flip(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     flow_list_a = flow_flipper(flow_list, flip_direction)
     return img0a, img1a, mid_gta, flow_list_a, mask, flip_direction
 
-def random_rotate(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
+def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     if np.random.random() < 1/3.:
         angle = 90
     elif np.random.random() < 2/3.:
@@ -187,7 +187,7 @@ def random_rotate(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     return img0a, img1a, mid_gta, flow_list_a, mask, angle
 
 # B, C, H, W
-def color_jitter(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
+def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     # A small probability to do individual jittering. 
     # More challenging, therefore smaller prob.
     asym_jitter_prob = 0.2
@@ -221,7 +221,7 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     return img0a, img1a, mid_gta, flow_list, mask, 'j'
 
 # B, C, H, W
-def random_erase(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
+def random_erase(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     # Randomly choose a rectangle region to erase.
     # Erased height/width is within this range.
     hw_bounds = [40, 80]
@@ -261,7 +261,7 @@ def random_erase(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
     return img0a, img1a, mid_gta, flow_list, mask, erased_pixel_count
 
-def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
+def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     # Randomly choose a scale factor.
     # Scale factor is within this range.
     H, W   = img0.shape[2:]
@@ -345,7 +345,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas=None):
 
     return img0a, img1a, mid_gta, flow_list_a, mask, [scale_H, scale_W]
 
-def flow_shifter(flow_list, offset_dict, sofi_idx=-1):
+def flow_shifter(flow_list, offset_dict, sofi_start_idx=-1):
     offset, img_bounds, pad_xy = offset_dict['dxy'], offset_dict['img_bounds'], offset_dict['pad']
 
     flow_list_a = []
@@ -353,7 +353,7 @@ def flow_shifter(flow_list, offset_dict, sofi_idx=-1):
         if flow is None:
             flow_list_a.append(None)
             continue
-        if i == sofi_idx:
+        if i >= sofi_start_idx:
             flow_sofi = flow
             if flow_sofi is not None:
                 img0_bound, img1_bound = img_bounds
@@ -452,18 +452,19 @@ def flow_rotator(flow_list, angle):
     return flow_list_a
 
 # flow_list include flow in all scales.
-def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, num_rift_scales, 
+def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, sofi_flow_list, 
                            shift_sigmas, aug_handler, aug_type, mixed_precision):
-    sofi_idx = num_rift_scales
-    flow_list = flow_list + [flow_teacher]
+    num_rift_scales = len(flow_list)
+    flow_list = flow_list + [flow_teacher] + sofi_flow_list
+    sofi_start_idx = num_rift_scales + 1
     img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
-            aug_handler(img0, img1, mid_gt, flow_list, sofi_idx, shift_sigmas)
-
-    flow_list_a, flow_teacher_a = flow_list_a[:-1], flow_list_a[-1]
+            aug_handler(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas)
+    flow_list_a, flow_teacher_a, sofi_flow_list_a = flow_list_a[:num_rift_scales], flow_list_a[num_rift_scales], \
+                                                    flow_list_a[sofi_start_idx:]
     imgsa = torch.cat((img0a, img1a), 1)            
 
     with autocast(enabled=mixed_precision):
-        flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict2, \
+        flow_list2, sofi_flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict2, \
             loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
 
     loss_consist_stu = 0
@@ -483,11 +484,12 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, n
     else:
         loss_consist_tea = 0
 
-    if flow_list[sofi_idx] is not None:
-        loss_consist_sofi = torch.abs(flow_list_a[sofi_idx] - flow_list2[sofi_idx])[smask].mean()
-        loss_consist = ((loss_consist_stu + loss_consist_sofi) / (num_rift_scales + 1) + loss_consist_tea) / 2
-    else:
-        loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_tea) / 2
+    num_sofi_loops = len(sofi_flow_list)
+    loss_consist_sofi = 0
+    for sofi_idx in range(num_sofi_loops):
+        if flow_list_a[sofi_idx] is not None:
+            loss_consist_sofi += torch.abs(sofi_flow_list_a[sofi_idx] - sofi_flow_list2[sofi_idx])[smask].mean()
+    loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_loops + loss_consist_tea) / 2
 
     if aug_type == 'shift':
         dx, dy = tidbit.flatten().tolist()[:2]

@@ -233,6 +233,8 @@ class IFNet(nn.Module):
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
             self.sofi_loops = sofi_loops
+        else:
+            self.sofi_loops = 0
 
         # Clamp with gradient works worse. Maybe when a value is clamped, that means it's an outlier?
         self.use_clamp_with_grad = False
@@ -257,8 +259,10 @@ class IFNet(nn.Module):
         stu_blocks = [self.block0, self.block1, self.block2]
         loss_distill = 0
 
-        # 3 scales of interpolation flow + sofi flow.
-        flow_list = [None, None, None, None]
+        # 3 scales of interpolation flow. 
+        flow_list = [None, None, None]
+        # 2 loops of sofi flow.
+        sofi_flow_list = [ None for i in range(self.sofi_loops) ]
         # 3 scales of backwarped middle frame (each scale has two images of two directions).
         warped_imgs_list = []
         # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
@@ -383,18 +387,15 @@ class IFNet(nn.Module):
                 # multiflow_sofi: refined flow (1->0, 0->1).
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
-                if k == 0 and self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob:
+                if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
+                  or k > 0:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
                 flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
                 global_mask_score_sofi = multimask_score_sofi[:, [-1]]
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
-
-            # Note the order: img 0, img 1.
-            # img1_warped_sofi is to approximate img0, so it appears first.
-            crude_img_list[3]  = img1_warped_sofi
-            crude_img_list[4]  = img0_warped_sofi
+                sofi_flow_list.append(flow_sofi)
 
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
@@ -402,9 +403,6 @@ class IFNet(nn.Module):
         else:
             multiflow_sofi,       multiflow10_sofi,       multiflow01_sofi        = None, None, None
             multimask_score_sofi, multimask_score10_sofi, multimask_score01_sofi  = None, None, None
-            flow_sofi            = None 
-
-        flow_list[3] = flow_sofi
 
         # contextnet generates warped features of the input image. 
         # multimask_score* is used in multiwarp, i.e., first warp features according to multiflow*, 
@@ -452,4 +450,4 @@ class IFNet(nn.Module):
         teacher_dict = { 'flow_teacher': flow_tea, 'merged_teacher': merged_tea }
         # flow_list, mask_list: flow and mask in 3 different scales.
         # If mid_gt is None, loss_distill = 0.
-        return flow_list, mask_list[2], crude_img_list, refined_img_list, teacher_dict, loss_distill
+        return flow_list, sofi_flow_list, mask_list[2], crude_img_list, refined_img_list, teacher_dict, loss_distill

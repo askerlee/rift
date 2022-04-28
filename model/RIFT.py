@@ -118,13 +118,13 @@ class RIFT:
     def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]        
-        flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
+        flow_list, sofi_flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
                 = self.flownet(imgs, scale_list, timestep=timestep)
         stu_pred = refined_img_list[2]
         if TTA == False:
             return stu_pred
         else:
-            flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict, loss_distill2 \
+            flow_list2, sofi_flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict, loss_distill2 \
                 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
             return (stu_pred + refined_img_list2[2].flip(2).flip(3)) / 2
     
@@ -140,16 +140,16 @@ class RIFT:
             self.eval()
         
         with autocast(enabled=self.mixed_precision):
-            flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill = \
+            flow_list, sofi_flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill = \
                     self.flownet(imgs, mid_gt, scale_list=[4, 2, 1])
 
         flow_teacher    = teacher_dict['flow_teacher']
         merged_teacher  = teacher_dict['merged_teacher']
 
-        num_rift_scales = 3
-        # flow_list is of length 4.
+        # flow_list is of length 3.
         args = dict(model=self.flownet, img0=img0, img1=img1, mid_gt=mid_gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, num_rift_scales=num_rift_scales,
+                    flow_list=flow_list, flow_teacher=flow_teacher, 
+                    sofi_flow_list=sofi_flow_list,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
         do_consist_loss = True
         # 0.2
@@ -217,7 +217,7 @@ class RIFT:
             loss_sofi = torch.tensor(0, device=imgs.device)
 
         loss_smooth = 0
-        for flow in flow_list + [flow_teacher]:
+        for flow in flow_list + [flow_teacher] + sofi_flow_list:
             if flow is not None:
                 # by default, use flow_smooth_delta
                 if self.use_edge_aware_smooth_loss:
@@ -248,7 +248,7 @@ class RIFT:
                 'mask_tea':     mask,
                 'flow':         flow_list[2][:, :2],    # :2 means only one direction of the flow is passed.
                 'flow_tea':     flow_teacher,
-                'flow_sofi':    flow_list[-1],          # Keep both directions of sofi flow.
+                'flow_sofi':    sofi_flow_list[-1],     # Keep both directions of sofi flow.
                 # If not esti_sofi, crude_img0, crude_img1, refined_img0, refined_img1 are all None.
                 'crude_img0':   crude_img_list[3],
                 'crude_img1':   crude_img_list[4],
@@ -300,12 +300,10 @@ class SOFI_Wrapper(nn.Module):
 
         # Provide an empty tensor as mid_gt, just to make the model happy.
         mid_gt  = imgs[:, :0]           
-        flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
+        flow_list, sofi_flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
                 = self.flownet(imgs, mid_gt, scale_list)
 
-        flow_sofi = flow_list[3]
-        # flow_list[2] * 2 is the mid flow, which is around 0.1 AEPE worse than flow_sofi.
-        #flow_sofi = flow_list[2] * 2
+        flow_sofi = sofi_flow_list[-1]
         flow_01   = flow_sofi[:, 2:4]
         flow_10   = flow_sofi[:, 0:2]
         if self.sofi_mode == 'LR':
