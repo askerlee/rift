@@ -484,10 +484,10 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     else:
         loss_consist_tea = 0
 
-    num_sofi_loops = len(sofi_flow_list)
+    num_sofi_loops = len(sofi_flow_list_a)
     loss_consist_sofi = 0
     for sofi_idx in range(num_sofi_loops):
-        if flow_list_a[sofi_idx] is not None:
+        if sofi_flow_list_a[sofi_idx] is not None:
             loss_consist_sofi += torch.abs(sofi_flow_list_a[sofi_idx] - sofi_flow_list2[sofi_idx])[smask].mean()
     loss_consist = (loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_loops + loss_consist_tea) / 2
 
