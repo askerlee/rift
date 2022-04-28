@@ -395,7 +395,7 @@ class IFNet(nn.Module):
                 flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
                 global_mask_score_sofi = multimask_score_sofi[:, [-1]]
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
-                sofi_flow_list.append(flow_sofi)
+                sofi_flow_list[k] = flow_sofi
 
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
@@ -434,9 +434,9 @@ class IFNet(nn.Module):
             # flow10_warp: flow10 aligned to image0.
             flow10_align0 = warp(flow10, flow01)
             # flow_sofi extended with flow01 aligned to image1.
-            flow_sofi_01a1 = torch.cat((flow_sofi, flow01_align1), dim=1)
+            # flow_sofi_01a1 = torch.cat((flow_sofi, flow01_align1), dim=1)
             # flow_sofi extended with flow10 aligned to image0.
-            flow_sofi_10a0 = torch.cat((flow_sofi, flow10_align0), dim=1)
+            # flow_sofi_10a0 = torch.cat((flow_sofi, flow10_align0), dim=1)
             flow_sofi_warp = torch.cat((flow_sofi, flow10_align0, flow01_align1), dim=1)
 
             img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_warp, ctx1_sofi)
