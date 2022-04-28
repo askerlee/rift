@@ -369,7 +369,7 @@ class IFNet(nn.Module):
             multiflow_sofi = multiflow * 2
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
-            for k in range(self.sofi_loop):
+            for k in range(self.sofi_loops):
                 imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
                 # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
