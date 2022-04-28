@@ -397,6 +397,11 @@ class IFNet(nn.Module):
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
                 sofi_flow_list[k] = flow_sofi
 
+            # Note the order: img 0, img 1.
+            # img1_warped_sofi is to approximate img0, so it appears first.
+            crude_img_list[3]  = img1_warped_sofi
+            crude_img_list[4]  = img0_warped_sofi
+            
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
