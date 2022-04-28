@@ -233,6 +233,7 @@ class IFNet(nn.Module):
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
             self.num_sofi_loops = num_sofi_loops
+            self.cut_sofi_loop_grad = True
         else:
             self.num_sofi_loops = 0
 
@@ -388,7 +389,7 @@ class IFNet(nn.Module):
                 # stopgrad helps during early stages, but hurts during later stages. 
                 # Therefore make it stochastic with a small prob (default 0.3).
                 if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
-                  or k > 0:
+                  or k > 0 and self.cut_sofi_loop_grad:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
@@ -401,7 +402,7 @@ class IFNet(nn.Module):
             # img1_warped_sofi is to approximate img0, so it appears first.
             crude_img_list[3]  = img1_warped_sofi
             crude_img_list[4]  = img0_warped_sofi
-            
+
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
             # flow_sofi: single bi-flow merged from multiflow_sofi.
