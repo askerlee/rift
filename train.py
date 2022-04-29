@@ -291,7 +291,7 @@ if __name__ == "__main__":
     parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
                         help='Do SOFI estimation')
     parser.add_argument('--sofiloops', dest='num_sofi_loops', default=2, type=int)
-    parser.add_argument('--nocutloopgrad', dest='cut_sofi_loop_grad', action='store_false', 
+    parser.add_argument('--cutloopgrad', dest='cut_sofi_loop_grad', action='store_true', 
                         help='Do not cut sofi loop grad')
 
     parser.add_argument('--big', dest='is_big_model', action='store_true', 
