@@ -39,7 +39,6 @@ class RIFT:
                  distill_loss_weight=0.02, 
                  smooth_loss_weight=0.001,
                  num_sofi_loops=2,
-                 cut_sofi_loop_grad=False,
                  multi=(8,8,4), 
                  weight_decay=1e-3,
                  consistency_args={},
@@ -52,7 +51,7 @@ class RIFT:
         if use_old_model:
             self.flownet = IFNet_rife()
         else:
-            self.flownet = IFNet(multi, is_big_model, esti_sofi, num_sofi_loops, cut_sofi_loop_grad)
+            self.flownet = IFNet(multi, is_big_model, esti_sofi, num_sofi_loops)
         self.device()
 
         conv_param_groups, trans_param_groups = [], []

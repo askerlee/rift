@@ -203,7 +203,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=2, cut_sofi_loop_grad=False):
+    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=3):
         super(IFNet, self).__init__()
 
         if is_big_model:
@@ -233,7 +233,7 @@ class IFNet(nn.Module):
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
             self.num_sofi_loops = num_sofi_loops
-            self.cut_sofi_loop_grad = cut_sofi_loop_grad
+            self.cut_sofi_loop_grad = False
         else:
             self.num_sofi_loops = 0
 
@@ -389,8 +389,8 @@ class IFNet(nn.Module):
                 # In the first loop, stopgrad helps during early stages, but hurts during later stages, 
                 # even if it's activated with a small probability like 0.3.
                 # So it's disabled by initializing stopgrad_prob=0.
-                # In later loops, we can choose if to cut the gradient flow to the previously estimated flow or not 
-                # by setting cut_sofi_loop_grad.
+                # If cut_sofi_loop_grad, then in later loops (k>0), the gradient flow will be cut from the previously estimated flow.
+                # cut_sofi_loop_grad=True hurts performance, so disabled.
                 if k == 0 and (self.stopgrad_prob > 0 and torch.rand(1) < self.stopgrad_prob) \
                   or (k > 0 and self.cut_sofi_loop_grad):
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
