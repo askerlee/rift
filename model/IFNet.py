@@ -261,18 +261,18 @@ class IFNet(nn.Module):
         loss_distill = 0
 
         # 3 scales of interpolation flow. 
-        flow_list = [None, None, None]
+        flow_list = [ None for _ in scale_list ]
         # 2 loops of sofi flow.
-        sofi_flow_list = [ None for i in range(self.num_sofi_loops) ]
+        sofi_flow_list = [ None for _ in range(self.num_sofi_loops) ]
         # 3 scales of backwarped middle frame (each scale has two images of two directions).
         warped_imgs_list = []
         # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
-        crude_img_list   = [None, None, None, None, None]
+        crude_img_list   = [None for _ in range(len(scale_list) + 2) ]
         # 3 scales of estimated middle frame + reconstructed img0 + reconstructed img1
-        refined_img_list = [None, None, None, None, None]
+        refined_img_list = [None for _ in range(len(scale_list) + 2) ]
         mask_list = []
 
-        for i in range(3):
+        for i in range(len(scale_list)):
             if i == 0:
                 imgs = torch.cat((img0, img1), 1)
                 global_mask_score = torch.zeros_like(img0[:, [0]])

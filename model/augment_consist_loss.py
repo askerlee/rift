@@ -454,7 +454,9 @@ def flow_rotator(flow_list, angle):
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, sofi_flow_list, 
                            shift_sigmas, aug_handler, aug_type, mixed_precision):
+    # Original flow_list: 3 flows in 3 scales.
     num_rift_scales = len(flow_list)
+    # Put sofi flows at the end, so that they can be indexed by sofi_start_idx .. end of list.
     flow_list = flow_list + [flow_teacher] + sofi_flow_list
     sofi_start_idx = num_rift_scales + 1
     img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
@@ -484,11 +486,14 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     else:
         loss_consist_tea = 0
 
+    # There is no None flow in sofi_flow_list_a.
     num_sofi_loops = len(sofi_flow_list_a)
     loss_consist_sofi = 0
     for sofi_idx in range(num_sofi_loops):
         if sofi_flow_list_a[sofi_idx] is not None:
             loss_consist_sofi += torch.abs(sofi_flow_list_a[sofi_idx] - sofi_flow_list2[sofi_idx])[smask].mean()
+        else:
+            breakpoint()
     loss_consist = ((loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_loops) / 2 + loss_consist_tea) / 2
 
     if aug_type == 'shift':
