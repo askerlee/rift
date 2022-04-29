@@ -290,7 +290,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--sofi', dest='esti_sofi', action='store_true', 
                         help='Do SOFI estimation')
-    parser.add_argument('--sofiloops', dest='num_sofi_loops', default=3, type=int)
+    parser.add_argument('--sofiloops', dest='num_sofi_loops', default=4, type=int)
 
     parser.add_argument('--big', dest='is_big_model', action='store_true', 
                         help='Use a bigger model (more channels)')    

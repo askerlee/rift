@@ -448,8 +448,8 @@ class IFNet(nn.Module):
             # flow_sofi_10a0 = torch.cat((flow_sofi, flow10_align0), dim=1)
             flow_sofi_warp = torch.cat((flow_sofi, flow10_align0, flow01_align1), dim=1)
 
-            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, flow_sofi_warp, ctx1_sofi)
-            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, flow_sofi_warp, ctx0_sofi)
+            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, global_mask_score_sofi, flow_sofi_warp, ctx1_sofi)
+            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, global_mask_score_sofi, flow_sofi_warp, ctx0_sofi)
 
             refined_img0  = self.clamp(img1_warped_sofi + img0_residual)
             refined_img1  = self.clamp(img0_warped_sofi + img1_residual)
