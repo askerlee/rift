@@ -379,6 +379,7 @@ class IFNet(nn.Module):
             global_mask_score_sofi = global_mask_score
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
+
             for k in range(self.num_sofi_loops):
                 imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
@@ -396,8 +397,10 @@ class IFNet(nn.Module):
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi.data
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
-                flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)     
-                global_mask_score_sofi = multimask_score_sofi[:, [-1]]
+                flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)  
+                # The last channel of multimask_score_sofi is unconstrained, 
+                # therefore not to use it as input feature to block_sofi.
+                # global_mask_score_sofi = multimask_score_sofi[:, [-1]]
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
                 sofi_flow_list[k] = flow_sofi
 
