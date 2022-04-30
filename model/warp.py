@@ -64,9 +64,9 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     # ML: 0.5 -> 0, MR: 0.5 -> 1.
     # ML_0, ML_1, ..., ML_M, MR_0, ..., MR_M, ML~MR weight
     # 1: mask, for the warp0-warp1 combination weight.
-    # For sofi, the global mask score may be missing. In that case, there are totally 2*M channels.
+    # For sofi, the global mask scores may be bidirectional. In that case, there are totally 2*M+2 channels.
     if img1 is not None:
-        assert multimask_score.shape[1] == 2*M+1 or multimask_score.shape[1] == 2*M
+        assert multimask_score.shape[1] == 2*M+1 or multimask_score.shape[1] == 2*M+2
 
     # img0_warped_list, img1_warped_list are two lists, each of length M.
     # => [16, M, 3, 224, 224]

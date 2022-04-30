@@ -390,14 +390,15 @@ class IFNet(nn.Module):
             global_mask_score10_sofi    = self.fwarp(global_mask_score,   flow_m1)
 
             multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
-            # multimask_score_sofi doesn't have the last channel (global score),
-            # as multimerge_flow and multiwarp don't use the global score.
-            multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi], 1)
+            global_mask_score_sofi  = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
+            # multimask_score_sofi is appended with global_mask_score_sofi,
+            # but note global_mask_score_sofi is bidirectional (two channels), 
+            # and is not used in multimerge_flow(), just to pass the channel number check.
+            multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi, global_mask_score_sofi], 1)
             flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
             # Different from global_mask_score (1 channel), global_mask_score_sofi has 2 channels.
-            global_mask_score_sofi    = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
 
             for k in range(self.num_sofi_loops):
                 imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
