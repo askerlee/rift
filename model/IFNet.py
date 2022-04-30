@@ -387,6 +387,9 @@ class IFNet(nn.Module):
             blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score], 1)
             blob_01_warped = self.fwarp(blob_01, flow_m1)
             blob_10_warped = self.fwarp(blob_10, flow_m0)
+            # multiflow01_sofi:         2*M channels
+            # multimask_score01_sofi:   M channels
+            # global_mask_score01_sofi: 1 channel
             multiflow01_sofi, multimask_score01_sofi, global_mask_score01_sofi = \
                 blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:3*M], blob_01_warped[:, 3*M:]
             multiflow10_sofi, multimask_score10_sofi, global_mask_score10_sofi = \
