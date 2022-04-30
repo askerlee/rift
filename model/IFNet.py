@@ -378,8 +378,8 @@ class IFNet(nn.Module):
 
         if self.esti_sofi:
             # forward_flow() accepts flow in the shape of [B, H, W, 2]
-            flow_m0 = flow_m0.transpose(0, 2, 3, 1)
-            flow_m1 = flow_m1.transpose(0, 2, 3, 1)
+            flow_m0 = flow_m0.permute(0, 2, 3, 1)
+            flow_m1 = flow_m1.permute(0, 2, 3, 1)
             # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
             multiflow01_sofi            = self.fwarp(multiflow_m1 * 2,    flow_m0)
