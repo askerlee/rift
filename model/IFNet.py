@@ -414,13 +414,18 @@ class IFNet(nn.Module):
                 indeg_01 = blob_01_warped[:, 3*M+1:]
                 indeg_10 = blob_10_warped[:, 3*M+1:]
                 # flow values at pixels with zero or fractional in-degree are kept unchanged.
-                # Only normalize the pixels whose in-degree > 1.
-                indeg_01[ indeg_01 < 1 ] = 1
-                indeg_10[ indeg_10 < 1 ] = 1
+                # Only normalize the pixels whose in-degree >= 0.5.
+                indeg_01[ indeg_01 < 0.5 ] = 1
+                indeg_10[ indeg_10 < 0.5 ] = 1
                 multiflow01_sofi         = multiflow01_sofi / indeg_01
                 multiflow10_sofi         = multiflow10_sofi / indeg_10
+                # Normalizing the multi-mask scores have less importance, as they are transformed by softmax pixel-wise.
+                # The relative order of the mask scores at each pixel doesn't change, 
+                # but the softmax probs do change a little bit after normalization.
                 multimask_score01_sofi   = multimask_score01_sofi / indeg_01
                 multimask_score10_sofi   = multimask_score10_sofi / indeg_10
+                # The effect of normalizing the global mask score is unknown. 
+                # But should be no worse than no normalization.
                 global_mask_score01_sofi = global_mask_score01_sofi / indeg_01
                 global_mask_score10_sofi = global_mask_score10_sofi / indeg_10
 
