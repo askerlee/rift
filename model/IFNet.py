@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.warp import multiwarp, multimerge_flow
+from model.warp import backwarp, multiwarp, multimerge_flow
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
@@ -456,9 +456,9 @@ class IFNet(nn.Module):
             # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
             flow10, flow01 = flow_sofi.split(2, dim=1)
             # flow01_warp: flow01 aligned to image1.
-            flow01_align1 = warp(flow01, flow10)
+            flow01_align1 = backwarp(flow01, flow10)
             # flow10_warp: flow10 aligned to image0.
-            flow10_align0 = warp(flow10, flow01)
+            flow10_align0 = backwarp(flow10, flow01)
             # flow_sofi extended with flow01 aligned to image1.
             # flow_sofi_01a1 = torch.cat((flow_sofi, flow01_align1), dim=1)
             # flow_sofi extended with flow10 aligned to image0.

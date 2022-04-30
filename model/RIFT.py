@@ -4,7 +4,6 @@ import numpy as np
 from torch.optim import AdamW
 import torch.optim as optim
 import itertools
-from model.warp import warp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from model.IFNet import *
 from model.IFNet_m import *
