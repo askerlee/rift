@@ -385,15 +385,17 @@ class IFNet(nn.Module):
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
             # forward_warp is slow. To speed up, we pack them up, warp, and then unpack.
             if fwarp_do_normalize:
-                norm_01 = torch.ones_like(multiflow[:, [0]])
-                norm_10 = torch.ones_like(multiflow[:, [0]])
+                # indeg_01, indeg_10 are all-one pseudo images used to count the in-degree of each target pixel 
+                # (fractional counts of pixels mapped to this pixel).
+                ones_01 = torch.ones_like(multiflow[:, [0]])
+                ones_10 = torch.ones_like(multiflow[:, [0]])
             else:
-                # norm_01, norm_10 are of zero-channels.
-                norm_01 = torch.ones_like(multiflow[:, []])
-                norm_10 = torch.ones_like(multiflow[:, []])
+                # indeg_01, indeg_10 are of zero-channels. Just to uniform the concatenated array.
+                ones_01 = torch.ones_like(multiflow[:, []])
+                ones_10 = torch.ones_like(multiflow[:, []])
 
-            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score, norm_01], 1)
-            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score, norm_10], 1)
+            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score, ones_01], 1)
+            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score, ones_10], 1)
             # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
             # are mapped to coordinates in img0.
             blob_01_warped = self.fwarp(blob_01, flow_m0)
@@ -409,12 +411,18 @@ class IFNet(nn.Module):
                 blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:3*M], blob_10_warped[:, 3*M:3*M+1]
 
             if fwarp_do_normalize:
-                norm_01 = blob_01_warped[:, 3*M+1:]
-                norm_10 = blob_10_warped[:, 3*M+1:]
-                norm_01[ norm_01 < 1 ] = 1
-                norm_10[ norm_10 < 1 ] = 1
-                multiflow01_sofi = multiflow01_sofi / norm_01
-                multiflow10_sofi = multiflow10_sofi / norm_10
+                indeg_01 = blob_01_warped[:, 3*M+1:]
+                indeg_10 = blob_10_warped[:, 3*M+1:]
+                # flow values at pixels with zero or fractional in-degree are kept unchanged.
+                # Only normalize the pixels whose in-degree > 1.
+                indeg_01[ indeg_01 < 1 ] = 1
+                indeg_10[ indeg_10 < 1 ] = 1
+                multiflow01_sofi         = multiflow01_sofi / indeg_01
+                multiflow10_sofi         = multiflow10_sofi / indeg_10
+                multimask_score01_sofi   = multimask_score01_sofi / indeg_01
+                multimask_score10_sofi   = multimask_score10_sofi / indeg_10
+                global_mask_score01_sofi = global_mask_score01_sofi / indeg_01
+                global_mask_score10_sofi = global_mask_score10_sofi / indeg_10
 
             multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
