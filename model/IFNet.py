@@ -8,6 +8,7 @@ import os
 import torch.distributed as dist
 from model.laplacian import LapLoss
 import functools
+from Forward_Warp import forward_warp
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
@@ -97,7 +98,7 @@ class Clamp01(torch.autograd.Function):
 
 class IFBlock(nn.Module):
     # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, c, img_chans, nonimg_chans, multi):
+    def __init__(self, name, c, img_chans, nonimg_chans, multi, global_mask_chans=1):
         super(IFBlock, self).__init__()
         self.name = name
         # Each image: concat of (original image, warped image).
@@ -110,7 +111,7 @@ class IFBlock(nn.Module):
         else:
             # when outputting multiple flows, 4*M are flow channels, 
             # 2*M flow group attention, 1 mask weight to combine warp0 and warp1.
-            out_chan_num = 6 * self.M + 1
+            out_chan_num = 6 * self.M + global_mask_chans
         self.lastconv = nn.ConvTranspose2d(c, out_chan_num, 4, 2, 1)
 
         conv = conv_gen(do_BN=False)
@@ -193,8 +194,9 @@ class IFBlock(nn.Module):
         multiflow = scaled_output[:, : 4*self.M] * scale * 2
         # multimask_score: 
         # if M == 1, multimask_score has one channel, just as the original scheme.
-        # if M > 1, 2*M+1 channels. 2*M for M groups of (0.5->0, 0.5->1) flow group attention scores, 
-        # 1 for the warp0-warp1 combination weight.
+        # if M > 1, 2*M+1 (2*M+2 for sofi) channels. 
+        # 2*M for M groups of (0.5->0, 0.5->1) flow group attention scores, 
+        # 1 channel (2 channels for sofi) for the warp0-warp1 combination weight.
         # If M==1, the first two channels are redundant and never used or involved into training.
         multimask_score = scaled_output[:, 4*self.M : ]
 
@@ -227,8 +229,9 @@ class IFNet(nn.Module):
         self.unet = Unet()
         self.esti_sofi = esti_sofi
         if self.esti_sofi:
-            self.block_sofi = IFBlock('block_sofi', c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                      multi=self.Ms[2])
+            # nonimg_chans: 2 global mask scores (1 for each direction), 4 flow (2 for each direction).
+            self.block_sofi = IFBlock('block_sofi', c=block_widths[2], img_chans=6, nonimg_chans=6,
+                                      multi=self.Ms[2], global_mask_chans=2)
             self.sofi_unet0 = SOFI_Unet()
             self.sofi_unet1 = SOFI_Unet()
             self.stopgrad_prob = 0
@@ -365,26 +368,37 @@ class IFNet(nn.Module):
                                                   )
 
         M = self.Ms[-1]
-        # multiflow0, multiflow1: first/second half of multiflow.
-        # multimask_score0, multimask_score1: first/second half of multimask_score (except the global score).
-        multiflow0, multiflow1              = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
-        multimask_score0, multimask_score1  = multimask_score[:, :M], multimask_score[:, M:2*M]
+        # multiflow_m0, multiflow_m1: first/second half of multiflow.
+        # multimask_score_m0, multimask_score_m1: first/second half of multimask_score (except the global score).
+        flow_m0, flow_m1                        = flow[:, :2],            flow[:, 2:]
+        multiflow_m0, multiflow_m1              = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
+        multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
 
         if self.esti_sofi:
-            # Ms: multi, i.e., different scales in each layer.
-            # First use 2*(middle->0, middle->1) to approximate the flow (1->0, 0->1).
-            # db: double (flow)
-            multiflow_sofi = multiflow * 2
-            flow_sofi      = flow *2
-            global_mask_score_sofi = global_mask_score
+            # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
+            # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
+            multiflow01_sofi            = forward_warp(multiflow_m1 * 2,    flow_m0)
+            multimask_score01_sofi      = forward_warp(multimask_score_m0,  flow_m0)
+            global_mask_score01_sofi    = forward_warp(global_mask_score,   flow_m0)
+            multiflow10_sofi            = forward_warp(multiflow_m0 * 2,    flow_m1)
+            multimask_score10_sofi      = forward_warp(multimask_score_m1,  flow_m1)
+            global_mask_score10_sofi    = forward_warp(global_mask_score,   flow_m1)
+
+            multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
+            # multimask_score_sofi doesn't have the last channel (global score),
+            # as multimerge_flow and multiwarp don't use the global score.
+            multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi], 1)
+            flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
             img0_warped_sofi, img1_warped_sofi = \
-                multiwarp(img0, img1, multiflow_sofi, multimask_score, self.Ms[-1])
+                multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
+            # Different from global_mask_score (1 channel), global_mask_score_sofi has 2 channels.
+            global_mask_score_sofi    = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
 
             for k in range(self.num_sofi_loops):
                 imgs = torch.cat((img0, img0_warped_sofi, img1, img1_warped_sofi), 1)
                 # multiflow_sofi_d: flow delta between multiflow_sofi and 2*(middle flow).
-                # the last channel of multimask_score_sofi is global mask weight to blend two directions, 
-                # which is not used in SOFI.
+                # the last two channels of multimask_score_sofi are global mask weights to indicate occlusions.
+                # So they are passed to sofi_unet().
                 multiflow_sofi_d, multimask_score_sofi = self.block_sofi(imgs, global_mask_score_sofi, flow_sofi, scale=scale_list[0])
                 # multiflow_sofi: refined flow (1->0, 0->1).
                 # In the first loop, stopgrad helps during early stages, but hurts during later stages, 
@@ -398,9 +412,9 @@ class IFNet(nn.Module):
                 else:
                     multiflow_sofi = multiflow_sofi_d + multiflow_sofi
                 flow_sofi = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)  
-                # The last channel of multimask_score_sofi is unconstrained, 
-                # therefore not to use it as input feature to block_sofi.
-                # global_mask_score_sofi = multimask_score_sofi[:, [-1]]
+                # The last two channels of multimask_score_sofi is unconstrained, 
+                # which may pose some issues when used as input feature to block_sofi.
+                global_mask_score_sofi = multimask_score_sofi[:, -2:]
                 img0_warped_sofi, img1_warped_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
                 sofi_flow_list[k] = flow_sofi
 
@@ -424,9 +438,9 @@ class IFNet(nn.Module):
         # by multiflow10_sofi and multiflow01_sofi, respectively.
         # Otherwise, multiflow10_sofi, multimask_score10_sofi are None,
         # and accordingly, ctx0_sofi, ctx1_sofi are None.
-        ctx0, ctx0_sofi = self.contextnet(img0, M, multiflow0, multimask_score0, 
+        ctx0, ctx0_sofi = self.contextnet(img0, M, multiflow_m0, multimask_score_m0, 
                                           multiflow10_sofi, multimask_score10_sofi)
-        ctx1, ctx1_sofi = self.contextnet(img1, M, multiflow1, multimask_score1, 
+        ctx1, ctx1_sofi = self.contextnet(img1, M, multiflow_m1, multimask_score_m1, 
                                           multiflow01_sofi, multimask_score01_sofi)
 
         # unet is to refine the crude image crude_img_list[2] with its output img_residual.
