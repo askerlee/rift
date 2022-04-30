@@ -107,12 +107,12 @@ class IFBlock(nn.Module):
         self.M = multi
         if self.M == 1:
             # originally, lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
-            out_chan_num = 5
+            self.out_chan_num = 5
         else:
             # when outputting multiple flows, 4*M are flow channels, 
             # 2*M flow group attention, 1 mask weight to combine warp0 and warp1.
-            out_chan_num = 6 * self.M + global_mask_chans
-        self.lastconv = nn.ConvTranspose2d(c, out_chan_num, 4, 2, 1)
+            self.out_chan_num = 6 * self.M + global_mask_chans
+        self.lastconv = nn.ConvTranspose2d(c, self.out_chan_num, 4, 2, 1)
 
         conv = conv_gen(do_BN=False)
 
