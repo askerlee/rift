@@ -247,7 +247,9 @@ class IFNet(nn.Module):
             self.clamp = clamp01_inst.apply
         else:
             self.clamp = functools.partial(torch.clamp, min=0, max=1)
-            
+        
+        self.fwarp = forward_warp()
+
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
@@ -377,12 +379,12 @@ class IFNet(nn.Module):
         if self.esti_sofi:
             # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
-            multiflow01_sofi            = forward_warp(multiflow_m1 * 2,    flow_m0)
-            multimask_score01_sofi      = forward_warp(multimask_score_m0,  flow_m0)
-            global_mask_score01_sofi    = forward_warp(global_mask_score,   flow_m0)
-            multiflow10_sofi            = forward_warp(multiflow_m0 * 2,    flow_m1)
-            multimask_score10_sofi      = forward_warp(multimask_score_m1,  flow_m1)
-            global_mask_score10_sofi    = forward_warp(global_mask_score,   flow_m1)
+            multiflow01_sofi            = self.fwarp(multiflow_m1 * 2,    flow_m0)
+            multimask_score01_sofi      = self.fwarp(multimask_score_m0,  flow_m0)
+            global_mask_score01_sofi    = self.fwarp(global_mask_score,   flow_m0)
+            multiflow10_sofi            = self.fwarp(multiflow_m0 * 2,    flow_m1)
+            multimask_score10_sofi      = self.fwarp(multimask_score_m1,  flow_m1)
+            global_mask_score10_sofi    = self.fwarp(global_mask_score,   flow_m1)
 
             multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
             # multimask_score_sofi doesn't have the last channel (global score),
