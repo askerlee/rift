@@ -382,12 +382,15 @@ class IFNet(nn.Module):
             flow_m1 = flow_m1.permute(0, 2, 3, 1)
             # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
-            multiflow01_sofi            = self.fwarp(multiflow_m1 * 2,    flow_m0)
-            multimask_score01_sofi      = self.fwarp(multimask_score_m0,  flow_m0)
-            global_mask_score01_sofi    = self.fwarp(global_mask_score,   flow_m0)
-            multiflow10_sofi            = self.fwarp(multiflow_m0 * 2,    flow_m1)
-            multimask_score10_sofi      = self.fwarp(multimask_score_m1,  flow_m1)
-            global_mask_score10_sofi    = self.fwarp(global_mask_score,   flow_m1)
+            # forward_warp is slow. To speed up, we pack them up, warp, and then unpack.
+            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score], 1)
+            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score], 1)
+            blob_01_warped = self.fwarp(blob_01, flow_m1)
+            blob_10_warped = self.fwarp(blob_10, flow_m0)
+            multiflow01_sofi, multimask_score01_sofi, global_mask_score01_sofi = \
+                blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:3*M], blob_01_warped[:, 3*M:]
+            multiflow10_sofi, multimask_score10_sofi, global_mask_score10_sofi = \
+                blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:3*M], blob_10_warped[:, 3*M:]
 
             multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
