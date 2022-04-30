@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.optim as optim
 import itertools
-from model.warp import warp, multiwarp, multimerge_flow
+from model.warp import backwarp, multiwarp, multimerge_flow
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,16 +46,16 @@ class Contextnet_rife(nn.Module):
     def forward(self, x, flow):
         x = self.conv1(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1 = warp(x, flow)        
+        f1 = backwarp(x, flow)        
         x = self.conv2(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f2 = warp(x, flow)
+        f2 = backwarp(x, flow)
         x = self.conv3(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f3 = warp(x, flow)
+        f3 = backwarp(x, flow)
         x = self.conv4(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f4 = warp(x, flow)
+        f4 = backwarp(x, flow)
         return [f1, f2, f3, f4]
         
 # Contextnet generates warped features of the input image. 
