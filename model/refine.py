@@ -148,8 +148,8 @@ class Unet(nn.Module):
 class SOFI_Unet(nn.Module):
     def __init__(self, c=16):
         super(SOFI_Unet, self).__init__()
-        # 15: 2 images (2*3) + global_mask_score_sofi + flow (4 normal + 4 warped)
-        self.down0 = Conv2(15, 2*c)
+        # 16: 2 images (2*3) + global_mask_score_sofi (2 directions) + flow (4 normal + 4 warped)
+        self.down0 = Conv2(16, 2*c)
         self.down1 = Conv2(3*c, 4*c)
         self.down2 = Conv2(6*c, 8*c)
         self.down3 = Conv2(12*c, 16*c)
