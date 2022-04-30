@@ -377,23 +377,44 @@ class IFNet(nn.Module):
         multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
 
         if self.esti_sofi:
+            fwarp_do_normalize = True
             # forward_flow() accepts flow in the shape of [B, H, W, 2]
             flow_m0 = flow_m0.permute(0, 2, 3, 1)
             flow_m1 = flow_m1.permute(0, 2, 3, 1)
             # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
             # forward_warp is slow. To speed up, we pack them up, warp, and then unpack.
-            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score], 1)
-            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score], 1)
-            blob_01_warped = self.fwarp(blob_01, flow_m1)
-            blob_10_warped = self.fwarp(blob_10, flow_m0)
+            if fwarp_do_normalize:
+                norm_01 = torch.ones_like(multiflow[:, [0]])
+                norm_10 = torch.ones_like(multiflow[:, [0]])
+            else:
+                # norm_01, norm_10 are of zero-channels.
+                norm_01 = torch.ones_like(multiflow[:, []])
+                norm_10 = torch.ones_like(multiflow[:, []])
+
+            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score, norm_01], 1)
+            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score, norm_10], 1)
+            # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
+            # are mapped to coordinates in img0.
+            blob_01_warped = self.fwarp(blob_01, flow_m0)
+            # fwarp m0 flow (and scores) by m1 flow, so that coordiates of the middle frame
+            # are mapped to coordinates in img1.
+            blob_10_warped = self.fwarp(blob_10, flow_m1)
             # multiflow01_sofi:         2*M channels
             # multimask_score01_sofi:   M channels
             # global_mask_score01_sofi: 1 channel
             multiflow01_sofi, multimask_score01_sofi, global_mask_score01_sofi = \
-                blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:3*M], blob_01_warped[:, 3*M:]
+                blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:3*M], blob_01_warped[:, 3*M:3*M+1]
             multiflow10_sofi, multimask_score10_sofi, global_mask_score10_sofi = \
-                blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:3*M], blob_10_warped[:, 3*M:]
+                blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:3*M], blob_10_warped[:, 3*M:3*M+1]
+
+            if fwarp_do_normalize:
+                norm_01 = blob_01_warped[:, 3*M+1:]
+                norm_10 = blob_10_warped[:, 3*M+1:]
+                norm_01[ norm_01 < 1 ] = 1
+                norm_10[ norm_10 < 1 ] = 1
+                multiflow01_sofi = multiflow01_sofi / norm_01
+                multiflow10_sofi = multiflow10_sofi / norm_10
 
             multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
