@@ -409,8 +409,8 @@ class IFNet(nn.Module):
             # multimask_score01_sofi:   M channels
             # global_mask_score01_sofi: 1 channel
             # indeg_01:                 1 or 0 channels
-            assert blob_01_warped.shape[1] == 3*M+3 or blob_01_warped.shape[1] == 3*M+4
-            assert blob_10_warped.shape[1] == 3*M+3 or blob_10_warped.shape[1] == 3*M+4
+            assert blob_01_warped.shape[1] == 3 * M + 3 + fwarp_do_normalize
+            assert blob_10_warped.shape[1] == 3 * M + 3 + fwarp_do_normalize
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi = \
                 blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:2*M+2], blob_01_warped[:, 2*M+2:3*M+2], blob_01_warped[:, 3*M+2:3*M+3]
             multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi = \
@@ -423,6 +423,11 @@ class IFNet(nn.Module):
                 # Only normalize the pixels whose in-degree >= 0.5.
                 indeg_01[ indeg_01 < 0.5 ] = 1
                 indeg_10[ indeg_10 < 0.5 ] = 1
+                # No need to backprop through indeg_01 and indeg_10.
+                indeg_01 = indeg_01.detach()
+                indeg_10 = indeg_10.detach()
+                #indeg_01 = torch.sqrt(indeg_01)
+                #indeg_10 = torch.sqrt(indeg_10)
                 multiflow01_sofi         = multiflow01_sofi / indeg_01
                 multiflow10_sofi         = multiflow10_sofi / indeg_10
                 flow01                   = flow01 / indeg_01
