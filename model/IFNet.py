@@ -425,6 +425,8 @@ class IFNet(nn.Module):
                 indeg_10[ indeg_10 < 0.5 ] = 1
                 multiflow01_sofi         = multiflow01_sofi / indeg_01
                 multiflow10_sofi         = multiflow10_sofi / indeg_10
+                flow01                   = flow01 / indeg_01
+                flow10                   = flow10 / indeg_10
                 # Normalizing the multi-mask scores have less impact, as they are pixel-wise transformed by softmax.
                 # The relative orders of the mask scores at each pixel don't change, 
                 # but the softmax weights do change a little bit after normalization.
