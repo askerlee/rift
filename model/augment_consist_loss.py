@@ -487,8 +487,10 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         loss_consist_tea = 0
 
     # There is no None flow in sofi_flow_list_a.
-    only_consist_on_last_sofi_flow = True
-    if only_consist_on_last_sofi_flow:
+    # only_consist_on_final_sofi_flow: the consistency loss is only applied to the final sofi flow.
+    # If False, the consistency loss is applied to all sofi flows, and the performance is slightly worse.
+    only_consist_on_final_sofi_flow = True
+    if only_consist_on_final_sofi_flow:
         sofi_flow_consist_set = [-1]
     else:
         sofi_flow_consist_set = range(len(sofi_flow_list_a))
