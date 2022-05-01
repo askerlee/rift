@@ -379,8 +379,8 @@ class IFNet(nn.Module):
         if self.esti_sofi:
             fwarp_do_normalize = True
             # forward_flow() accepts flow in the shape of [B, H, W, 2]
-            flow_m0 = flow_m0.permute(0, 2, 3, 1)
-            flow_m1 = flow_m1.permute(0, 2, 3, 1)
+            flow_m0_bhwc = flow_m0.permute(0, 2, 3, 1)
+            flow_m1_bhwc = flow_m1.permute(0, 2, 3, 1)
             # First use 2*(middle->0, middle->1) flow to approximate the flow (1->0, 0->1).
             # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
             # forward_warp is slow. To speed up, we pack them up, warp, and then unpack.
@@ -400,10 +400,10 @@ class IFNet(nn.Module):
             blob_10 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m1, global_mask_score, ones_10], 1)
             # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
             # are mapped to coordinates in img0.
-            blob_01_warped = self.fwarp(blob_01, flow_m0)
+            blob_01_warped = self.fwarp(blob_01, flow_m0_bhwc)
             # fwarp m0 flow (and scores) by m1 flow, so that coordiates of the middle frame
             # are mapped to coordinates in img1.
-            blob_10_warped = self.fwarp(blob_10, flow_m1)
+            blob_10_warped = self.fwarp(blob_10, flow_m1_bhwc)
             # multiflow01_sofi:         2*M channels
             # flow01:                   2 channels
             # multimask_score01_sofi:   M channels
