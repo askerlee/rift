@@ -390,12 +390,14 @@ class IFNet(nn.Module):
                 ones_01 = torch.ones_like(multiflow[:, [0]])
                 ones_10 = torch.ones_like(multiflow[:, [0]])
             else:
-                # indeg_01, indeg_10 are of zero-channels. Just to uniform the concatenated array.
+                # indeg_01, indeg_10 are of zero-sized tensors, to act as placeholders in the concatenated array.
                 ones_01 = torch.ones_like(multiflow[:, []])
                 ones_10 = torch.ones_like(multiflow[:, []])
 
-            blob_01 = torch.cat([multiflow_m1 * 2, multimask_score_m0, global_mask_score, ones_01], 1)
-            blob_10 = torch.cat([multiflow_m0 * 2, multimask_score_m1, global_mask_score, ones_10], 1)
+            # m->0, m->1 should be around half of 1->0, 0->1. 
+            # So multiflow_m1 * 2 approximates multiflow01, and multiflow_m0 * 2 approximates multiflow10.
+            blob_01 = torch.cat([multiflow_m1 * 2, flow_m1 * 2, multimask_score_m0, global_mask_score, ones_01], 1)
+            blob_10 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m1, global_mask_score, ones_10], 1)
             # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
             # are mapped to coordinates in img0.
             blob_01_warped = self.fwarp(blob_01, flow_m0)
@@ -403,39 +405,45 @@ class IFNet(nn.Module):
             # are mapped to coordinates in img1.
             blob_10_warped = self.fwarp(blob_10, flow_m1)
             # multiflow01_sofi:         2*M channels
+            # flow01:                   2 channels
             # multimask_score01_sofi:   M channels
             # global_mask_score01_sofi: 1 channel
-            multiflow01_sofi, multimask_score01_sofi, global_mask_score01_sofi = \
-                blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:3*M], blob_01_warped[:, 3*M:3*M+1]
-            multiflow10_sofi, multimask_score10_sofi, global_mask_score10_sofi = \
-                blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:3*M], blob_10_warped[:, 3*M:3*M+1]
+            # indeg_01:                 1 or 0 channels
+            assert blob_01_warped.shape[1] == 3*M+3 or blob_01_warped.shape[1] == 3*M+4
+            assert blob_10_warped.shape[1] == 3*M+3 or blob_10_warped.shape[1] == 3*M+4
+            multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi = \
+                blob_01_warped[:, :2*M], blob_01_warped[:, 2*M:2*M+2], blob_01_warped[:, 2*M+2:3*M+2], blob_01_warped[:, 3*M+2:3*M+3]
+            multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi = \
+                blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:2*M+2], blob_10_warped[:, 2*M+2:3*M+2], blob_10_warped[:, 3*M+2:3*M+3]
 
             if fwarp_do_normalize:
-                indeg_01 = blob_01_warped[:, 3*M+1:]
-                indeg_10 = blob_10_warped[:, 3*M+1:]
-                # flow values at pixels with zero or fractional in-degree are kept unchanged.
+                indeg_01 = blob_01_warped[:, 3*M+3:]
+                indeg_10 = blob_10_warped[:, 3*M+3:]
+                # Flow values at pixels with zero or small fractional in-degree are kept unchanged.
                 # Only normalize the pixels whose in-degree >= 0.5.
                 indeg_01[ indeg_01 < 0.5 ] = 1
                 indeg_10[ indeg_10 < 0.5 ] = 1
                 multiflow01_sofi         = multiflow01_sofi / indeg_01
                 multiflow10_sofi         = multiflow10_sofi / indeg_10
-                # Normalizing the multi-mask scores have less importance, as they are transformed by softmax pixel-wise.
-                # The relative order of the mask scores at each pixel doesn't change, 
-                # but the softmax probs do change a little bit after normalization.
+                # Normalizing the multi-mask scores have less impact, as they are pixel-wise transformed by softmax.
+                # The relative orders of the mask scores at each pixel don't change, 
+                # but the softmax weights do change a little bit after normalization.
                 multimask_score01_sofi   = multimask_score01_sofi / indeg_01
                 multimask_score10_sofi   = multimask_score10_sofi / indeg_10
                 # The effect of normalizing the global mask score is unknown. 
-                # But should be no worse than no normalization.
+                # But doing normalization shouldn't make it worse.
                 global_mask_score01_sofi = global_mask_score01_sofi / indeg_01
                 global_mask_score10_sofi = global_mask_score10_sofi / indeg_10
 
-            multiflow_sofi          = torch.cat([multiflow10_sofi, multiflow01_sofi], 1)
-            global_mask_score_sofi  = torch.cat([global_mask_score10_sofi, global_mask_score01_sofi], 1)
+            multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
+            global_mask_score_sofi  = torch.cat([global_mask_score10_sofi,  global_mask_score01_sofi], 1)
             # multimask_score_sofi is appended with global_mask_score_sofi,
-            # but note global_mask_score_sofi is bidirectional (two channels), 
-            # and is not used in multimerge_flow(), just to pass the channel number check.
+            # but note global_mask_score_sofi is bidirectional (2 channels).
+            # multimask_score_sofi here is only used in multimerge_flow(), where the global_mask_score_sofi is not used.
+            # They are concatenated to multimask_score_sofi just to pass the channel number sanity check.
             multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi, global_mask_score_sofi], 1)
-            flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
+            # flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
+            flow_sofi               = torch.cat([flow10, flow01], 1)
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
             # Different from global_mask_score (1 channel), global_mask_score_sofi has 2 channels.
