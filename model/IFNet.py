@@ -270,12 +270,12 @@ class IFNet(nn.Module):
         # 2 loops of sofi flow.
         sofi_flow_list = [ None for _ in range(self.num_sofi_loops) ]
         # 3 scales of backwarped middle frame (each scale has two images of two directions).
-        warped_imgs_list = []
+        warped_imgs_list = [ None for _ in scale_list ]
         # 3 scales of crude middle frame (two directions are merged to one image) + warped img0 + warped img1.
         crude_img_list   = [None for _ in range(len(scale_list) + 2) ]
         # 3 scales of estimated middle frame + reconstructed img0 + reconstructed img1
         refined_img_list = [None for _ in range(len(scale_list) + 2) ]
-        mask_list = []
+        mask_list = [ None for _ in scale_list ]
 
         for i in range(len(scale_list)):
             if i == 0:
@@ -317,7 +317,7 @@ class IFNet(nn.Module):
             # No need to have residual connections.
             multimask_score = multimask_score_d
             global_mask_score = multimask_score[:, [-1]]
-            mask_list.append(torch.sigmoid(global_mask_score))
+            mask_list[i] = torch.sigmoid(global_mask_score)
 
             # flow: single bi-flow merged from multiflow.
             flow = multimerge_flow(multiflow, multimask_score, self.Ms[i])
@@ -325,12 +325,12 @@ class IFNet(nn.Module):
             img0_warped, img1_warped = \
                 multiwarp(img0, img1, multiflow, multimask_score, self.Ms[i])
             warped_imgs = (img0_warped, img1_warped)
-            warped_imgs_list.append(warped_imgs)
+            warped_imgs_list[i] = warped_imgs
 
         if do_distillation:
             # multiflow and multimask_score are from block2, 
             # which always have the same M as the teacher.
-            multiflow_skip       = multiflow
+            multiflow_skip  = multiflow
 
             # teacher only works at the last scale, i.e., the full image.
             # block_tea ~ block2, except that block_tea takes mid_gt (the middle frame) as extra input.
@@ -417,17 +417,14 @@ class IFNet(nn.Module):
                 blob_10_warped[:, :2*M], blob_10_warped[:, 2*M:2*M+2], blob_10_warped[:, 2*M+2:3*M+2], blob_10_warped[:, 3*M+2:3*M+3]
 
             if fwarp_do_normalize:
+                # indeg_01: 1-channel fractional counts of pixels mapped to this pixel.
                 indeg_01 = blob_01_warped[:, 3*M+3:]
                 indeg_10 = blob_10_warped[:, 3*M+3:]
-                # Flow values at pixels with zero or small fractional in-degree are kept unchanged.
                 # Only normalize the pixels whose in-degree >= 0.5.
+                # Flow values at pixels with zero or small fractional in-degree are kept unchanged; probably only 
+                # (a fraction of) one source pixel is mapped to this pixel.
                 indeg_01[ indeg_01 < 0.5 ] = 1
                 indeg_10[ indeg_10 < 0.5 ] = 1
-                #indeg_01 = indeg_01.detach()
-                #indeg_10 = indeg_10.detach()
-                # sqrt norm leads to divergence.
-                #indeg_01 = torch.sqrt(indeg_01)
-                #indeg_10 = torch.sqrt(indeg_10)
                 # Selectively backprop through indeg_01 and indeg_10.
                 # Backpropping from multiflow01_sofi/multiflow10_sofi through indeg_01/indeg_10 
                 # leads to slightly better performance.
@@ -454,7 +451,8 @@ class IFNet(nn.Module):
             # multimask_score_sofi is appended with global_mask_score_sofi,
             # but note global_mask_score_sofi is bidirectional (2 channels).
             # multimask_score_sofi here is only used in multimerge_flow(), where the global_mask_score_sofi is not used.
-            # They are concatenated to multimask_score_sofi just to pass the channel number sanity check.
+            # They are concatenated to multimask_score_sofi just to have a consistent channel number with later loops,
+            # so as to pass the sanity check in multiwarp().
             multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi, global_mask_score_sofi], 1)
             # flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
             flow_sofi               = torch.cat([flow10, flow01], 1)
