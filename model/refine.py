@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.optim as optim
 import itertools
-from model.warp import warp, multiwarp, multimerge_flow
+from model.warp import backwarp, multiwarp, multimerge_flow
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,16 +46,16 @@ class Contextnet_rife(nn.Module):
     def forward(self, x, flow):
         x = self.conv1(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1 = warp(x, flow)        
+        f1 = backwarp(x, flow)        
         x = self.conv2(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f2 = warp(x, flow)
+        f2 = backwarp(x, flow)
         x = self.conv3(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f3 = warp(x, flow)
+        f3 = backwarp(x, flow)
         x = self.conv4(x)
         flow = F.interpolate(flow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f4 = warp(x, flow)
+        f4 = backwarp(x, flow)
         return [f1, f2, f3, f4]
         
 # Contextnet generates warped features of the input image. 
@@ -68,29 +68,53 @@ class Contextnet(nn.Module):
         self.conv3 = Conv2(2*c, 4*c)
         self.conv4 = Conv2(4*c, 8*c)
     
-    def forward(self, x, multiflow, multimask_score, M):
+    # Can take either one or two sets of multiflow/multimask_score.
+    def forward(self, x, M, multiflow, multimask_score, multiflow2=None, multimask_score2=None):
         x = self.conv1(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
-        f1, _ = multiwarp(x, None, multiflow, multimask_score, M)        
+        f1, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+            g1, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv2(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f2, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+            g2, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv3(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f3, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+            g3, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
         x = self.conv4(x)
         multiflow = F.interpolate(multiflow, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
         f4, _ = multiwarp(x, None, multiflow, multimask_score, M)
+        if multiflow2 is not None:
+            multiflow2 = F.interpolate(multiflow2, scale_factor=0.5, mode="bilinear", align_corners=False, recompute_scale_factor=False) * 0.5
+            g4, _ = multiwarp(x, None, multiflow2, multimask_score2, M)
+
+        fs = [f1, f2, f3, f4]
+        if multiflow2 is not None:
+            gs = [g1, g2, g3, g4]
+        else:
+            gs = None
+
         # f1, f2, f3, f4 are gradually scaled down. f1: 1/2, f2: 1/4, f3: 1/8, f4: 1/16 of the input x.
         # f1, f2, f3, f4 are warped by flow.
         # The feature maps in every scale are warped only after the last conv of the corresponding scale, 
-        # not in the middle.
-        return [f1, f2, f3, f4]
+        # not in the middle. I.e., here no conv will be applied to warped features.
+        return fs, gs
 
 # Unet: 17 channels of input, 3 channels of output.
 class Unet(nn.Module):
     def __init__(self, c=16):
         super(Unet, self).__init__()
+        # 17: 4 images (4*3) + mask (1) + flow (4)
         self.down0 = Conv2(17, 2*c)
         self.down1 = Conv2(4*c, 4*c)
         self.down2 = Conv2(8*c, 8*c)
@@ -101,8 +125,8 @@ class Unet(nn.Module):
         self.up3   = deconv(4*c, c)
         self.conv  = nn.Conv2d(c, 3, 3, 1, 1)
 
-    # context0: conv features of img0 extracted with contextnet. 
-    # context1: conv features of img1 extracted with contextnet. 
+    # context0: 4 conv features of img0 extracted with contextnet. channels: c, 2c, 4c, 8c.
+    # context1: 4 conv features of img1 extracted with contextnet. channels: c, 2c, 4c, 8c.
     # context0, context1 are two lists of 4 feature maps in 4 scales.
     # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
     def forward(self, img0, img1, warped_img0, warped_img1, mask, flow, context0, context1):
@@ -117,4 +141,39 @@ class Unet(nn.Module):
         x  = self.conv(x)
         # 0 < x < 1 due to sigmoid.
         # the returned tensor is scaled to [-1, 1], and used as image residual.
-        return torch.sigmoid(x)
+        # return torch.sigmoid(x)
+        return torch.tanh(x)
+
+# SOFI_Unet: 10 channels of input, 3 channels of output.
+class SOFI_Unet(nn.Module):
+    def __init__(self, c=16):
+        super(SOFI_Unet, self).__init__()
+        # 16: 2 images (2*3) + global_mask_score_sofi (2 directions) + flow (4 normal + 4 warped)
+        self.down0 = Conv2(16, 2*c)
+        self.down1 = Conv2(3*c, 4*c)
+        self.down2 = Conv2(6*c, 8*c)
+        self.down3 = Conv2(12*c, 16*c)
+        self.up0   = deconv(24*c, 8*c)
+        self.up1   = deconv(16*c, 4*c)
+        self.up2   = deconv(8*c, 2*c)
+        self.up3   = deconv(4*c, c)
+        self.conv  = nn.Conv2d(c, 3, 3, 1, 1)
+
+    # context0: 4 conv features of img0 extracted with contextnet. channels: c, 2c, 4c, 8c. 
+    # context1: 4 conv features of img1 extracted with contextnet. channels: c, 2c, 4c, 8c.
+    # context0, context1 are two lists of 4 feature maps in 4 scales.
+    # Unet takes original images, warped images, mask and flow as input, much richer than contextnet.
+    def forward(self, img0, warped_img0, mask, flow, context0):
+        s0 = self.down0(torch.cat((img0, warped_img0, mask, flow), 1))  # 15 -> 2c
+        s1 = self.down1(torch.cat((s0, context0[0]), 1))                # 3c -> 4c
+        s2 = self.down2(torch.cat((s1, context0[1]), 1))                # 6c -> 8c
+        s3 = self.down3(torch.cat((s2, context0[2]), 1))                # 12c -> 16c
+        x  = self.up0(  torch.cat((s3, context0[3]), 1))                # 24c -> 8c
+        x  = self.up1(torch.cat((x, s2), 1))                            # 16c -> 4c
+        x  = self.up2(torch.cat((x, s1), 1))                            # 8c -> 2c
+        x  = self.up3(torch.cat((x, s0), 1))                            # 4c -> c
+        x  = self.conv(x)
+        # 0 < x < 1 due to sigmoid.
+        # the returned tensor is scaled to [-1, 1], and used as image residual.
+        # return torch.sigmoid(x)
+        return torch.tanh(x)

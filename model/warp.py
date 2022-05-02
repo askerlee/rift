@@ -5,8 +5,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Precomputed coordinate grids dictionary, with (tensor device, tensor size) as the keys.
 backwarp_tenGrid = {}
 
-# warp feature maps according to flow. ten: tensor?
-def warp(tenInput, tenFlow):
+# backwarp and multiwarp are doing backward warping using the forward flow.
+# backwarp feature maps according to flow. ten: tensor?
+def backwarp(tenInput, tenFlow):
     k = (str(tenFlow.device), str(tenFlow.size()))
     if k not in backwarp_tenGrid:
         tenHorizontal = torch.linspace(-1.0, 1.0, tenFlow.shape[3], device=device).view(
@@ -25,7 +26,7 @@ def warp(tenInput, tenFlow):
 
 
 # Warp images with multiple groups of flow, and combine them into one group with flow group attention.
-# If M==1, multiwarp falls back to warp.
+# If M==1, multiwarp falls back to backwarp.
 def multiwarp(img0, img1, multiflow, multimask_score, M):
     img0_warped_list = []
     img1_warped_list = []
@@ -36,19 +37,21 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     # m0 means flow from middle to img0, m1 means flow from middle to img1.
     # Each block has 2 channels.
     for i in range(M):
-        img0_warped = warp(img0, multiflow[:, i*2 : i*2+2])
+        # mid -> 0 flow to warp img0, which approximates mid.
+        img0_warped = backwarp(img0, multiflow[:, i*2 : i*2+2])
         img0_warped_list.append(img0_warped)
         # Warp the mask scores. The scores are generated mostly based on
         # unwarped images, and there's misalignment between warped images and unwarped 
         # scores. Therefore, we need to warp the mask scores as well.
         # But doing so only leads to very slight improvement (~0.02 psnr).
-        maskm0_score_warped = warp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
+        maskm0_score_warped = backwarp(multimask_score[:, [i]], multiflow[:, i*2 : i*2+2])
         multimaskm0_score_list.append(maskm0_score_warped)
 
         if img1 is not None:
-            img1_warped = warp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
+            # mid -> 1 flow to warp img1, which approximates mid.
+            img1_warped = backwarp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
             img1_warped_list.append(img1_warped)
-            maskm1_score_warped = warp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
+            maskm1_score_warped = backwarp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
             multimaskm1_score_list.append(maskm1_score_warped)
         else:
             # placeholder.
@@ -61,7 +64,9 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
     # ML: 0.5 -> 0, MR: 0.5 -> 1.
     # ML_0, ML_1, ..., ML_M, MR_0, ..., MR_M, ML~MR weight
     # 1: mask, for the warp0-warp1 combination weight.
-    assert multimask_score.shape[1] == 2*M+1
+    # For sofi, the global mask scores may be bidirectional. In that case, there are totally 2*M+2 channels.
+    if img1 is not None:
+        assert multimask_score.shape[1] == 2*M+1 or multimask_score.shape[1] == 2*M+2
 
     # img0_warped_list, img1_warped_list are two lists, each of length M.
     # => [16, M, 3, 224, 224]
@@ -87,8 +92,8 @@ def multimerge_flow(multiflow, multimask_score, M):
         multiflowm0, multiflowm1 = multiflow[:, :2], multiflow[:, 2:4]
         flow = multiflow
     else:
-        multiflowm0 = multiflow[:, :M*2]
-        multiflowm1 = multiflow[:, M*2:]
+        multiflowm0 = multiflow[:, :2*M]
+        multiflowm1 = multiflow[:, 2*M:]
         # multiflow: [16, 4*M, 224, 224]
         mf_unpack_shape = list(multiflow.shape)
         mf_unpack_shape[1:2] = [M, 2]
@@ -103,9 +108,7 @@ def multimerge_flow(multiflow, multimask_score, M):
         flowm0 = (warp0_attn * multiflowm0_unpack).sum(dim=1)
         flowm1 = (warp1_attn * multiflowm1_unpack).sum(dim=1)
         flow = torch.cat([flowm0, flowm1], dim=1)
-    # Returned multiflowm0, multiflowm1 are not combined with attention. 
-    # They will be used in contextnet.
-    return flow, multiflowm0, multiflowm1, flowm0, flowm1
+    return flow
 
 # group_drop brings slight degradation.
 # Modified from drop_path() in 

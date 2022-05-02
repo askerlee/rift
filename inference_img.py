@@ -3,7 +3,7 @@ import cv2
 import torch
 import argparse
 from torch.nn import functional as F
-from model.RIFE import Model
+from model.RIFT import RIFT
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -32,23 +32,26 @@ args = parser.parse_args()
 args.multi = [ int(m) for m in args.multi.split(",") ]
 print(f"Args:\n{args}")
 
+'''
 if args.use_old_model:
-    model = Model(use_old_model=True)
+    model = RIFT(use_old_model=True)
     if not hasattr(model, 'version'):
         model.version = 0     
     model.load_model('checkpoints/rife.pth')
 elif args.hd:
     from model.rife_new.v4_0.RIFE_HDv3 import Model
-    model = Model()
+    model = RIFT()
     if not hasattr(model, 'version'):
         model.version = 0
     # -1: rank. If rank <= 0, remove "module" prefix from state_dict keys.
     model.load_model('checkpoints/rife-hd.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(multi=args.multi)
-    model.load_model(args.cp)
-    model.version = 1.0
+'''    
+
+model = RIFT(multi=args.multi)
+model.load_model(args.cp)
+model.version = 1.0
 
 model.eval()
 model.device()
