@@ -423,24 +423,31 @@ class IFNet(nn.Module):
                 # Only normalize the pixels whose in-degree >= 0.5.
                 indeg_01[ indeg_01 < 0.5 ] = 1
                 indeg_10[ indeg_10 < 0.5 ] = 1
-                # No need to backprop through indeg_01 and indeg_10.
-                indeg_01 = indeg_01.detach()
-                indeg_10 = indeg_10.detach()
+                #indeg_01 = indeg_01.detach()
+                #indeg_10 = indeg_10.detach()
+                # sqrt norm leads to divergence.
                 #indeg_01 = torch.sqrt(indeg_01)
                 #indeg_10 = torch.sqrt(indeg_10)
+                # Selectively backprop through indeg_01 and indeg_10.
+                # Backpropping from multiflow01_sofi/multiflow10_sofi through indeg_01/indeg_10 
+                # leads to slightly better performance.
                 multiflow01_sofi         = multiflow01_sofi / indeg_01
                 multiflow10_sofi         = multiflow10_sofi / indeg_10
-                flow01                   = flow01 / indeg_01
-                flow10                   = flow10 / indeg_10
+                # Backpropping from flow01/flow10 through indeg_01/indeg_10 leads to divergence.
+                # The reason is unknown.
+                flow01                   = flow01 / indeg_01.detach()
+                flow10                   = flow10 / indeg_10.detach()
                 # Normalizing the multi-mask scores have less impact, as they are pixel-wise transformed by softmax.
                 # The relative orders of the mask scores at each pixel don't change, 
                 # but the softmax weights do change a little bit after normalization.
-                multimask_score01_sofi   = multimask_score01_sofi / indeg_01
-                multimask_score10_sofi   = multimask_score10_sofi / indeg_10
+                # No backpropping through indeg_01/indeg_10 leads to slightly better performance.
+                multimask_score01_sofi   = multimask_score01_sofi / indeg_01.detach()
+                multimask_score10_sofi   = multimask_score10_sofi / indeg_10.detach()
                 # The effect of normalizing the global mask score is unknown. 
                 # But doing normalization shouldn't make it worse.
-                global_mask_score01_sofi = global_mask_score01_sofi / indeg_01
-                global_mask_score10_sofi = global_mask_score10_sofi / indeg_10
+                # No backpropping through indeg_01/indeg_10 leads to slightly better performance.
+                global_mask_score01_sofi = global_mask_score01_sofi / indeg_01.detach()
+                global_mask_score10_sofi = global_mask_score10_sofi / indeg_10.detach()
 
             multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi,  global_mask_score01_sofi], 1)
