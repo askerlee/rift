@@ -525,7 +525,7 @@ class IFNet(nn.Module):
             # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.
             # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
             flow10,                   flow01                    = flow_sofi.split(2, dim=1)
-            global_mask_score10_sofi, global_mask_score01_sofi  = global_mask_score_sofi.split(2, dim=1)
+            global_mask_score10_sofi, global_mask_score01_sofi  = global_mask_score_sofi.split(1, dim=1)
             # flow01_align1: flow01 aligned to image1.
             flow01_align1 = backwarp(flow01, flow10)
             # flow10_align0: flow10 aligned to image0.
