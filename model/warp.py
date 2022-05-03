@@ -198,6 +198,8 @@ def fwarp_blob(fwarp, img0, img1, mid_flow, mid_multiflow, multimask_score, M,
         img1_fw0 = img1_fw0 / indeg_m0.detach()
         img0_fw1 = img0_fw1 / indeg_m1.detach()
 
+    img0_fw1 = torch.clamp(img0_fw1, 0, 1)
+    img1_fw0 = torch.clamp(img1_fw0, 0, 1)
     return multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, img1_fw0, \
            multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi, img0_fw1
 

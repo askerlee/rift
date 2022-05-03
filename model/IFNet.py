@@ -375,8 +375,10 @@ class IFNet(nn.Module):
         M = self.Ms[-1]
         # multiflow_m0, multiflow_m1: first/second half of multiflow.
         # multimask_score_m0, multimask_score_m1: first/second half of multimask_score (except the global score).
-        multiflow_m0, multiflow_m1              = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
+        multiflow_m0,       multiflow_m1        = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
         multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
+
+        sofi_do_dual_warp = True
 
         if self.esti_sofi:
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, img1_fw0, \
@@ -399,9 +401,13 @@ class IFNet(nn.Module):
             img0_bwarp_sofi, img1_bwarp_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
-            # img*_dwarp: dual-warped images. No weights are available yet, so did a simple average.
-            img0_warp = img0_bwarp_sofi
-            img1_warp = img1_bwarp_sofi
+            if sofi_do_dual_warp:
+                # Generate dual-warped images. No weights are available yet, so did a simple average.
+                img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
+                img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
+            else:
+                img0_warp = img0_bwarp_sofi
+                img1_warp = img1_bwarp_sofi
 
             for k in range(self.num_sofi_loops):
                 imgs = torch.cat((img0, img0_warp, img1, img1_warp), 1)
@@ -426,15 +432,16 @@ class IFNet(nn.Module):
                 # which may pose some issues when used as input feature to block_sofi.
                 global_mask_score_sofi = multimask_score_sofi[:, -2:]
                 img0_bwarp_sofi, img1_bwarp_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
-                # Using dual warped images leads to divergence, for unknown reasons. :-(
-                # mask_sofi = torch.sigmoid(global_mask_score_sofi)
-                # img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
-                # img0_warp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
-                # img1_warp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])         
-                # img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
-                # img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
-                img0_warp = img0_bwarp_sofi
-                img1_warp = img1_bwarp_sofi
+
+                if sofi_do_dual_warp:
+                    # Using dual warped images leads to divergence, for unknown reasons. :-(
+                    mask_sofi = torch.sigmoid(global_mask_score_sofi)
+                    img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
+                    img0_warp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
+                    img1_warp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])  
+                else:
+                    img0_warp = img0_bwarp_sofi
+                    img1_warp = img1_bwarp_sofi
 
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
