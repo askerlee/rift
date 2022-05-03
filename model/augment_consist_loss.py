@@ -21,7 +21,7 @@ except:
         def __exit__(self, *args):
             pass
 
-color_fun = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
+colorjitter_fun = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
 
 def visualize_flow(flow, save_name):
     # https://stackoverflow.com/questions/28898346/visualize-optical-flow-with-color-model
@@ -74,13 +74,14 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=(16
     
     # If flow=0, pixels at (dy, dx)_0a <-> (0, 0)_1a.
     if dx >= 0 and dy >= 0:
-        # img0 is cropped at the bottom-right corner.               img0[:-dy, :-dx]
+        # img0 is cropped off the bottom-right corner.               img0[:-dy, :-dx]
         img0_bound = (0,  H - dy,  0,  W - dx)
-        # img1 is shifted by (dx, dy) to the left and up. pixels at (dy, dx) ->(0, 0).
+        # img1 is shifted by (dx, dy) to the left and up (or equivalently, cropped off the top-left corner). 
+        # pixels at (dy, dx) ->(0, 0).
         #                                                           img1[dy:,  dx:]
         img1_bound = (dy, H,       dx, W)
     if dx >= 0 and dy < 0:
-        # img0 is cropped at the right side, and shifted to the up. img0[-dy:, :-dx]
+        # img0 is cropped off the right side, and shifted to the up. img0[-dy:, :-dx]
         img0_bound = (-dy, H,      0,  W - dx)
         # img1 is shifted to the left and cropped at the bottom.    img1[:dy,  dx:]
         img1_bound = (0,   H + dy, dx, W)
@@ -89,14 +90,14 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=(16
     if dx < 0 and dy >= 0:
         # img0 is shifted to the left, and cropped at the bottom.   img0[:-dy, -dx:]
         img0_bound = (0,   H - dy, -dx, W)
-        # img1 is cropped at the right side, and shifted to the up. img1[dy:,  :dx]
+        # img1 is cropped off the right side, and shifted to the up. img1[dy:,  :dx]
         img1_bound = (dy,  H,      0,   W + dx)
         # (0, dy)_0 => (dx, dy)_0a, (0, dy)_1 => (0, 0)_1a.
         # So if flow=0, i.e., (dx, dy)_0 == (dx, dy)_1, then (dx, dy)_0a => (0, 0)_1a.         
     if dx < 0 and dy < 0:
         # img0 is shifted by (-dx, -dy) to the left and up. img0[-dy:, -dx:]
         img0_bound = (-dy, H,      -dx, W)
-        # img1 is cropped at the bottom-right corner.       img1[:dy,  :dx]
+        # img1 is cropped off the bottom-right corner.       img1[:dy,  :dx]
         img1_bound = (0,   H + dy, 0,   W + dx)
 
     # dxy is the motion of the middle frame. It's always half of the relative motion between frames 0 and 1.
@@ -196,20 +197,20 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     if same_aug:
         if mid_gt.shape[1] == 3:
             pseudo_batch = torch.cat([img0, img1, mid_gt], dim=0)
-            pseudo_batch_a = color_fun(pseudo_batch)
+            pseudo_batch_a = colorjitter_fun(pseudo_batch)
             img0a, img1a, mid_gta   = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
         else:
             # mid_gt is an empty tensor.
             pseudo_batch    = torch.cat([img0, img1], dim=0)
-            pseudo_batch_a  = color_fun(pseudo_batch)
+            pseudo_batch_a  = colorjitter_fun(pseudo_batch)
             img0a, img1a    = torch.split(pseudo_batch_a, img0.shape[0], dim=0)
             mid_gta = mid_gt
     else:
-        img0a = color_fun(img0)
-        img1a = color_fun(img1)
+        img0a = colorjitter_fun(img0)
+        img1a = colorjitter_fun(img1)
 
         if mid_gt.shape[1] == 3:
-            mid_gta   = color_fun(mid_gt)
+            mid_gta   = colorjitter_fun(mid_gt)
         else:
             mid_gta   = mid_gt
 
@@ -300,7 +301,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
         scaled_flow_block   = F.pad(scaled_flow_block,  pads, "constant", 0)
 
     # After padding, scaled_imgs are at least H*W.
-    # Crop extra borders.
+    # Extra borders have to be cropped.
     H2, W2  = scaled_imgs.shape[2:] 
     h_start = np.random.randint(H2 - H + 1)
     h_end   = h_start + H
@@ -315,10 +316,8 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     img0a, img1a = scaled_imgs[0:B], scaled_imgs[B:2*B]
     if mid_gt.shape[1] == 3:
         mid_gta = scaled_imgs[2*B:3*B]
-        flow_start_chan = 3*B
     else:
         mid_gta = mid_gt
-        flow_start_chan = 2*B
 
     # Padding and cropping doesn't change the flow magnitude. Only scaling does.
     # Scale the flow magnitudes accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
@@ -362,19 +361,28 @@ def flow_shifter(flow_list, offset_dict, sofi_start_idx=-1):
                 T1, B1, L1, R1 = img1_bound
                 dx2, dy2 = pad_xy
                 flow10, flow01 = flow_sofi.split(2, dim=1)
+                # Sofi flow is the relative motion between img0 and img1. Each image is shifted by offset
+                # relative to the middle frame, so 2*offset here.
+                # Sofi flow in both directions is cropped, as in the shifted images, some areas are shifted 
+                # outside the original images. We have to shift the same areas of the sofi flow 
+                # outside the original flow. But img0/img1 are shifted in opposite directions. 
+                # So we do the shifting on the two directions separately.
                 # flow10 is cropped in the same way as img1.
                 flow10a = flow10[:, :, T1:B1, L1:R1]
                 # flow01 is cropped in the same way as img0.
                 flow01a = flow01[:, :, T0:B0, L0:R0]
                 flow_sofi_a = torch.cat([flow10a, flow01a], dim=1)
+                # offset: [1, 4, 1, 1]
                 flow_sofi_a = flow_sofi_a + 2 * offset
-                # flow_sofi_a is smaller than original. Pad flow_sofi_a in the same way as img0a, img1a.
+                # flow_sofi_a is smaller than original images. Pad flow_sofi_a in the same way as img0a, img1a.
                 flow_sofi_a = F.pad(flow_sofi_a, (dx2, dx2, dy2, dy2))
             else:
                 flow_sofi_a = None
             # sofi 0<->1 flow should be shifted double as compared to middle -> 0/1 flow.
             flow_list_a.append(flow_sofi_a)
         else:
+            # The middle flow doesn't need cropping, as the middle flow doesn't shift, 
+            # but only changes by value (as img0 and img1 are shifted.)
             flow_a = flow + offset
             flow_list_a.append(flow_a)
     
@@ -383,9 +391,11 @@ def flow_shifter(flow_list, offset_dict, sofi_start_idx=-1):
 # flip_direction: 'h' or 'v'
 def flow_flipper(flow_list, flip_direction):
     if flip_direction == 'h':
+        # x-flow takes negative. y-flow doesn't change.
         sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_list[0].device)
         OP = hflip  
     elif flip_direction == 'v':
+        # x-flow doesn't change. y-flow takes negative.
         sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow_list[0].device)
         OP = vflip
     else:

@@ -117,15 +117,16 @@ class RIFT:
     def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]        
+        NS = len(scale_list)
         flow_list, sofi_flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill \
                 = self.flownet(imgs, scale_list, timestep=timestep)
-        stu_pred = refined_img_list[2]
+        stu_pred = refined_img_list[NS-1]
         if TTA == False:
             return stu_pred
         else:
             flow_list2, sofi_flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict, loss_distill2 \
                 = self.flownet(imgs.flip(2).flip(3), scale_list, timestep=timestep)
-            return (stu_pred + refined_img_list2[2].flip(2).flip(3)) / 2
+            return (stu_pred + refined_img_list2[NS-1].flip(2).flip(3)) / 2
     
     def update(self, imgs, mid_gt, learning_rate=0, mul=1, training=True, flow_gt=None):
         for param_group in self.optimG.param_groups:
@@ -138,9 +139,12 @@ class RIFT:
         else:
             self.eval()
         
+        scale_list = [4, 2, 1]
+        NS = len(scale_list)
+
         with autocast(enabled=self.mixed_precision):
             flow_list, sofi_flow_list, mask, crude_img_list, refined_img_list, teacher_dict, loss_distill = \
-                    self.flownet(imgs, mid_gt, scale_list=[4, 2, 1])
+                    self.flownet(imgs, mid_gt, scale_list=scale_list)
 
         flow_teacher    = teacher_dict['flow_teacher']
         merged_teacher  = teacher_dict['merged_teacher']
@@ -188,14 +192,14 @@ class RIFT:
             loss_consist_str = f"{loss_consist:.3f}/{aug_desc}"
 
         only_calc_refined_loss = True
-        stu_pred = refined_img_list[2]
+        stu_pred = refined_img_list[NS-1]
         if mid_gt.shape[1] == 3:
             loss_stu = (self.lap(stu_pred, mid_gt)).mean()
             if not only_calc_refined_loss:
-                for stu_crude_pred in crude_img_list[:3]:
+                for stu_crude_pred in crude_img_list[:NS]:
                     # lap: laplacian pyramid loss.
                     loss_stu += (self.lap(stu_crude_pred, mid_gt)).mean()
-                loss_stu = loss_stu / 4
+                loss_stu = loss_stu / (NS + 1)      # 1 final refined_img, NS crude imgs.
             # loss_tea: laplacian pyramid loss between warped image by teacher's flow & the ground truth image
             loss_tea = (self.lap(merged_teacher, mid_gt)).mean()
         else:
@@ -203,8 +207,8 @@ class RIFT:
             loss_tea = 0
 
         if self.esti_sofi:
-            refined_img0        = refined_img_list[3]
-            refined_img1        = refined_img_list[4]
+            refined_img0        = refined_img_list[NS]
+            refined_img1        = refined_img_list[NS+1]
             #crude_img0          = crude_img_list[3]
             #crude_img1          = crude_img_list[4]
             loss_refined_img0   = (self.lap(refined_img0, img0)).mean()
@@ -239,20 +243,20 @@ class RIFT:
 
             self.optimG.step()
         else:
-            flow_teacher = flow_list[2]
+            flow_teacher = flow_list[NS-1]
 
-        return refined_img_list[2], {
+        return refined_img_list[NS-1], {
                 'merged_tea':   merged_teacher,
                 'mask':         mask,
                 'mask_tea':     mask,
-                'flow':         flow_list[2][:, :2],    # :2 means only one direction of the flow is passed.
+                'flow':         flow_list[NS-1][:, :2],     # :2 means only one direction of the flow is passed.
                 'flow_tea':     flow_teacher,
-                'flow_sofi':    sofi_flow_list[-1],     # Keep both directions of sofi flow.
+                'flow_sofi':    sofi_flow_list[-1],         # Keep both directions of sofi flow.
                 # If not esti_sofi, crude_img0, crude_img1, refined_img0, refined_img1 are all None.
-                'crude_img0':   crude_img_list[3],
-                'crude_img1':   crude_img_list[4],
-                'refined_img0': refined_img_list[3],    
-                'refined_img1': refined_img_list[4],
+                'crude_img0':   crude_img_list[NS],
+                'crude_img1':   crude_img_list[NS+1],
+                'refined_img0': refined_img_list[NS],    
+                'refined_img1': refined_img_list[NS+1],
                 'loss_stu':     loss_stu,
                 'loss_tea':     loss_tea,
                 'loss_sofi':    loss_sofi,
