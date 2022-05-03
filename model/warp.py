@@ -110,7 +110,7 @@ def multimerge_flow(multiflow, multimask_score, M):
         flow = torch.cat([flowm0, flowm1], dim=1)
     return flow
 
-def fwarp_blob(fwarp, img0, img1, mid_flow, mid_multiflow, multimask_score, M, 
+def fwarp_blob(fwarp, mid_flow, mid_multiflow, multimask_score, M, 
                fwarp_do_normalize=True):
     flow_m0, flow_m1                        = mid_flow[:, :2],        mid_flow[:, 2:]
     multiflow_m0, multiflow_m1              = mid_multiflow[:, :2*M], mid_multiflow[:, 2*M:4*M]
@@ -135,8 +135,8 @@ def fwarp_blob(fwarp, img0, img1, mid_flow, mid_multiflow, multimask_score, M,
 
     # m->0, m->1 should be around half of 1->0, 0->1. 
     # So multiflow_m1 * 2 approximates multiflow01, and multiflow_m0 * 2 approximates multiflow10.
-    blob1 = torch.cat([multiflow_m1 * 2, flow_m1 * 2, multimask_score_m1, global_mask_score, img1, ones1], 1)
-    blob0 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m0, global_mask_score, img0, ones0], 1)
+    blob1 = torch.cat([multiflow_m1 * 2, flow_m1 * 2, multimask_score_m1, global_mask_score, ones1], 1)
+    blob0 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m0, global_mask_score, ones0], 1)
     # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
     # are aligned with coordinates of img0.
     blob1_fw0 = fwarp(blob1, flow_m0_bhwc)
@@ -149,14 +149,14 @@ def fwarp_blob(fwarp, img0, img1, mid_flow, mid_multiflow, multimask_score, M,
     # global_mask_score01_sofi: 1 channel
     # img1_fw0:                 3 channels
     # indeg_m0:                 1 or 0 channels (= fwarp_do_normalize)
-    assert blob1_fw0.shape[1] == 3 * M + 6 + fwarp_do_normalize
-    assert blob0_fw1.shape[1] == 3 * M + 6 + fwarp_do_normalize
-    multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, img1_fw0, indeg_m0 = \
+    assert blob1_fw0.shape[1] == 3 * M + 3 + fwarp_do_normalize
+    assert blob0_fw1.shape[1] == 3 * M + 3 + fwarp_do_normalize
+    multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, indeg_m0 = \
         blob1_fw0[:, :2*M], blob1_fw0[:, 2*M:2*M+2], blob1_fw0[:, 2*M+2:3*M+2], \
-        blob1_fw0[:, 3*M+2:3*M+3], blob1_fw0[:, 3*M+3:3*M+6], blob1_fw0[:, 3*M+6:]
+        blob1_fw0[:, 3*M+2:3*M+3], blob1_fw0[:, 3*M+3:]
     multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi, img0_fw1, indeg_m1 = \
         blob0_fw1[:, :2*M], blob0_fw1[:, 2*M:2*M+2], blob0_fw1[:, 2*M+2:3*M+2], \
-        blob0_fw1[:, 3*M+2:3*M+3], blob0_fw1[:, 3*M+3:3*M+6], blob0_fw1[:, 3*M+6:]
+        blob0_fw1[:, 3*M+2:3*M+3], blob0_fw1[:, 3*M+3:]
 
     if fwarp_do_normalize:
         # indeg_m0: 1-channel fractional counts of pixels in middle frame mapped to each pixel in img0.
@@ -193,15 +193,9 @@ def fwarp_blob(fwarp, img0, img1, mid_flow, mid_multiflow, multimask_score, M,
         # Maybe because this bp path is independent of multiwarp().
         global_mask_score01_sofi = global_mask_score01_sofi / indeg_m0
         global_mask_score10_sofi = global_mask_score10_sofi / indeg_m1
-        # img1_fw0 is fwarped from img1 using flow_m0. So divided by indeg_m0.
-        # img0_fw1 is fwarped from img0 using flow_m1. So divided by indeg_m1.
-        img1_fw0 = img1_fw0 / indeg_m0.detach()
-        img0_fw1 = img0_fw1 / indeg_m1.detach()
 
-    img0_fw1 = torch.clamp(img0_fw1, 0, 1)
-    img1_fw0 = torch.clamp(img1_fw0, 0, 1)
-    return multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, img1_fw0, \
-           multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi, img0_fw1
+    return multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \
+           multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi
 
 def fwarp_imgs(fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True):
     flow_10, flow_01 = flow_sofi[:, :2], flow_sofi[:, 2:]
