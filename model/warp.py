@@ -154,7 +154,7 @@ def fwarp_blob(fwarp, mid_flow, mid_multiflow, multimask_score, M,
     multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, indeg_m0 = \
         blob1_fw0[:, :2*M], blob1_fw0[:, 2*M:2*M+2], blob1_fw0[:, 2*M+2:3*M+2], \
         blob1_fw0[:, 3*M+2:3*M+3], blob1_fw0[:, 3*M+3:]
-    multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi, img0_fw1, indeg_m1 = \
+    multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi, indeg_m1 = \
         blob0_fw1[:, :2*M], blob0_fw1[:, 2*M:2*M+2], blob0_fw1[:, 2*M+2:3*M+2], \
         blob0_fw1[:, 3*M+2:3*M+3], blob0_fw1[:, 3*M+3:]
 
