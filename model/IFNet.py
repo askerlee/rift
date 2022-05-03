@@ -430,6 +430,8 @@ class IFNet(nn.Module):
                 img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
                 img0_dwarp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
                 img1_dwarp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])         
+                #img0_dwarp = (img0_bwarp_sofi + img0_fw1) / 2
+                #img1_dwarp = (img1_bwarp_sofi + img1_fw0) / 2
 
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]

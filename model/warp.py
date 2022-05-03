@@ -245,4 +245,6 @@ def fwarp_imgs(fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True):
         img1_fw0 = img1_fw0 / indeg_10.detach()
         img0_fw1 = img0_fw1 / indeg_01.detach()
 
+    img0_fw1 = torch.clamp(img0_fw1, 0, 1)
+    img1_fw0 = torch.clamp(img1_fw0, 0, 1)
     return img0_fw1, img1_fw0
