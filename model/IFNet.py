@@ -307,11 +307,11 @@ class IFNet(nn.Module):
                 if Mp == Mc:
                     multiflow_skip  = multiflow
                 elif Mp > Mc:
-                    # If multiflow from the previous iteration has more channels than the current iteration.
                     # Mp: M of the previous iteration. Mc: M of the current iteration.
-                    # Only take the first Ms[i] channels (of each direction) as the residual.
+                    # If multiflow from the previous iteration has more channels than the current iteration,
+                    # only take the first Ms[i] channels (of each direction) as the residual.
                     multiflow_skip  = torch.cat([ multiflow[:, :2*Mc], multiflow[:, 2*Mp:2*Mp+2*Mc] ], 1)
-                # Mp < Mc. Shouldn't happen.
+                # Mp < Mc should never happen.
                 else:
                     debug()
 
@@ -498,11 +498,11 @@ class IFNet(nn.Module):
             multiflow_sofi,       multiflow10_sofi,       multiflow01_sofi        = None, None, None
             multimask_score_sofi, multimask_score10_sofi, multimask_score01_sofi  = None, None, None
 
-        # contextnet generates warped features of the input image. 
-        # multimask_score* is used in multiwarp, i.e., first warp features according to multiflow*, 
+        # contextnet generates backwarped features of the input image. 
+        # multimask_score* is used in multiwarp, i.e., first backwarp features according to multiflow*, 
         # then combine with multimask_score*.
         # ctx0, ctx1: four level conv features of img0 and img1, gradually scaled down. 
-        # If esti_sofi, ctx0_sofi, ctx1_sofi are contextual features warped 
+        # If esti_sofi: ctx0_sofi, ctx1_sofi are contextual features backwarped 
         # by multiflow10_sofi and multiflow01_sofi, respectively.
         # Otherwise, multiflow10_sofi, multimask_score10_sofi are None,
         # and accordingly, ctx0_sofi, ctx1_sofi are None.
@@ -510,6 +510,8 @@ class IFNet(nn.Module):
                                           multiflow10_sofi, multimask_score10_sofi)
         ctx1, ctx1_sofi = self.contextnet(img1, M, multiflow_m1, multimask_score_m1, 
                                           multiflow01_sofi, multimask_score01_sofi)
+        # After backwarping, ctx0/ctx1 are both aligned with the middle frame.
+        # After backwarping, ctx0_sofi is aligned with img1, and ctx1_sofi aligned with img0.
 
         # unet is to refine the crude image crude_img_list[NS-1] with its output img_residual.
         # flow: merged flow (of two directions) from multiflow computed in the last iteration.
@@ -522,19 +524,25 @@ class IFNet(nn.Module):
         if self.esti_sofi:        
             # img0_warped_sofi is a crude version of img1, and is refined with img1_residual.
             # img1_warped_sofi is a crude version of img0, and is refined with img0_residual.
-            flow10, flow01 = flow_sofi.split(2, dim=1)
-            # flow01_warp: flow01 aligned to image1.
+            flow10,                   flow01                    = flow_sofi.split(2, dim=1)
+            global_mask_score10_sofi, global_mask_score01_sofi  = global_mask_score_sofi.split(2, dim=1)
+            # flow01_align1: flow01 aligned to image1.
             flow01_align1 = backwarp(flow01, flow10)
-            # flow10_warp: flow10 aligned to image0.
+            # flow10_align0: flow10 aligned to image0.
             flow10_align0 = backwarp(flow10, flow01)
+            flow_sofi_align1 = torch.cat((flow10, flow01_align1), dim=1)
+            flow_sofi_align0 = torch.cat((flow10_align0, flow01), dim=1)
             # flow_sofi extended with flow01 aligned to image1.
             # flow_sofi_01a1 = torch.cat((flow_sofi, flow01_align1), dim=1)
             # flow_sofi extended with flow10 aligned to image0.
             # flow_sofi_10a0 = torch.cat((flow_sofi, flow10_align0), dim=1)
-            flow_sofi_warp = torch.cat((flow_sofi, flow10_align0, flow01_align1), dim=1)
+            # flow_sofi_warp = torch.cat((flow_sofi, flow10_align0, flow01_align1), dim=1)
 
-            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, global_mask_score_sofi, flow_sofi_warp, ctx1_sofi)
-            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, global_mask_score_sofi, flow_sofi_warp, ctx0_sofi)
+            # After backwarping in contextnet(), ctx1_sofi is aligned with img0, and ctx0_sofi is aligned with img1.
+            # For img0_residual, try the best to align all input features with img0.
+            img0_residual = self.sofi_unet0(img1, img1_warped_sofi, global_mask_score01_sofi, flow_sofi_align0, ctx1_sofi)
+            # For img1_residual, try the best to align all input features with img1.
+            img1_residual = self.sofi_unet1(img0, img0_warped_sofi, global_mask_score10_sofi, flow_sofi_align1, ctx0_sofi)
 
             # The order in crude_img_list and refined_img_list: img 0, img 1.
             # img1_warped_sofi is to approximate img0, so it appears first.
