@@ -205,7 +205,7 @@ class IFBlock(nn.Module):
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
 class IFNet(nn.Module):
-    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=3):
+    def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=2):
         super(IFNet, self).__init__()
 
         if is_big_model:
@@ -443,8 +443,8 @@ class IFNet(nn.Module):
                 # The effect of normalizing the global mask score is unknown. 
                 # But doing normalization shouldn't make it worse.
                 # No backpropping through indeg_01/indeg_10 leads to slightly better performance.
-                global_mask_score01_sofi = global_mask_score01_sofi / indeg_01.detach()
-                global_mask_score10_sofi = global_mask_score10_sofi / indeg_10.detach()
+                global_mask_score01_sofi = global_mask_score01_sofi / indeg_01
+                global_mask_score10_sofi = global_mask_score10_sofi / indeg_10
 
             multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi,  global_mask_score01_sofi], 1)
@@ -454,7 +454,7 @@ class IFNet(nn.Module):
             # They are concatenated to multimask_score_sofi just to have a consistent channel number with later loops,
             # so as to pass the sanity check in multiwarp().
             multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi, global_mask_score_sofi], 1)
-            # flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
+            #flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
             flow_sofi               = torch.cat([flow10, flow01], 1)
             img0_warped_sofi, img1_warped_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
