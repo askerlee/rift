@@ -400,11 +400,11 @@ class IFNet(nn.Module):
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
             # img*_dwarp: dual-warped images. No weights are available yet, so did a simple average.
-            img0_dwarp = (img0_bwarp_sofi + img0_fw1) / 2
-            img1_dwarp = (img1_bwarp_sofi + img1_fw0) / 2
+            img0_warp = img0_bwarp_sofi
+            img1_warp = img1_bwarp_sofi
 
             for k in range(self.num_sofi_loops):
-                imgs = torch.cat((img0, img0_dwarp, img1, img1_dwarp), 1)
+                imgs = torch.cat((img0, img0_warp, img1, img1_warp), 1)
                 # multiflow_sofi_d: flow delta between the new multiflow_sofi and the old multiflow_sofi.
                 # the last two channels of multimask_score_sofi are global mask weights to indicate occlusions.
                 # So they are passed to sofi_unet().
@@ -426,12 +426,15 @@ class IFNet(nn.Module):
                 # which may pose some issues when used as input feature to block_sofi.
                 global_mask_score_sofi = multimask_score_sofi[:, -2:]
                 img0_bwarp_sofi, img1_bwarp_sofi = multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
-                mask_sofi = torch.sigmoid(global_mask_score_sofi)
-                img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
-                img0_dwarp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
-                img1_dwarp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])         
-                #img0_dwarp = (img0_bwarp_sofi + img0_fw1) / 2
-                #img1_dwarp = (img1_bwarp_sofi + img1_fw0) / 2
+                # Using dual warped images leads to divergence, for unknown reasons. :-(
+                # mask_sofi = torch.sigmoid(global_mask_score_sofi)
+                # img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
+                # img0_warp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
+                # img1_warp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])         
+                # img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
+                # img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
+                img0_warp = img0_bwarp_sofi
+                img1_warp = img1_bwarp_sofi
 
             multiflow10_sofi,       multiflow01_sofi        = multiflow_sofi[:, :2*M],      multiflow_sofi[:, 2*M:4*M]
             multimask_score10_sofi, multimask_score01_sofi  = multimask_score_sofi[:, :M],  multimask_score_sofi[:, M:2*M]
@@ -464,8 +467,8 @@ class IFNet(nn.Module):
         refined_img_list[NS - 1] = refined_img
 
         if self.esti_sofi:        
-            # img0_dwarp is a crude version of img1, and is refined with img1_residual.
-            # img1_dwarp is a crude version of img0, and is refined with img0_residual.
+            # img0_warp is a crude version of img1, and is refined with img1_residual.
+            # img1_warp is a crude version of img0, and is refined with img0_residual.
             flow10,                   flow01                    = flow_sofi.split(2, dim=1)
             global_mask_score10_sofi, global_mask_score01_sofi  = global_mask_score_sofi.split(1, dim=1)
             # flow01_align1: flow01 aligned to image1.
@@ -482,18 +485,18 @@ class IFNet(nn.Module):
 
             # After backwarping in contextnet(), ctx1_sofi is aligned with img0, and ctx0_sofi is aligned with img1.
             # For img0_residual, try the best to align all input features with img0.
-            img0_residual = self.sofi_unet0(img1, img1_dwarp, global_mask_score01_sofi, flow_sofi_align0, ctx1_sofi)
+            img0_residual = self.sofi_unet0(img1, img1_warp, global_mask_score01_sofi, flow_sofi_align0, ctx1_sofi)
             # For img1_residual, try the best to align all input features with img1.
-            img1_residual = self.sofi_unet1(img0, img0_dwarp, global_mask_score10_sofi, flow_sofi_align1, ctx0_sofi)
+            img1_residual = self.sofi_unet1(img0, img0_warp, global_mask_score10_sofi, flow_sofi_align1, ctx0_sofi)
 
             # The order in crude_img_list and refined_img_list: img 0, img 1.
-            # img1_dwarp is to approximate img0, so it appears first.
-            crude_img_list[NS]          = img1_dwarp
-            refined_img0  = self.clamp(img1_dwarp + img0_residual)
+            # img1_warp is to approximate img0, so it appears first.
+            crude_img_list[NS]          = img1_warp
+            refined_img0  = self.clamp(img1_warp + img0_residual)
             refined_img_list[NS]        = refined_img0
             # wapred img0 approximates img1.
-            crude_img_list[NS+1]        = img0_dwarp            
-            refined_img1  = self.clamp(img0_dwarp + img1_residual)
+            crude_img_list[NS+1]        = img0_warp            
+            refined_img1  = self.clamp(img0_warp + img1_residual)
             refined_img_list[NS + 1]    = refined_img1
 
         teacher_dict = { 'flow_teacher': flow_tea, 'merged_teacher': merged_tea }
