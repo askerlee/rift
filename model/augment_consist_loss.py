@@ -510,6 +510,11 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
 
     img0a, img1a, mid_gta, flow_list_a = img0, img1, mid_gt, flow_list
     aug_descs = []
+
+    mask_shape      = list(img0a.shape)
+    mask_shape[1]   = 4   # For 4 flow channels of two directions (2 for each direction).
+    smask           = torch.ones(mask_shape, device=img0.device, dtype=bool)    
+
     for aug_idx in range(len(aug_handlers)):
         aug_handler = aug_handlers[aug_idx]
         aug_type    = aug_types[aug_idx]
