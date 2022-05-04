@@ -525,8 +525,10 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
             continue
 
         all_aug_are_noop = False
-        # smask doesn't need to updated iteratively. The first MAX_WHOLE_IMG_AUG_COUNT aug_handlers are whole image augmentors,
-        # and smask is always the all-one mask. Only the last aug_handler is part image augmentor, 
+        # smask doesn't need to updated iteratively. 
+        # The first MAX_WHOLE_IMG_AUG_COUNT aug_handlers are whole image augmentors,
+        # and smask is always the all-one mask. So no need to keep it.
+        # Only the last aug_handler is part image augmentor, 
         # and smask is a nontrivial mask that needs to be kept.
         img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
                 aug_handler(img0a, img1a, mid_gta, flow_list_a, sofi_start_idx, shift_sigmas)
