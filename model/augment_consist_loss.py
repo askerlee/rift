@@ -514,6 +514,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     mask_shape      = list(img0a.shape)
     mask_shape[1]   = 4   # For 4 flow channels of two directions (2 for each direction).
     smask           = torch.ones(mask_shape, device=img0.device, dtype=bool)    
+    all_aug_are_noop = True
 
     for aug_idx in range(len(aug_handlers)):
         aug_handler = aug_handlers[aug_idx]
@@ -523,6 +524,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
             aug_descs.append("")
             continue
 
+        all_aug_are_noop = False
         # smask doesn't need to updated iteratively. The first MAX_WHOLE_IMG_AUG_COUNT aug_handlers are whole image augmentors,
         # and smask is always the all-one mask. Only the last aug_handler is part image augmentor, 
         # and smask is a nontrivial mask that needs to be kept.
@@ -548,8 +550,10 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         
         aug_descs.append(aug_desc)
 
-    # If all three augs are NO-OP, aug_desc = '---'.
+    # If all three augs are NO-OP, aug_desc = '--'.
     aug_desc = '-'.join(aug_descs)
+    if all_aug_are_noop:
+        return 0, 0, aug_desc
 
     flow_list_a, flow_teacher_a, sofi_flow_list_a = flow_list_a[:num_rift_scales], flow_list_a[num_rift_scales], \
                                                     flow_list_a[sofi_start_idx:]
