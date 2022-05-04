@@ -79,6 +79,7 @@ class RIFT:
         self.consistency_args    = consistency_args
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
         self.shift_sigmas        = consistency_args.get("shift_sigmas", [24, 16])
+        self.whole_img_aug_count = consistency_args.get("whole_img_aug_count", 1)
         self.mixed_precision = mixed_precision
 
     def train(self):
@@ -151,7 +152,6 @@ class RIFT:
         # whole image augmentations are those that don't invalidate any areas of the image,
         # such as flipping, rotating, and color jittering. 
         # Shifting and scaling invalidate some areas of the image.
-        MAX_WHOLE_IMG_AUG_COUNT = 1
         whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
         whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
         whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
@@ -173,7 +173,7 @@ class RIFT:
         args["aug_types"]    = []
 
         # replace=False: don't allow two augmentations of the same type.
-        whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=MAX_WHOLE_IMG_AUG_COUNT,
+        whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=self.whole_img_aug_count,
                                                  p=whole_img_aug_probs, replace=False)
         for i in whole_img_aug_indices:
             whole_aug_handler = whole_img_aug_handlers[i]

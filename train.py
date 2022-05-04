@@ -340,6 +340,8 @@ if __name__ == "__main__":
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="24,16", type=str,
                         help='Stds of shifts for shifting consistency loss')
 
+    parser.add_argument('--wholeaugcount', dest='whole_img_aug_count', default=1, type=int, 
+                        help='Number of whole-image augmentations.')    
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
     parser.add_argument('--smoothweight', dest='smooth_loss_weight', default=0.0, type=float, 
@@ -380,6 +382,7 @@ if __name__ == "__main__":
         'erase_prob':   args.cons_erase_prob,
         'scale_prob':   args.cons_scale_prob,
         'swap_prob':    args.cons_swap_prob,
+        'whole_img_aug_count': args.whole_img_aug_count,
         'consist_loss_weight': args.consist_loss_weight,
     }
 
