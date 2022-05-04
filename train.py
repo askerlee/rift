@@ -74,7 +74,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
     dataset_val = VimeoDataset('validation')
     val_loader = DataLoader(dataset_val, batch_size=6, pin_memory=False, num_workers=4)
 
-    if args.flow_train_stage is not None:
+    if flow_train_stage is not None:
         sys.path.append('../craft/core')
         import datasets
         # Disable shift aug implemented within the flow dataset, 

@@ -172,14 +172,16 @@ class RIFT:
         args["aug_handlers"] = []
         args["aug_types"]    = []
 
-        for _ in range(MAX_WHOLE_IMG_AUG_COUNT):
-            whole_img_aug_idx = np.random.choice(len(whole_img_aug_probs), p=whole_img_aug_probs)
-            whole_aug_handler = whole_img_aug_handlers[whole_img_aug_idx]
-            whole_aug_type    = whole_img_aug_types[whole_img_aug_idx]
+        # replace=False: don't allow two augmentations of the same type.
+        whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=MAX_WHOLE_IMG_AUG_COUNT,
+                                                 p=whole_img_aug_probs, replace=False)
+        for i in whole_img_aug_indices:
+            whole_aug_handler = whole_img_aug_handlers[i]
+            whole_aug_type    = whole_img_aug_types[i]
             args["aug_handlers"].append(whole_aug_handler)
             args["aug_types"].append(whole_aug_type)
 
-        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), p=part_img_aug_probs)
+        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=1, p=part_img_aug_probs)
         part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
         part_aug_type    = part_img_aug_types[part_img_aug_idx]
         args["aug_handlers"].append(part_aug_handler)
