@@ -243,6 +243,23 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
 
     return img0a, img1a, mid_gta, flow_list, mask, 'j'
 
+def bgr2rgb(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
+    img0a = img0[:, [2, 1, 0], :, :]
+    img1a = img1[:, [2, 1, 0], :, :]
+
+    if mid_gt.shape[1] == 3:
+        mid_gta = mid_gt[:, [2, 1, 0], :, :]
+    else:
+        # mid_gt is an empty tensor.
+        mid_gta = mid_gt
+
+    # mask has the same shape as the flipped image.
+    mask_shape = list(img0a.shape)
+    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
+    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+
+    return img0a, img1a, mid_gta, flow_list, mask, 'bgr2rgb'
+
 # B, C, H, W
 def random_erase(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     # Randomly choose a rectangle region to erase.
@@ -546,7 +563,8 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         aug_desc = f"e{tidbit}"
     elif aug_type == "scale":
         aug_desc = f"{tidbit[0]:.2f}*{tidbit[1]:.2f}"
-    elif aug_type == 'swap':
-        aug_desc = 'swap'
+    else:
+        # swap, bgr2rgb, ...
+        aug_desc = tidbit
         
     return loss_consist, loss_distill2, aug_desc
