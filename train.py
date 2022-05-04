@@ -336,9 +336,6 @@ if __name__ == "__main__":
                         help='Probability of scaling consistency loss')
     parser.add_argument('--consswapprob', dest='cons_swap_prob', default=0.5, type=float,
                         help='Probability of swapping consistency loss')
-    parser.add_argument('--consbgr2rgbprob', dest='cons_bgr2rgb_prob', default=0.5, type=float,
-                        help='Probability of swapping bgr to rgb channels consistency loss')
-
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
@@ -380,7 +377,6 @@ if __name__ == "__main__":
         'erase_prob':   args.cons_erase_prob,
         'scale_prob':   args.cons_scale_prob,
         'swap_prob':    args.cons_swap_prob,
-        'bgr2rgb_prob': args.cons_bgr2rgb_prob,
         'consist_loss_weight': args.consist_loss_weight,
     }
 

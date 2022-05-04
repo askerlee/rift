@@ -209,6 +209,18 @@ def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=No
 
     return img0a, img1a, mid_gta, flow_list_a, mask, angle
 
+def bgr2rgb(img0, img1, mid_gt):
+    img0a = img0[:, [2, 1, 0], :, :]
+    img1a = img1[:, [2, 1, 0], :, :]
+
+    if mid_gt.shape[1] == 3:
+        mid_gta = mid_gt[:, [2, 1, 0], :, :]
+    else:
+        # mid_gt is an empty tensor.
+        mid_gta = mid_gt
+
+    return img0a, img1a, mid_gta
+
 # B, C, H, W
 def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     # A small probability to do individual jittering. 
@@ -236,29 +248,16 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
         else:
             mid_gta   = mid_gt
 
+    bgr2rgb_prob = 0.4
+    if torch.rand().item() < bgr2rgb_prob:
+        img0a, img1a, mid_gta = bgr2rgb(img0a, img1a, mid_gta)
+        
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
     mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
 
     return img0a, img1a, mid_gta, flow_list, mask, 'j'
-
-def bgr2rgb(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
-    img0a = img0[:, [2, 1, 0], :, :]
-    img1a = img1[:, [2, 1, 0], :, :]
-
-    if mid_gt.shape[1] == 3:
-        mid_gta = mid_gt[:, [2, 1, 0], :, :]
-    else:
-        # mid_gt is an empty tensor.
-        mid_gta = mid_gt
-
-    # mask has the same shape as the flipped image.
-    mask_shape = list(img0a.shape)
-    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
-    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
-
-    return img0a, img1a, mid_gta, flow_list, mask, 'bgr2rgb'
 
 # B, C, H, W
 def random_erase(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):

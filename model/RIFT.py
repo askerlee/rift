@@ -84,7 +84,6 @@ class RIFT:
         self.cons_erase_prob    = consistency_args.get("erase_prob", 0.5)
         self.cons_scale_prob    = consistency_args.get("scale_prob", 0.3)
         self.cons_swap_prob     = consistency_args.get("swap_prob", 0.3)
-        self.cons_bgr2rgb_prob  = consistency_args.get("bgr2rgb_prob", 0.3)
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
         self.consistency_args   = consistency_args
 
@@ -186,13 +185,8 @@ class RIFT:
             args["aug_handler"]     = swap_frames
             args["aug_type"]        = "swap"
         # 0.1224
-        elif True: # self.cons_bgr2rgb_prob > 0 and random.random() < self.cons_bgr2rgb_prob:
-            args["aug_handler"]     = bgr2rgb
-            args["aug_type"]        = "bgr2rgb"
-        # 0. Always do some sort of consistency loss.
         else:
             loss_consist        = 0
-            mean_tidbit         = 0
             loss_distill2       = 0
             loss_consist_str    = '-'
             do_consist_loss     = False
