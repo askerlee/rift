@@ -154,13 +154,13 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
                 
             if local_rank == 0:                
                 if esti_sofi:
-                    loss_sofi = f"{info['loss_sofi']:.4f}"
+                    loss_sofi = f"{info['loss_sofi']:.3f}"
                 else:
                     loss_sofi = "-"
             
                 if is_flow_iter:
-                    loss_stu  = '-     '
-                    loss_dist = '-     '
+                    loss_stu  = '-    '
+                    loss_dist = '-    '
                 else:
                     loss_stu = f"{info['loss_stu']:.3f}"
                     loss_dist = f"{info['loss_distill']:.3f}"
