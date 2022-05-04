@@ -249,9 +249,9 @@ def color_jitter(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
             mid_gta   = mid_gt
 
     bgr2rgb_prob = 0.4
-    if torch.rand().item() < bgr2rgb_prob:
+    if torch.rand(1).item() < bgr2rgb_prob:
         img0a, img1a, mid_gta = bgr2rgb(img0a, img1a, mid_gta)
-        
+
     # mask has the same shape as the flipped image.
     mask_shape = list(img0a.shape)
     mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
