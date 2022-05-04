@@ -153,18 +153,18 @@ class RIFT:
         # Shifting and scaling invalidate some areas of the image.
         MAX_WHOLE_IMG_AUG_COUNT = 1
         whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
-        whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',     "" ]
-        whole_img_aug_probs = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
-                                         self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
-                                         self.consistency_args['swap_prob'],   0 ])
+        whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
+        whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
+                                            self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
+                                            self.consistency_args['swap_prob'],   0 ])
         # The last element is the prob of doing nothing.
         whole_img_aug_probs[-1] = 1 - np.sum(whole_img_aug_probs[:-1])
         assert whole_img_aug_probs[-1] >= 0
 
         part_img_aug_handlers = [ random_shift, random_scale, None ]
-        part_img_aug_types    = [ 'shift',     'scale',       "" ]
-        part_img_aug_probs = np.array([ self.consistency_args['shift_prob'], 
-                                        self.consistency_args['scale_prob'], 0 ])
+        part_img_aug_types    = [ 'shift',     'scale',       None ]
+        part_img_aug_probs    = np.array([ self.consistency_args['shift_prob'], 
+                                           self.consistency_args['scale_prob'], 0 ])
         # The last element is the prob of doing nothing.
         part_img_aug_probs[-1] = 1 - np.sum(part_img_aug_probs[:-1])
         assert part_img_aug_probs[-1] >= 0
@@ -181,7 +181,7 @@ class RIFT:
             args["aug_handlers"].append(whole_aug_handler)
             args["aug_types"].append(whole_aug_type)
 
-        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=1, p=part_img_aug_probs)
+        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=None, p=part_img_aug_probs)
         part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
         part_aug_type    = part_img_aug_types[part_img_aug_idx]
         args["aug_handlers"].append(part_aug_handler)
