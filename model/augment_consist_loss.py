@@ -334,7 +334,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
         pad_w1 = pad_w // 2
         pad_w2 = pad_w - pad_w1
 
-        pads        = (pad_w1, pad_w2, pad_h1, pad_h2)
+        pads                = (pad_w1, pad_w2, pad_h1, pad_h2)
         scaled_imgs         = F.pad(scaled_imgs,        pads, "constant", 0)
         scaled_flow_block   = F.pad(scaled_flow_block,  pads, "constant", 0)
 
@@ -535,7 +535,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
             dx, dy = tidbit.flatten().tolist()[:2]
             aug_desc = f"({dx:.0f},{dy:.0f})"
         elif aug_type == 'rotate':
-            aug_desc = f"rot{tidbit}"
+            aug_desc = f"r{tidbit}"
         elif aug_type == 'flip':
             aug_desc = f"{tidbit}flip"
         elif aug_type == 'color':
