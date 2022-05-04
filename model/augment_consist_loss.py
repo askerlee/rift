@@ -541,7 +541,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         elif aug_type == 'color':
             aug_desc = 'col'
         elif aug_type == 'erase':
-            aug_desc = f"e{tidbit}"
+            aug_desc = f"e{tidbit//100}"
         elif aug_type == "scale":
             aug_desc = f"{tidbit[0]:.1f}*{tidbit[1]:.1f}"
         else:
