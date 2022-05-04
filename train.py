@@ -320,22 +320,25 @@ if __name__ == "__main__":
     parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.5, type=float,
                         help='Probability of color jittering augmentation (differnt from color jitter consistency loss)')
 
+    # Whole-image augs
+    parser.add_argument('--consflipprob', dest='cons_flip_prob', default=0.15, type=float,
+                        help='Probability of flipping consistency loss')
+    parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.15, type=float,
+                        help='Probability of rotating consistency loss')
+    parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.15, type=float,
+                        help='Probability of color jitter consistency loss')
+    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.15, type=float,
+                        help='Probability of block erasing consistency loss')
+    parser.add_argument('--consswapprob', dest='cons_swap_prob', default=0.15, type=float,
+                        help='Probability of swapping consistency loss')
+
+    # Non-whole image augs
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.2, type=float,
                         help='Probability of shifting consistency loss')
-    parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="24,16", type=str,
-                        help='Stds of shifts for shifting consistency loss')
-    parser.add_argument('--consflipprob', dest='cons_flip_prob', default=0.1, type=float,
-                        help='Probability of flipping consistency loss')
-    parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.1, type=float,
-                        help='Probability of rotating consistency loss')
-    parser.add_argument('--consjitterprob', dest='cons_jitter_prob', default=0.1, type=float,
-                        help='Probability of color jitter consistency loss')
-    parser.add_argument('--conseraseprob', dest='cons_erase_prob', default=0.3, type=float,
-                        help='Probability of block erasing consistency loss')
     parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.4, type=float,
                         help='Probability of scaling consistency loss')
-    parser.add_argument('--consswapprob', dest='cons_swap_prob', default=0.5, type=float,
-                        help='Probability of swapping consistency loss')
+    parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="24,16", type=str,
+                        help='Stds of shifts for shifting consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')

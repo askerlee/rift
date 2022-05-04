@@ -76,16 +76,8 @@ class RIFT:
         self.smooth_loss_weight  = smooth_loss_weight
         self.distill_loss_weight = distill_loss_weight
         self.grad_clip = grad_clip
-        self.cons_shift_prob    = consistency_args.get("shift_prob", 0.2)
-        self.shift_sigmas       = consistency_args.get("shift_sigmas", [24, 16])
-        self.cons_flip_prob     = consistency_args.get("flip_prob", 0.1)
-        self.cons_rot_prob      = consistency_args.get("rot_prob", 0.1)
-        self.cons_jitter_prob   = consistency_args.get("jitter_prob", 0.2)
-        self.cons_erase_prob    = consistency_args.get("erase_prob", 0.5)
-        self.cons_scale_prob    = consistency_args.get("scale_prob", 0.3)
-        self.cons_swap_prob     = consistency_args.get("swap_prob", 0.3)
+        self.consistency_args    = consistency_args
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
-        self.consistency_args   = consistency_args
 
         self.mixed_precision = mixed_precision
 
@@ -155,42 +147,45 @@ class RIFT:
                     flow_list=flow_list, flow_teacher=flow_teacher, 
                     sofi_flow_list=sofi_flow_list,
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
-        do_consist_loss = True
-        # 0.2
-        if self.cons_shift_prob > 0 and random.random() < self.cons_shift_prob:
-            args["aug_handler"]     = random_shift
-            args["aug_type"]        = "shift"
-        # 0.8 * 0.1 = 0.08
-        elif self.cons_flip_prob > 0 and random.random() < self.cons_flip_prob:
-            args["aug_handler"]     = random_flip
-            args["aug_type"]        = "flip"
-        # 0.72 * 0.1 = 0.072
-        elif self.cons_rot_prob > 0 and random.random() < self.cons_rot_prob:
-            args["aug_handler"]     = random_rotate
-            args["aug_type"]        = "rotate"
-        # 0.648 * 0.1 = 0.0648
-        elif self.cons_jitter_prob > 0 and random.random() < self.cons_jitter_prob:
-            args["aug_handler"]     = color_jitter
-            args["aug_type"]        = "jitter"
-        # 0.5832 * 0.3 = 0.175
-        elif self.cons_erase_prob > 0 and random.random() < self.cons_erase_prob:
-            args["aug_handler"]     = random_erase
-            args["aug_type"]        = "erase"
-        # 0.408 * 0.4 = 0.1632
-        elif self.cons_scale_prob > 0 and random.random() < self.cons_scale_prob:
-            args["aug_handler"]     = random_scale
-            args["aug_type"]        = "scale"
-        # 0.2448 * 0.5 = 0.1224
-        elif self.cons_swap_prob > 0 and random.random() < self.cons_swap_prob:
-            args["aug_handler"]     = swap_frames
-            args["aug_type"]        = "swap"
-        # 0.1224
-        else:
-            loss_consist        = 0
-            loss_distill2       = 0
-            loss_consist_str    = '-'
-            do_consist_loss     = False
 
+        # whole image augmentations are those that don't invalidate any areas of the image,
+        # such as flipping, rotating, and jittering. 
+        # Shifting and scaling invalidate some areas of the image.
+        MAX_WHOLE_IMG_AUG_COUNT = 2
+        whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
+        whole_img_aug_types    = [ 'flip',      'rotate',       'jitter',    'erase',       'swap',     "" ]
+        whole_img_aug_probs = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
+                                         self.consistency_args['jitter_prob'], self.consistency_args['erase_prob'], 
+                                         self.consistency_args['swap_prob'],   0 ])
+        # The last element is the prob of doing nothing.
+        whole_img_aug_probs[-1] = 1 - np.sum(whole_img_aug_probs[:-1])
+        assert whole_img_aug_probs[-1] >= 0
+
+        part_img_aug_handlers = [ random_shift, random_scale, None ]
+        part_img_aug_types    = [ 'shift',     'scale',       "" ]
+        part_img_aug_probs = np.array([ self.consistency_args['shift_prob'], 
+                                        self.consistency_args['scale_prob'], 0 ])
+        # The last element is the prob of doing nothing.
+        part_img_aug_probs[-1] = 1 - np.sum(part_img_aug_probs[:-1])
+        assert part_img_aug_probs[-1] >= 0
+
+        args["aug_handlers"] = []
+        args["aug_types"]    = []
+        
+        for _ in range(MAX_WHOLE_IMG_AUG_COUNT):
+            whole_img_aug_idx = np.random.choice(len(whole_img_aug_probs), p=whole_img_aug_probs)
+            whole_aug_handler = whole_img_aug_handlers[whole_img_aug_idx]
+            whole_aug_type    = whole_img_aug_types[whole_img_aug_idx]
+            args["aug_handlers"].append(whole_aug_handler)
+            args["aug_types"].append(whole_aug_type)
+
+        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), p=part_img_aug_probs)
+        part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
+        part_aug_type    = part_img_aug_types[part_img_aug_idx]
+        args["aug_handlers"].append(part_aug_handler)
+        args["aug_types"].append(part_aug_type)
+
+        do_consist_loss = True
         if do_consist_loss:
             loss_consist, loss_distill2, aug_desc = calculate_consist_loss(**args)
             loss_consist_str = f"{loss_consist:.3f}/{aug_desc}"

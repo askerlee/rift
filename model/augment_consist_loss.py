@@ -501,14 +501,51 @@ def flow_rotator(flow_list, angle):
 
 # flow_list include flow in all scales.
 def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, sofi_flow_list, 
-                           shift_sigmas, aug_handler, aug_type, mixed_precision):
+                           shift_sigmas, aug_handlers, aug_types, mixed_precision):
     # Original flow_list: 3 flows in 3 scales.
     num_rift_scales = len(flow_list)
     # Put sofi flows at the end, so that they can be indexed by sofi_start_idx .. end of list.
     flow_list = flow_list + [flow_teacher] + sofi_flow_list
     sofi_start_idx = num_rift_scales + 1
-    img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
-            aug_handler(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas)
+
+    img0a, img1a, mid_gta, flow_list_a = img0, img1, mid_gt, flow_list
+    aug_descs = []
+    for aug_idx in range(len(aug_handlers)):
+        aug_handler = aug_handlers[aug_idx]
+        aug_type    = aug_types[aug_idx]
+        # NO-OP, i.e., no augmentation in this iteration.
+        if aug_handler is None:
+            aug_descs.append("")
+            continue
+
+        # smask doesn't need to updated iteratively. The first MAX_WHOLE_IMG_AUG_COUNT aug_handlers are whole image augmentors,
+        # and smask is always the all-one mask. Only the last aug_handler is part image augmentor, 
+        # and smask is a nontrivial mask that needs to be kept.
+        img0a, img1a, mid_gta, flow_list_a, smask, tidbit = \
+                aug_handler(img0a, img1a, mid_gta, flow_list_a, sofi_start_idx, shift_sigmas)
+
+        if aug_type == 'shift':
+            dx, dy = tidbit.flatten().tolist()[:2]
+            aug_desc = f"({dx:.0f},{dy:.0f})"
+        elif aug_type == 'rotate':
+            aug_desc = f"rot{tidbit}"
+        elif aug_type == 'flip':
+            aug_desc = f"{tidbit}flip"
+        elif aug_type == 'jitter':
+            aug_desc = 'jit'
+        elif aug_type == 'erase':
+            aug_desc = f"e{tidbit}"
+        elif aug_type == "scale":
+            aug_desc = f"{tidbit[0]:.2f}*{tidbit[1]:.2f}"
+        else:
+            # swap, ...
+            aug_desc = tidbit
+        
+        aug_descs.append(aug_desc)
+
+    # If all three augs are NO-OP, aug_desc = '---'.
+    aug_desc = '-'.join(aug_descs)
+
     flow_list_a, flow_teacher_a, sofi_flow_list_a = flow_list_a[:num_rift_scales], flow_list_a[num_rift_scales], \
                                                     flow_list_a[sofi_start_idx:]
     imgsa = torch.cat((img0a, img1a), 1)            
@@ -548,22 +585,5 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         loss_consist_sofi += torch.abs(sofi_flow_list_a[sofi_idx] - sofi_flow_list2[sofi_idx])[smask].mean()
         num_sofi_flow_in_loss += 1
     loss_consist = ((loss_consist_stu / num_rift_scales + loss_consist_sofi / num_sofi_flow_in_loss) / 2 + loss_consist_tea) / 2
-
-    if aug_type == 'shift':
-        dx, dy = tidbit.flatten().tolist()[:2]
-        aug_desc = f"({dx:.0f},{dy:.0f})"
-    elif aug_type == 'rotate':
-        aug_desc = f"rot{tidbit}"
-    elif aug_type == 'flip':
-        aug_desc = f"{tidbit}flip"
-    elif aug_type == 'jitter':
-        aug_desc = 'jitter'
-    elif aug_type == 'erase':
-        aug_desc = f"e{tidbit}"
-    elif aug_type == "scale":
-        aug_desc = f"{tidbit[0]:.2f}*{tidbit[1]:.2f}"
-    else:
-        # swap, bgr2rgb, ...
-        aug_desc = tidbit
         
     return loss_consist, loss_distill2, aug_desc
