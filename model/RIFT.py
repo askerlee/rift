@@ -78,7 +78,7 @@ class RIFT:
         self.grad_clip = grad_clip
         self.consistency_args    = consistency_args
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
-
+        self.shift_sigmas        = consistency_args.get("shift_sigmas", [24, 16])
         self.mixed_precision = mixed_precision
 
     def train(self):
@@ -171,7 +171,7 @@ class RIFT:
 
         args["aug_handlers"] = []
         args["aug_types"]    = []
-        
+
         for _ in range(MAX_WHOLE_IMG_AUG_COUNT):
             whole_img_aug_idx = np.random.choice(len(whole_img_aug_probs), p=whole_img_aug_probs)
             whole_aug_handler = whole_img_aug_handlers[whole_img_aug_idx]
