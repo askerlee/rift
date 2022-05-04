@@ -546,5 +546,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
         aug_desc = f"e{tidbit}"
     elif aug_type == "scale":
         aug_desc = f"{tidbit[0]:.2f}*{tidbit[1]:.2f}"
-
+    elif aug_type == 'swap':
+        aug_desc = 'swap'
+        
     return loss_consist, loss_distill2, aug_desc
