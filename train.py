@@ -335,7 +335,7 @@ if __name__ == "__main__":
     # Non-whole image augs
     parser.add_argument('--consshiftprob', dest='cons_shift_prob', default=0.2, type=float,
                         help='Probability of shifting consistency loss')
-    parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.4, type=float,
+    parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.2, type=float,
                         help='Probability of scaling consistency loss')
     parser.add_argument('--shiftsigmas', dest='shift_sigmas', default="24,16", type=str,
                         help='Stds of shifts for shifting consistency loss')
