@@ -334,6 +334,8 @@ if __name__ == "__main__":
                         help='Probability of block erasing consistency loss')
     parser.add_argument('--consscaleprob', dest='cons_scale_prob', default=0.4, type=float,
                         help='Probability of scaling consistency loss')
+    parser.add_argument('--consswapprob', dest='cons_swap_prob', default=0.5, type=float,
+                        help='Probability of swapping consistency loss')
 
     parser.add_argument('--consweight', dest='consist_loss_weight', default=0.02, type=float, 
                         help='Consistency loss weight.')
@@ -341,12 +343,6 @@ if __name__ == "__main__":
                         help='Flow smooth loss weight (0: disabled. If enabling, recommend 0.001).')
     parser.add_argument('--simplesmooth', dest='use_edge_aware_smooth_loss', action='store_false', 
                         help='Not to use image edge-aware smooth loss')
-
-    '''
-    parser.add_argument('--stopgradprob', dest='stopgrad_prob', default=0, type=float, 
-                        help='Stopgrad prob (from sofi flow to RIFT flow) for SOFI estimation '
-                        'default: 0, seems to hurt).')
-    '''
 
     # mixed_precision: not recommended. Using mixed precision will lead to nan.
     parser.add_argument('--mixed_precision', default=False, action='store_true', 
@@ -374,12 +370,13 @@ if __name__ == "__main__":
 
     consistency_args = {
         'shift_sigmas': args.shift_sigmas,
-        'shift_prob': args.cons_shift_prob,
-        'flip_prob': args.cons_flip_prob,
-        'rot_prob': args.cons_rot_prob,
-        'jitter_prob': args.cons_jitter_prob,
-        'erase_prob': args.cons_erase_prob,
-        'scale_prob': args.cons_scale_prob,
+        'shift_prob':   args.cons_shift_prob,
+        'flip_prob':    args.cons_flip_prob,
+        'rot_prob':     args.cons_rot_prob,
+        'jitter_prob':  args.cons_jitter_prob,
+        'erase_prob':   args.cons_erase_prob,
+        'scale_prob':   args.cons_scale_prob,
+        'swap_prob':    args.cons_swap_prob,
         'consist_loss_weight': args.consist_loss_weight,
     }
 

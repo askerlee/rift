@@ -165,6 +165,28 @@ def random_flip(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None
     flow_list_a = flow_flipper(flow_list, flip_direction)
     return img0a, img1a, mid_gta, flow_list_a, mask, flip_direction
 
+def swap_frames(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
+    img0a, img1a = img1, img0
+    mid_gta = mid_gt
+    
+    flow_list_a = []
+    for flow in flow_list:
+        # The treatment for sofi flows is the same as RIFT flows.
+        if flow is not None:
+            # For sofi flows, these are flow_10 and flow_01. They are swapped as well.
+            flow_m0, flow_m1 = flow.split(2, dim=1)
+            flow_a = torch.cat([flow_m1, flow_m0], dim=1)
+            flow_list_a.append(flow_a)
+        else:
+            flow_list_a.append(None)
+
+    # mask has the same shape as the flipped image.
+    mask_shape      = list(img0a.shape)
+    mask_shape[1]   = 4   # For 4 flow channels of two directions (2 for each direction).
+    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+
+    return img0a, img1a, mid_gta, flow_list_a, mask, 'swap'
+
 def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
     if np.random.random() < 1/3.:
         angle = 90

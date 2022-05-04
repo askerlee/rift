@@ -378,7 +378,7 @@ class IFNet(nn.Module):
         multiflow_m0,       multiflow_m1        = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
         multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
 
-        sofi_do_dual_warp = True
+        sofi_do_dual_warp = False
 
         if self.esti_sofi:
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \

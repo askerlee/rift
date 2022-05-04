@@ -83,6 +83,7 @@ class RIFT:
         self.cons_jitter_prob   = consistency_args.get("jitter_prob", 0.2)
         self.cons_erase_prob    = consistency_args.get("erase_prob", 0.5)
         self.cons_scale_prob    = consistency_args.get("scale_prob", 0.3)
+        self.cons_swap_prob     = consistency_args.get("swap_prob", 0.3)
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
         self.consistency_args   = consistency_args
 
@@ -179,7 +180,11 @@ class RIFT:
         elif self.cons_scale_prob > 0 and random.random() < self.cons_scale_prob:
             args["aug_handler"]     = random_scale
             args["aug_type"]        = "scale"
-        # 0.2448
+        # 0.2448 * 0.5 = 0.1224
+        elif self.cons_swap_prob > 0 and random.random() < self.cons_swap_prob:
+            args["aug_handler"]     = swap_frames
+            args["aug_type"]        = "swap"
+        # 0.1224
         else:
             loss_consist        = 0
             mean_tidbit         = 0

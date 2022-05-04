@@ -112,8 +112,8 @@ def multimerge_flow(multiflow, multimask_score, M):
 
 def fwarp_blob(fwarp, mid_flow, mid_multiflow, multimask_score, M, 
                fwarp_do_normalize=True):
-    flow_m0, flow_m1                        = mid_flow[:, :2],        mid_flow[:, 2:]
-    multiflow_m0, multiflow_m1              = mid_multiflow[:, :2*M], mid_multiflow[:, 2*M:4*M]
+    flow_m0,            flow_m1             = mid_flow[:, :2],        mid_flow[:, 2:]
+    multiflow_m0,       multiflow_m1        = mid_multiflow[:, :2*M], mid_multiflow[:, 2*M:4*M]
     multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
     global_mask_score                       = multimask_score[:, [-1]]
 
@@ -124,19 +124,17 @@ def fwarp_blob(fwarp, mid_flow, mid_multiflow, multimask_score, M,
     # But m0, m1 flow is aligned to the middle frame. Has to warp to align with img0/img1.
     # forward_warp is slow. To speed up, we pack them up, warp, and then unpack.
     if fwarp_do_normalize:
-        # ones0, ones1 are all-one pseudo images used to count the in-degree of each target pixel 
+        # ones is all-one pseudo images used to count the in-degree of each target pixel 
         # in image 0 and image 1. The counts are fractional.
-        ones0 = torch.ones_like(mid_multiflow[:, [0]])
-        ones1 = torch.ones_like(mid_multiflow[:, [0]])
+        ones = torch.ones_like(mid_multiflow[:, [0]])
     else:
-        # ones0, ones1 are of zero-sized tensors, to act as placeholders in the concatenated array.
-        ones0 = torch.ones_like(mid_multiflow[:, []])
-        ones1 = torch.ones_like(mid_multiflow[:, []])
+        # ones is of zero-sized tensors, to act as placeholders in the concatenated array.
+        ones = torch.ones_like(mid_multiflow[:, []])
 
     # m->0, m->1 should be around half of 1->0, 0->1. 
     # So multiflow_m1 * 2 approximates multiflow01, and multiflow_m0 * 2 approximates multiflow10.
-    blob1 = torch.cat([multiflow_m1 * 2, flow_m1 * 2, multimask_score_m1, global_mask_score, ones1], 1)
-    blob0 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m0, global_mask_score, ones0], 1)
+    blob1 = torch.cat([multiflow_m1 * 2, flow_m1 * 2, multimask_score_m1, global_mask_score, ones], 1)
+    blob0 = torch.cat([multiflow_m0 * 2, flow_m0 * 2, multimask_score_m0, global_mask_score, ones], 1)
     # fwarp m1 flow (and scores) by m0 flow, so that coordiates of the middle frame 
     # are aligned with coordinates of img0.
     blob1_fw0 = fwarp(blob1, flow_m0_bhwc)
