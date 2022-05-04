@@ -149,13 +149,13 @@ class RIFT:
                     shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
 
         # whole image augmentations are those that don't invalidate any areas of the image,
-        # such as flipping, rotating, and jittering. 
+        # such as flipping, rotating, and color jittering. 
         # Shifting and scaling invalidate some areas of the image.
         MAX_WHOLE_IMG_AUG_COUNT = 2
         whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
-        whole_img_aug_types    = [ 'flip',      'rotate',       'jitter',    'erase',       'swap',     "" ]
+        whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',     "" ]
         whole_img_aug_probs = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
-                                         self.consistency_args['jitter_prob'], self.consistency_args['erase_prob'], 
+                                         self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
                                          self.consistency_args['swap_prob'],   0 ])
         # The last element is the prob of doing nothing.
         whole_img_aug_probs[-1] = 1 - np.sum(whole_img_aug_probs[:-1])

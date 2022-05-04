@@ -538,8 +538,8 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
             aug_desc = f"rot{tidbit}"
         elif aug_type == 'flip':
             aug_desc = f"{tidbit}flip"
-        elif aug_type == 'jitter':
-            aug_desc = 'jit'
+        elif aug_type == 'color':
+            aug_desc = 'col'
         elif aug_type == 'erase':
             aug_desc = f"e{tidbit}"
         elif aug_type == "scale":
