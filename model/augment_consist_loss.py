@@ -556,7 +556,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     aug_desc = '-'.join(aug_descs)
     if all_aug_are_noop:
         return 0, 0, aug_desc
-
+    
     flow_list_a, flow_teacher_a, sofi_flow_list_a = flow_list_a[:num_rift_scales], flow_list_a[num_rift_scales], \
                                                     flow_list_a[sofi_start_idx:]
     imgsa = torch.cat((img0a, img1a), 1)            

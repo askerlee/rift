@@ -154,7 +154,7 @@ class RIFT:
         # Shifting and scaling invalidate some areas of the image.
         whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
         whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
-        whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],   self.consistency_args['rot_prob'], 
+        whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],  self.consistency_args['rot_prob'], 
                                             self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
                                             self.consistency_args['swap_prob'],   0 ])
         # The last element is the prob of doing nothing.
@@ -172,6 +172,7 @@ class RIFT:
         args["aug_handlers"] = []
         args["aug_types"]    = []
 
+        # 0.15*5=0.75 prob of doing something. 0.25 prob of no-op.
         # replace=False: don't allow two augmentations of the same type.
         whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=self.whole_img_aug_count,
                                                  p=whole_img_aug_probs, replace=False)
@@ -181,12 +182,16 @@ class RIFT:
             args["aug_handlers"].append(whole_aug_handler)
             args["aug_types"].append(whole_aug_type)
 
+        # 0.6 prob of no-op, 0.2 prob of shifting, 0.2 prob of scaling.
+        # Combining whole- and partial- augs, overall, 
+        # 0.15 prob of no-op, 0.55 prob of one aug, 0.3 prob of two augs. 
+        # So 0.3 prob of being harder than the previous single-aug scheme.
         part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=None, p=part_img_aug_probs)
         part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
         part_aug_type    = part_img_aug_types[part_img_aug_idx]
         args["aug_handlers"].append(part_aug_handler)
         args["aug_types"].append(part_aug_type)
-
+        
         do_consist_loss = True
         if do_consist_loss:
             loss_consist, loss_distill2, aug_desc = calculate_consist_loss(**args)
