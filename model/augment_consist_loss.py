@@ -358,16 +358,16 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     scaled_flow_block = scaled_imgs[:, gt_chan_end+1:]
     # Padding and cropping doesn't change the flow magnitude. Only scaling does.
     # Scale the flow magnitudes accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
-    flow_block_a  = scaled_flow_block * \
-                        torch.tensor([scale_W, scale_H, 
-                                      scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
+    scale_matrix = torch.tensor([scale_W, scale_H, 
+                                 scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
-    flow_list_a_notnone = flow_block_a.split(4, dim=1)
+    flow_list_a_notnone = scaled_flow_block.split(4, dim=1)
     flow_list_a = []
     notnone_idx = 0
     for flow in flow_list:
         if flow is not None:
-            flow_list_a.append(flow_list_a_notnone[notnone_idx])
+            scaled_flow_a = flow_list_a_notnone[notnone_idx] * scale_matrix
+            flow_list_a.append(scaled_flow_a)
             notnone_idx += 1
         else:
             flow_list_a.append(None)
