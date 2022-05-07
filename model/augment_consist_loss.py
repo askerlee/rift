@@ -106,7 +106,7 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=(16
     # Note the flows are for backward warping (from middle to 0/1).
     # From 0.5 -> 0: positive delta (from the old flow). old 0.5->0 flow + (dx, dy) = new 0.5->0 flow.
     # From 0.5 -> 1: negative delta (from the old flow). old 0.5->1 flow - (dx, dy) = new 0.5->1 flow.
-    dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=float, device=img0.device)
+    dxy = torch.tensor([ dx2,  dy2, -dx2, -dy2], dtype=img0.dtype, device=img0.device)
 
     # T, B, L, R: top, bottom, left, right boundary.
     T0, B0, L0, R0 = img0_bound
@@ -340,7 +340,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     w_start = np.random.randint(W2 - W + 1)
     w_end   = w_start + W
         
-    scaled_imgs         = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
+    scaled_imgs = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
     img0a, img1a = scaled_imgs[:, :3], scaled_imgs[:, 3:6]
@@ -422,11 +422,11 @@ def flow_shifter(flow_list, offset_dict, sofi_start_idx=-1):
 def flow_flipper(flow_list, flip_direction):
     if flip_direction == 'h':
         # x-flow takes negative. y-flow doesn't change.
-        sxy = torch.tensor([ -1,  1, -1, 1], dtype=float, device=flow_list[0].device)
+        sxy = torch.tensor([ -1,  1, -1, 1], dtype=flow_list[0].dtype, device=flow_list[0].device)
         OP = hflip  
     elif flip_direction == 'v':
         # x-flow doesn't change. y-flow takes negative.
-        sxy = torch.tensor([ 1, -1, 1, -1], dtype=float, device=flow_list[0].device)
+        sxy = torch.tensor([ 1, -1, 1, -1], dtype=flow_list[0].dtype, device=flow_list[0].device)
         OP = vflip
     else:
         breakpoint()
@@ -557,6 +557,7 @@ def calculate_consist_loss(model, img0, img1, mid_gt, flow_list, flow_teacher, s
     with autocast(enabled=mixed_precision):
         flow_list2, sofi_flow_list2, mask2, crude_img_list2, refined_img_list2, teacher_dict2, \
             loss_distill2 = model(imgsa, mid_gta, scale_list=[4, 2, 1])
+
 
     loss_consist_stu = 0
     # s enumerates all (middle frame flow) scales.
