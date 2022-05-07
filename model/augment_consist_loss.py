@@ -188,12 +188,19 @@ def swap_frames(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None
     return img0a, img1a, mid_gta, flow_list_a, mask, 'swap'
 
 def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=None):
+    angles      = [ 30,   60,   90,    120,  150,  180,   210,  240,  270,   300,  330 ]
+    angle_probs = [ 0.08, 0.08, 0.12,  0.08, 0.08, 0.12,  0.08, 0.08, 0.12,  0.08, 0.08 ]
+    angle_idx   = np.random.choice(len(angles), p=angle_probs)
+    angle       = angles[angle_idx]
+
+    '''
     if np.random.random() < 1/3.:
         angle = 90
     elif np.random.random() < 2/3.:
         angle = 180
     else:
         angle = 270
+    '''
 
     # angle: value in degrees, counter-clockwise.
     img0a   = rotate(img0.clone(),   angle=angle)
