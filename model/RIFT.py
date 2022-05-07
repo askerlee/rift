@@ -108,9 +108,11 @@ class RIFT:
         if rank == 0:
             torch.save(self.flownet.state_dict(), '{}/ep{:03}.pth'.format(path, epoch))
 
-    def set_whole_img_aug_count(self, count):
-        self.whole_img_aug_count = count
-        
+    def set_difficulty(self, whole_img_aug_count, shift_sigmas):
+        print(f"Change whole_img_aug_count={whole_img_aug_count}, shift_sigmas={shift_sigmas}")
+        self.whole_img_aug_count = whole_img_aug_count
+        self.shift_sigmas = shift_sigmas
+
     def inference(self, img0, img1, scale=1, TTA=False, timestep=0.5):
         imgs = torch.cat((img0, img1), 1)
         scale_list = [4/scale, 2/scale, 1/scale]        

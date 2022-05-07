@@ -38,6 +38,16 @@ def get_learning_rate(base_lr, step):
         # begin: base_lr, midway: 0.55*base_lr, end: 0.1*base_lr.
         return (M - M * 0.1) * mul + (M * 0.1)
 
+# Make consistency augmentation slightly difficult as the model learns.
+def schedule_difficulty(epoch, model):
+    if epoch < 20:
+        model.set_difficulty(1, (24, 16))
+    # Make the consistency aug a little big harder.
+    if epoch >= 20 and epoch < 60:
+        model.set_difficulty(2, (30, 20))
+    if epoch >= 60:
+        model.set_difficulty(3, (40, 30))
+        
 # Only visualize the first two channels of flow_map_np.
 def flow2rgb(flow_map_np):
     h, w, _ = flow_map_np.shape
@@ -99,9 +109,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
         if not args.debug:
             sampler.set_epoch(epoch)
 
-        # Make the consistency aug a little big harder.
-        if epoch >= 20:
-            model.set_whole_img_aug_count(2)
+        schedule_difficulty(epoch, model)
 
         time_stamp = time.time()
         for bi, data in enumerate(train_loader):

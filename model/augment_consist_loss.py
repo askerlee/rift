@@ -340,7 +340,7 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     w_start = np.random.randint(W2 - W + 1)
     w_end   = w_start + W
         
-    scaled_imgs = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
+    scaled_imgs = scaled_imgs[:, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
     img0a, img1a = scaled_imgs[:, :3], scaled_imgs[:, 3:6]
