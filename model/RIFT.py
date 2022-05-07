@@ -205,6 +205,7 @@ class RIFT:
             loss_consist_str = f"{loss_consist:.3f}/{aug_desc}"
         else:
             loss_consist, loss_distill2, aug_desc = 0, 0, "-"
+            loss_consist_str = "-"
 
         only_calc_refined_loss = True
         stu_pred = refined_img_list[NS-1]
