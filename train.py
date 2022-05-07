@@ -99,6 +99,10 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
         if not args.debug:
             sampler.set_epoch(epoch)
 
+        # Make the consistency aug a little big harder.
+        if epoch >= 20:
+            model.set_whole_img_aug_count(2)
+
         time_stamp = time.time()
         for bi, data in enumerate(train_loader):
             # Use flow data (no middle-frame, no flow gt) to train the model.
@@ -317,7 +321,7 @@ if __name__ == "__main__":
                         help='Output M groups of flow')
     parser.add_argument('--augshiftprob', dest='aug_shift_prob', default=0, type=float,
                         help='Probability of shifting augmentation')
-    parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.5, type=float,
+    parser.add_argument('--augjitterprob', dest='aug_jitter_prob', default=0.3, type=float,
                         help='Probability of color jittering augmentation (differnt from color jitter consistency loss)')
 
     # Whole-image augs

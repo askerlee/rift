@@ -477,9 +477,10 @@ def flow_rotator(flow_list, angle):
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
     # angle = 270: R = [[0, 1],  [-1, 0]], i.e., (u, v) => ( v, -u)
     # But why?    
+    
 
     flow_list_a = []
-    for i, flow in enumerate(flow_list):
+    for flow in flow_list:
         if flow is None:
             flow_list_a.append(None)
             continue
