@@ -311,20 +311,13 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     scale_H = H2 / H
     scale_W = W2 / W
 
+    # flow_list_notnone: a list of (B, 4, H, W)
     flow_list_notnone = [ f for f in flow_list if f is not None ]
-    # flow_block: B*K, 4, H, W
-    flow_block = torch.cat(flow_list_notnone, dim=0)
 
-    # To be consistent with images, mask has 3 channels. But only 1 channel is really needed.
-    mask = torch.ones(img0.shape, device=img0.device, dtype=img0.dtype)
+    mask = torch.ones_like(img0[:, [0]])
+    imgs = torch.cat([img0, img1, mid_gt, mask] + flow_list_notnone, dim=1)
 
-    if mid_gt.shape[1] == 3:
-        imgs = torch.cat([img0, img1, mid_gt, mask], dim=0)
-    else:
-        imgs = torch.cat([img0, img1, mask], dim=0)
-
-    scaled_imgs         = F.interpolate(imgs,       size=(H2, W2), mode='bilinear', align_corners=False)
-    scaled_flow_block   = F.interpolate(flow_block, size=(H2, W2), mode='bilinear', align_corners=False)
+    scaled_imgs = F.interpolate(imgs, size=(H2, W2), mode='bilinear', align_corners=False)
 
     if H2 < H or W2 < W:
         pad_h  = max(H - H2, 0)
@@ -334,36 +327,42 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
         pad_w1 = pad_w // 2
         pad_w2 = pad_w - pad_w1
 
-        pads                = (pad_w1, pad_w2, pad_h1, pad_h2)
-        scaled_imgs         = F.pad(scaled_imgs,        pads, "constant", 0)
-        scaled_flow_block   = F.pad(scaled_flow_block,  pads, "constant", 0)
+        pads        = (pad_w1, pad_w2, pad_h1, pad_h2)
+        scaled_imgs = F.pad(scaled_imgs, pads, "constant", 0)
 
     # After padding, scaled_imgs are at least H*W.
-    # Extra borders have to be cropped.
+    # Crop extra borders to make it H*W.
     H2, W2  = scaled_imgs.shape[2:] 
+    # If H2 == H already, randint(1) always returns 0.
     h_start = np.random.randint(H2 - H + 1)
     h_end   = h_start + H
+    # If W2 == W already, randint(1) always returns 0.
     w_start = np.random.randint(W2 - W + 1)
     w_end   = w_start + W
         
     scaled_imgs         = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
-    scaled_flow_block   = scaled_flow_block[:, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
-    B = img0.shape[0]
-    img0a, img1a = scaled_imgs[0:B], scaled_imgs[B:2*B]
-    if mid_gt.shape[1] == 3:
-        mid_gta = scaled_imgs[2*B:3*B]
-    else:
-        mid_gta = mid_gt
+    img0a, img1a = scaled_imgs[:, 3], scaled_imgs[:, 3:6]
+    # When there's no gt, mid_gt is a zero-channel tensor.
+    gt_chan_end = 6+mid_gt.shape[1]
+    mid_gta = scaled_imgs[:, 6:gt_chan_end]
+    mask    = scaled_imgs[:, gt_chan_end:gt_chan_end+1]
+    # mask: B, 4, H, W. Same mask for the two directions.
+    mask    = mask.repeat(1, 4, 1, 1)
+    # At padded areas of imgs, mask is also padded with zeros. 
+    # At the boundary there could be fractional mask values.
+    # Therefore, convert float mask to bool mask by thresholding.
+    mask    = (mask >= 0.5)
 
+    scaled_flow_block = scaled_imgs[:, gt_chan_end+1:]
     # Padding and cropping doesn't change the flow magnitude. Only scaling does.
     # Scale the flow magnitudes accordingly. flow is (x, y, x, y), so (scale_W, scale_H, scale_W, scale_H).
     flow_block_a  = scaled_flow_block * \
                         torch.tensor([scale_W, scale_H, 
                                       scale_W, scale_H], device=img0.device).reshape(1, 4, 1, 1)
 
-    flow_list_a_notnone = flow_block_a.split(B, dim=0)
+    flow_list_a_notnone = flow_block_a.split(4, dim=1)
     flow_list_a = []
     notnone_idx = 0
     for flow in flow_list:
@@ -372,13 +371,6 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
             notnone_idx += 1
         else:
             flow_list_a.append(None)
-
-    mask = scaled_imgs[-B:]
-    # mask: B, 4, H, W. Same mask for the two directions.
-    mask = mask[:, [0]].repeat(1, 4, 1, 1)
-    # At padded areas of imgs, mask is also padded with zeros.
-    # Therefore, convert float mask to bool mask by thresholding.
-    mask = (mask >= 0.5)
 
     return img0a, img1a, mid_gta, flow_list_a, mask, [scale_H, scale_W]
 
@@ -477,7 +469,7 @@ def flow_rotator(flow_list, angle):
     # angle = 180: R = [[-1, 0], [0, -1]], i.e., (u, v) => (-u, -v)
     # angle = 270: R = [[0, 1],  [-1, 0]], i.e., (u, v) => ( v, -u)
     # But why?    
-    
+
 
     flow_list_a = []
     for flow in flow_list:
