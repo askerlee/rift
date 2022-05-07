@@ -202,17 +202,41 @@ def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=No
         angle = 270
     '''
 
-    # angle: value in degrees, counter-clockwise.
-    img0a   = rotate(img0.clone(),   angle=angle)
-    img1a   = rotate(img1.clone(),   angle=angle)
-    mid_gta = rotate(mid_gt.clone(), angle=angle)
-    # mask has the same shape as the rotated image.
-    mask_shape = list(img0a.shape)
-    mask_shape[1] = 4   # For 4 flow channels of two directions (2 for each direction).
-    # TODO: If images height != width, then rotation will crop images, and mask will contain 0s.
-    mask = torch.ones(mask_shape, device=img0.device, dtype=bool)
+    # flow_list_notnone: a list of (B, 4, H, W)
+    flow_list_notnone = [ f for f in flow_list if f is not None ]
 
-    flow_list_a = flow_rotator(flow_list, angle)
+    mask = torch.ones_like(img0[:, [0]])
+    imgs = torch.cat([img0, img1, mid_gt, mask] + flow_list_notnone, dim=1)
+
+    # angle: value in degrees, counter-clockwise.
+    rot_imgs        = rotate(imgs, angle, expand=False, fill=0)
+    img0a, img1a    = rot_imgs[:, :3], rot_imgs[:, 3:6]
+
+    # When there's no gt, mid_gt is a zero-channel tensor.
+    gt_chan_end = 6 + mid_gt.shape[1]
+    mid_gta = rot_imgs[:, 6:gt_chan_end]
+    mask    = rot_imgs[:, gt_chan_end:gt_chan_end+1]
+    # mask: B, 4, H, W. Same mask for the two directions.
+    mask    = mask.repeat(1, 4, 1, 1)
+    # At padded areas of imgs, mask is also padded with zeros. 
+    # At the boundary there could be fractional mask values.
+    # Therefore, convert float mask to bool mask by thresholding.
+    mask    = (mask >= 0.5)
+
+    rot_flow_block = rot_imgs[:, gt_chan_end+1:]    
+
+    flow_list_a_notnone = rot_flow_block.split(4, dim=1)
+    flow_list_a_notnone = flow_rotator(flow_list_a_notnone, angle)
+
+    flow_list_a = []
+    notnone_idx = 0
+    for flow in flow_list:
+        if flow is not None:
+            scaled_flow_a = flow_list_a_notnone[notnone_idx]
+            flow_list_a.append(scaled_flow_a)
+            notnone_idx += 1
+        else:
+            flow_list_a.append(None)
 
     return img0a, img1a, mid_gta, flow_list_a, mask, angle
 
@@ -477,25 +501,22 @@ def flow_rotator(flow_list, angle):
     # angle = 270: R = [[0, 1],  [-1, 0]], i.e., (u, v) => ( v, -u)
     # But why?    
 
-
     flow_list_a = []
     for flow in flow_list:
         if flow is None:
             flow_list_a.append(None)
             continue
 
-        # counter-clockwise through an angle θ about the origin
-        flow_rot = rotate(flow, angle=angle)
         # Pytorch rotate: center of rotation, default is the center of the image.     
         # flow: B, C, H, W (16, 4, 224, 224) tensor
         # R: (4, 2) rotation matrix, tensor
         # flow map left multiplied by rotation matrix R
-        flow_rot_trans = torch.einsum('jc, bjhw -> bchw', R, flow_rot)
+        flow_trans = torch.einsum('jc, bjhw -> bchw', R, flow)
         # visualize_flow(flow_fst[0].permute(1, 2, 0), 'flow.png')
         # visualize_flow(flow_fst_rot[0].permute(1, 2, 0), 'flow_rotate_90.png')
         # print(flow_fst[0, :, 0, 0])
         # print(flow_fst_rot[0, :, 0, 0])
-        flow_list_a.append(flow_rot_trans)
+        flow_list_a.append(flow_trans)
 
     return flow_list_a
 

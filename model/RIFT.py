@@ -80,7 +80,7 @@ class RIFT:
         self.consist_loss_weight = consistency_args.get("consist_loss_weight", 0.02)
         self.shift_sigmas        = consistency_args.get("shift_sigmas", [24, 16])
         self.whole_img_aug_count = consistency_args.get("whole_img_aug_count", 1)
-        self.mixed_precision = mixed_precision
+        self.mixed_precision     = mixed_precision
 
     def train(self):
         self.flownet.train()
@@ -109,7 +109,7 @@ class RIFT:
             torch.save(self.flownet.state_dict(), '{}/ep{:03}.pth'.format(path, epoch))
 
     def set_difficulty(self, whole_img_aug_count, shift_sigmas, rank=0):
-        if rank == 0:
+        if rank == 0 and (self.whole_img_aug_count != whole_img_aug_count or self.shift_sigmas != shift_sigmas):
             print(f"whole_img_aug_count={whole_img_aug_count}, shift_sigmas={shift_sigmas}")
         self.whole_img_aug_count = whole_img_aug_count
         self.shift_sigmas        = shift_sigmas
