@@ -335,7 +335,7 @@ if __name__ == "__main__":
     # Whole-image augs
     parser.add_argument('--consflipprob', dest='cons_flip_prob', default=0.15, type=float,
                         help='Probability of flipping consistency loss')
-    parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.15, type=float,
+    parser.add_argument('--consrotprob', dest='cons_rot_prob', default=0.25, type=float,
                         help='Probability of rotating consistency loss')
     parser.add_argument('--conscolorprob', dest='cons_color_prob', default=0.15, type=float,
                         help='Probability of color jitter consistency loss')

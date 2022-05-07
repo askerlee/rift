@@ -158,6 +158,7 @@ class RIFT:
         # whole image augmentations are those that don't invalidate any areas of the image,
         # such as flipping, rotating, and color jittering. 
         # Shifting and scaling invalidate some areas of the image.
+        #                              0.15        0.25            0.15         0.15          0.15       0.15
         whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
         whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
         whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],  self.consistency_args['rot_prob'], 

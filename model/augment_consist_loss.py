@@ -4,6 +4,7 @@ import random
 import numpy as np
 import torch.nn.functional as F
 from torchvision.transforms.functional import hflip, vflip, rotate
+from torchvision.transforms import InterpolationMode
 from torchvision.transforms import ColorJitter
 import cv2
 
@@ -209,7 +210,7 @@ def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=No
     imgs = torch.cat([img0, img1, mid_gt, mask] + flow_list_notnone, dim=1)
 
     # angle: value in degrees, counter-clockwise.
-    rot_imgs        = rotate(imgs, angle, expand=False, fill=0)
+    rot_imgs        = rotate(imgs, angle, interpolation=InterpolationMode.BILINEAR, expand=False, fill=0)
     img0a, img1a    = rot_imgs[:, :3], rot_imgs[:, 3:6]
 
     # When there's no gt, mid_gt is a zero-channel tensor.
@@ -238,6 +239,12 @@ def random_rotate(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=No
         else:
             flow_list_a.append(None)
 
+    # In the invalidated areas (mask == 0) of the images, pixels and flows are filled with 0.
+    # If random_rotate() is followed by partial image augmentation such as random_shift() or random_scale(),
+    # the flows at these areas (after shifting/scaling) are probably also 0, and won't cause much consistency loss. 
+    # So we don't have to exclude the invalildated areas from the consistency loss calculation. 
+    # Therefore, we don't have to chain-update the mask generated here in random_shift() or random_scale().
+    # Hence, we still treat random_rotate() as a type of whole-image augmentation.
     return img0a, img1a, mid_gta, flow_list_a, mask, angle
 
 def bgr2rgb(img0, img1, mid_gt):
