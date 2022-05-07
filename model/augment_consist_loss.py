@@ -343,9 +343,9 @@ def random_scale(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=Non
     scaled_imgs         = scaled_imgs[      :, :, h_start:h_end, w_start:w_end]
     assert scaled_imgs.shape[2:] == (H, W)
 
-    img0a, img1a = scaled_imgs[:, 3], scaled_imgs[:, 3:6]
+    img0a, img1a = scaled_imgs[:, :3], scaled_imgs[:, 3:6]
     # When there's no gt, mid_gt is a zero-channel tensor.
-    gt_chan_end = 6+mid_gt.shape[1]
+    gt_chan_end = 6 + mid_gt.shape[1]
     mid_gta = scaled_imgs[:, 6:gt_chan_end]
     mask    = scaled_imgs[:, gt_chan_end:gt_chan_end+1]
     # mask: B, 4, H, W. Same mask for the two directions.
