@@ -149,60 +149,62 @@ class RIFT:
         flow_teacher    = teacher_dict['flow_teacher']
         merged_teacher  = teacher_dict['merged_teacher']
 
-        # flow_list is of length 3.
-        args = dict(model=self.flownet, img0=img0, img1=img1, mid_gt=mid_gt, 
-                    flow_list=flow_list, flow_teacher=flow_teacher, 
-                    sofi_flow_list=sofi_flow_list,
-                    shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
-
-        # whole image augmentations are those that don't invalidate any areas of the image,
-        # such as flipping, rotating, and color jittering. 
-        # Shifting and scaling invalidate some areas of the image.
-        #                              0.15        0.25            0.15         0.15          0.15       0.15
-        whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
-        whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
-        whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],  self.consistency_args['rot_prob'], 
-                                            self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
-                                            self.consistency_args['swap_prob'],   0 ])
-        # The last element is the prob of doing nothing.
-        whole_img_aug_probs[-1] = 1 - np.sum(whole_img_aug_probs[:-1])
-        assert whole_img_aug_probs[-1] >= 0
-
-        part_img_aug_handlers = [ random_shift, random_scale, None ]
-        part_img_aug_types    = [ 'shift',     'scale',       None ]
-        part_img_aug_probs    = np.array([ self.consistency_args['shift_prob'], 
-                                           self.consistency_args['scale_prob'], 0 ])
-        # The last element is the prob of doing nothing.
-        part_img_aug_probs[-1] = 1 - np.sum(part_img_aug_probs[:-1])
-        assert part_img_aug_probs[-1] >= 0
-
-        args["aug_handlers"] = []
-        args["aug_types"]    = []
-
-        # 0.15*5=0.75 prob of doing something. 0.25 prob of no-op.
-        # replace=False: don't allow two augmentations of the same type.
-        whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=self.whole_img_aug_count,
-                                                 p=whole_img_aug_probs, replace=False)
-        for i in whole_img_aug_indices:
-            whole_aug_handler = whole_img_aug_handlers[i]
-            whole_aug_type    = whole_img_aug_types[i]
-            args["aug_handlers"].append(whole_aug_handler)
-            args["aug_types"].append(whole_aug_type)
-
-        # 0.6 prob of no-op, 0.2 prob of shifting, 0.2 prob of scaling.
-        # Combining whole- and partial- augs, overall, 
-        # 0.15 prob of no-op, 0.55 prob of one aug, 0.3 prob of two augs. 
-        # So 0.3 prob of being harder than the previous single-aug scheme.
-        part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=None, p=part_img_aug_probs)
-        part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
-        part_aug_type    = part_img_aug_types[part_img_aug_idx]
-        args["aug_handlers"].append(part_aug_handler)
-        args["aug_types"].append(part_aug_type)
-        
-        do_consist_loss = True
+        do_consist_loss = training
         if do_consist_loss:
+            # flow_list is of length 3.
+            args = dict(model=self.flownet, img0=img0, img1=img1, mid_gt=mid_gt, 
+                        flow_list=flow_list, flow_teacher=flow_teacher, 
+                        sofi_flow_list=sofi_flow_list,
+                        shift_sigmas=self.shift_sigmas, mixed_precision=self.mixed_precision)
+
+            # whole image augmentations are those that don't invalidate any areas of the image,
+            # such as flipping, rotating, and color jittering. 
+            # Shifting and scaling invalidate some areas of the image.
+            #                              0.15        0.25           0.15        0.15          0.15        0.15
+            whole_img_aug_handlers = [ random_flip, random_rotate, color_jitter, random_erase, swap_frames, None ]
+            whole_img_aug_types    = [ 'flip',      'rotate',       'color',    'erase',       'swap',      None ]
+            whole_img_aug_probs    = np.array([ self.consistency_args['flip_prob'],  self.consistency_args['rot_prob'], 
+                                                self.consistency_args['color_prob'], self.consistency_args['erase_prob'], 
+                                                self.consistency_args['swap_prob'],   0 ])
+            # The last element is the prob of doing nothing.
+            whole_img_aug_probs[-1] = 1 - np.sum(whole_img_aug_probs[:-1])
+            assert whole_img_aug_probs[-1] >= 0
+
+            part_img_aug_handlers = [ random_shift, random_scale, None ]
+            part_img_aug_types    = [ 'shift',     'scale',       None ]
+            part_img_aug_probs    = np.array([ self.consistency_args['shift_prob'], 
+                                            self.consistency_args['scale_prob'], 0 ])
+            # The last element is the prob of doing nothing.
+            part_img_aug_probs[-1] = 1 - np.sum(part_img_aug_probs[:-1])
+            assert part_img_aug_probs[-1] >= 0
+
+            args["aug_handlers"] = []
+            args["aug_types"]    = []
+
+            # 0.15*5=0.75 prob of doing something. 0.25 prob of no-op.
+            # replace=False: don't allow two augmentations of the same type.
+            whole_img_aug_indices = np.random.choice(len(whole_img_aug_probs), size=self.whole_img_aug_count,
+                                                    p=whole_img_aug_probs, replace=False)
+            for i in whole_img_aug_indices:
+                whole_aug_handler = whole_img_aug_handlers[i]
+                whole_aug_type    = whole_img_aug_types[i]
+                args["aug_handlers"].append(whole_aug_handler)
+                args["aug_types"].append(whole_aug_type)
+
+            # 0.6 prob of no-op, 0.2 prob of shifting, 0.2 prob of scaling.
+            # Combining whole- and partial- augs, overall, 
+            # 0.15 prob of no-op, 0.55 prob of one aug, 0.3 prob of two augs. 
+            # So 0.3 prob of being harder than the previous single-aug scheme.
+            part_img_aug_idx = np.random.choice(len(part_img_aug_probs), size=None, p=part_img_aug_probs)
+            part_aug_handler = part_img_aug_handlers[part_img_aug_idx]
+            part_aug_type    = part_img_aug_types[part_img_aug_idx]
+            args["aug_handlers"].append(part_aug_handler)
+            args["aug_types"].append(part_aug_type)
+            
             loss_consist, loss_distill2, aug_desc = calculate_consist_loss(**args)
             loss_consist_str = f"{loss_consist:.3f}/{aug_desc}"
+        else:
+            loss_consist, loss_distill2, aug_desc = 0, 0, "-"
 
         only_calc_refined_loss = True
         stu_pred = refined_img_list[NS-1]
