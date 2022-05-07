@@ -127,9 +127,9 @@ def random_shift(img0, img1, mid_gt, flow_list, sofi_start_idx, shift_sigmas=(16
     # Pad img0a, img1a, mid_gta by half of (dy, dx), to the original size.
     # Note the pads are ordered as (x1, x2, y1, y2) instead of (y1, y2, x1, x2). 
     # The order is different from np.pad().
-    img0a   = F.pad(img0a,      (dx2, dx2, dy2, dy2), value=img0a.mean())
-    img1a   = F.pad(img1a,      (dx2, dx2, dy2, dy2), value=img1a.mean())
-    mid_gta = F.pad(mid_gta,    (dx2, dx2, dy2, dy2), value=mid_gta.mean())
+    img0a   = F.pad(img0a,      (dx2, dx2, dy2, dy2), value=img0a.mean().item())
+    img1a   = F.pad(img1a,      (dx2, dx2, dy2, dy2), value=img1a.mean().item())
+    mid_gta = F.pad(mid_gta,    (dx2, dx2, dy2, dy2), value=mid_gta.mean().item())
 
     mask_shape      = list(img0.shape)
     mask_shape[1]   = 4   # For 4 flow channels of two directions (2 for each direction).
