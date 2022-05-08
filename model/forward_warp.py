@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
-from visgraph import make_dot
+#from model.visgraph import make_dot
 from warp import backwarp
 
 def mesh_grid(B, H, W):
