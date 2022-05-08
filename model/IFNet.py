@@ -8,7 +8,7 @@ import os
 import torch.distributed as dist
 from model.laplacian import LapLoss
 import functools
-from forward_warp import fwarp_blob, fwarp_imgs
+from model.forward_warp import fwarp_blob, fwarp_imgs
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
