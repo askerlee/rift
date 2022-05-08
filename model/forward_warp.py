@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
-#from model.visgraph import make_dot
-from warp import backwarp
 
 def mesh_grid(B, H, W):
     # mesh grid consisting of (x, y) coordinates.
@@ -217,6 +215,9 @@ def fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True):
     return img0_fw1, img1_fw0
 
 if __name__ == '__main__':	
+    from model.visgraph import make_dot
+    from model.warp import backwarp
+    
     torch.set_printoptions(sci_mode=False)
     flow12  = torch.full((1, 2, 5, 5),  1., requires_grad=True)
     # flow12 and flow21 are reverse flows.
