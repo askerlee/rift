@@ -401,7 +401,7 @@ class IFNet(nn.Module):
 
             if sofi_do_dual_warp:
                 img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=False)
-                # Generate dual-warped images. No weights are available yet, so did a simple average.
+                # Generate dual-warped images. No weights are available at the beginning, so did a simple average.
                 img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
                 img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
             else:
