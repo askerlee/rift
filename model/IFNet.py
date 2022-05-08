@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.warp import backwarp, multiwarp, multimerge_flow, fwarp_blob, fwarp_imgs
+from model.warp import backwarp, multiwarp, multimerge_flow
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
 import os
 import torch.distributed as dist
 from model.laplacian import LapLoss
 import functools
-from Forward_Warp import forward_warp
+from forward_warp import fwarp_blob, fwarp_imgs
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
@@ -248,8 +248,6 @@ class IFNet(nn.Module):
         else:
             self.clamp = functools.partial(torch.clamp, min=0, max=1)
         
-        self.fwarp = forward_warp()
-
     # scale_list: the scales to shrink the feature maps. scale_factor = 1. / scale_list[i]
     # For evaluation on benchmark datasets, as only the middle frame is compared,
     # we don't need to consider a flexible timestep here.
@@ -383,7 +381,7 @@ class IFNet(nn.Module):
         if self.esti_sofi:
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \
             multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi \
-                = fwarp_blob(self.fwarp, flow, multiflow, multimask_score, 
+                = fwarp_blob(flow, multiflow, multimask_score, 
                              M, fwarp_do_normalize=True)
 
             multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
@@ -402,7 +400,7 @@ class IFNet(nn.Module):
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
             if sofi_do_dual_warp:
-                img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
+                img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True)
                 # Generate dual-warped images. No weights are available yet, so did a simple average.
                 img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
                 img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
@@ -436,7 +434,7 @@ class IFNet(nn.Module):
 
                 if sofi_do_dual_warp:
                     # Using dual warped images leads to divergence, for unknown reasons. :-(
-                    img0_fw1, img1_fw0 = fwarp_imgs(self.fwarp, img0, img1, flow_sofi, fwarp_do_normalize=True)
+                    img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True)
                     mask_sofi = torch.sigmoid(global_mask_score_sofi)
                     img0_warp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
                     img1_warp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])  
