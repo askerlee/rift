@@ -376,13 +376,13 @@ class IFNet(nn.Module):
         multiflow_m0,       multiflow_m1        = multiflow[:, :2*M],     multiflow[:, 2*M:4*M]
         multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
 
-        sofi_do_dual_warp = False
+        sofi_do_dual_warp = True
 
         if self.esti_sofi:
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \
             multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi \
                 = fwarp_blob(flow, multiflow, multimask_score, 
-                             M, fwarp_do_normalize=True)
+                             M, fwarp_do_normalize=False)
 
             multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi,  global_mask_score01_sofi], 1)
@@ -400,7 +400,7 @@ class IFNet(nn.Module):
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, self.Ms[-1])
 
             if sofi_do_dual_warp:
-                img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True)
+                img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=False)
                 # Generate dual-warped images. No weights are available yet, so did a simple average.
                 img0_warp = (img0_bwarp_sofi + img0_fw1) / 2
                 img1_warp = (img1_bwarp_sofi + img1_fw0) / 2
@@ -434,7 +434,7 @@ class IFNet(nn.Module):
 
                 if sofi_do_dual_warp:
                     # Using dual warped images leads to divergence, for unknown reasons. :-(
-                    img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True)
+                    img0_fw1, img1_fw0 = fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=False)
                     mask_sofi = torch.sigmoid(global_mask_score_sofi)
                     img0_warp = img0_bwarp_sofi * mask_sofi[:, [0]] + img0_fw1 * (1 - mask_sofi[:, [0]])
                     img1_warp = img1_bwarp_sofi * mask_sofi[:, [1]] + img1_fw0 * (1 - mask_sofi[:, [1]])  

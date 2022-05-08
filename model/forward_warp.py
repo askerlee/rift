@@ -88,7 +88,7 @@ def forward_warp(image, flow12):
     return image_warped
 
 def fwarp_blob(mid_flow, mid_multiflow, multimask_score, M, 
-               fwarp_do_normalize=True):
+               fwarp_do_normalize=False):
     flow_m0,            flow_m1             = mid_flow[:, :2],        mid_flow[:, 2:]
     multiflow_m0,       multiflow_m1        = mid_multiflow[:, :2*M], mid_multiflow[:, 2*M:4*M]
     multimask_score_m0, multimask_score_m1  = multimask_score[:, :M], multimask_score[:, M:2*M]
@@ -169,7 +169,7 @@ def fwarp_blob(mid_flow, mid_multiflow, multimask_score, M,
     return multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \
            multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi
 
-def fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True):
+def fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=False):
     flow_10, flow_01 = flow_sofi[:, :2], flow_sofi[:, 2:]
 
     if fwarp_do_normalize:
@@ -217,7 +217,7 @@ def fwarp_imgs(img0, img1, flow_sofi, fwarp_do_normalize=True):
 if __name__ == '__main__':	
     from model.visgraph import make_dot
     from model.warp import backwarp
-    
+
     torch.set_printoptions(sci_mode=False)
     flow12  = torch.full((1, 2, 5, 5),  1., requires_grad=True)
     # flow12 and flow21 are reverse flows.
