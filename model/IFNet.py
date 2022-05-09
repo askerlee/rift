@@ -381,7 +381,7 @@ class IFNet(nn.Module):
         if self.esti_sofi:
             multiflow01_sofi, flow01, multimask_score01_sofi, global_mask_score01_sofi, \
             multiflow10_sofi, flow10, multimask_score10_sofi, global_mask_score10_sofi \
-                = fwarp_blob(flow, multiflow, multimask_score)
+                = fwarp_blob(flow, multiflow, multimask_score, M)
 
             multiflow_sofi          = torch.cat([multiflow10_sofi,          multiflow01_sofi], 1)
             global_mask_score_sofi  = torch.cat([global_mask_score10_sofi,  global_mask_score01_sofi], 1)
