@@ -43,11 +43,13 @@ def schedule_difficulty(epoch, model, local_rank):
     if epoch < 20:
         model.set_difficulty(1, (24, 16), local_rank)
     # Make the consistency aug a little big harder.
-    if epoch >= 20 and epoch < 60:
+    if epoch >= 20 and epoch < 40:
         model.set_difficulty(2, (30, 20), local_rank)
-    if epoch >= 60:
+    if epoch >= 40 and epoch < 80:
         model.set_difficulty(3, (40, 30), local_rank)
-        
+    if epoch >= 80:
+        model.set_difficulty(4, (50, 40), local_rank)
+
 # Only visualize the first two channels of flow_map_np.
 def flow2rgb(flow_map_np):
     h, w, _ = flow_map_np.shape
