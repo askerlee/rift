@@ -9,6 +9,5 @@ test/
 *.npz
 
 *.zip
-
+*.bat
 data
-*.txt

@@ -11,7 +11,7 @@ import _thread
 import skvideo.io
 from queue import Queue, Empty
 from model.pytorch_msssim import ssim_matlab
-from model.RIFE import Model
+from model.RIFT import RIFT
 
 warnings.filterwarnings("ignore")
 
@@ -102,7 +102,7 @@ if torch.cuda.is_available():
         torch.set_default_tensor_type(torch.cuda.HalfTensor)
 
 if args.use_old_model:
-    model = Model(use_old_model=True)
+    model = RIFT(use_old_model=True)
     if not hasattr(model, 'version'):
         model.version = 0    
     model.load_model('checkpoints/rife.pth')
@@ -115,10 +115,10 @@ elif args.hd:
     model.load_model('checkpoints/rife-hd.pth', -1)
     print("Loaded 3.x/4.x HD model.")
 else:
-    model = Model(multi=args.multi)
+    model = RIFT(multi=args.multi)
     model.load_model(args.cp)
     model.version = 1.0
-    
+        
 model.eval()
 model.device()
 
