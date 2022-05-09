@@ -47,9 +47,9 @@ def forward_warp(image, flow12):
                          x_left_is_out  | y_top_is_out], dim=1)
 
     # encode coordinates, since the scatter function can only index along one axis
-    # bg: batch, geometric (B, H*W)
-    indeg_bg        = torch.zeros(B, H*W).type_as(image)
-    image_warped_bgc  = torch.zeros(B, H*W, C).type_as(image)
+    # bgc: batch, geometric (B, H*W), channel
+    # The last channel of image_warped_bgc is to count in-degrees.
+    image_warped_bgc    = torch.zeros(B, H*W, C + 1).type_as(image)
     
     # xy_addr: [B, 4*H*W]. 
     # Each block is the (flattened) coordinates that index one corner of the 
@@ -78,12 +78,18 @@ def forward_warp(image, flow12):
     image_bgc   = image.reshape(B, C, -1).permute(0, 2, 1)
     # image_b4gc: [B, 4*H*W, C].
     image_b4gc  = image_bgc.repeat(1, 4, 1)
-    indeg_bg.scatter_add_(1, xy_addr, weights_bg)
-    xy_addr_c   = xy_addr.unsqueeze(-1).repeat(1, 1, C)
+    # ones_b4g1: [B, 4*H*W, 1]. To count the in-degrees of dst pixels.
+    ones_b4g1  = torch.ones_like(image_b4gc[:, :, [0]])
+    image_b4gc = torch.cat([image_b4gc, ones_b4g1], -1)
+
+    # xy_addr_c: [B, 4*H*W, C].
+    xy_addr_c   = xy_addr.unsqueeze(-1).repeat(1, 1, C+1)
+    # weighted_img_b4gc: [B, 4*H*W, C].
     weighted_img_b4gc = weights_bg.unsqueeze(-1) * image_b4gc
     image_warped_bgc.scatter_add_(1, xy_addr_c, weighted_img_b4gc)
+    image_warped_bgc, indeg_bg  = image_warped_bgc[:, :, :-1], image_warped_bgc[:, :, [-1]]
     indeg_bg[indeg_bg < 0.5] = 1
-    image_warped_bgc  = image_warped_bgc / indeg_bg.unsqueeze(-1)
+    image_warped_bgc  = image_warped_bgc / indeg_bg
     image_warped      = image_warped_bgc.permute(0, 2, 1).reshape(B, C, H, W)
 
     return image_warped
@@ -137,11 +143,13 @@ def fwarp_imgs(img0, img1, flow_sofi):
     return img0_fw1, img1_fw0
 
 if __name__ == '__main__':	
-    from model.visgraph import make_dot
-    from model.warp import backwarp
+    #from model.visgraph import make_dot
+    #from model.warp import backwarp
 
     torch.set_printoptions(sci_mode=False)
-    flow12  = torch.full((1, 2, 5, 5),  1., requires_grad=True)
+    #flow12  = torch.full((1, 2, 5, 5),  1., requires_grad=True)
+    flow12  = torch.randn((1, 2, 5, 5), requires_grad=True)
+
     # flow12 and flow21 are reverse flows.
     # flow21  = torch.full((1, 2, 5, 5), -1., requires_grad=True)
     x       = torch.randn(1, 2, 5, 5, requires_grad=True)
@@ -151,7 +159,7 @@ if __name__ == '__main__':
     #x_warp.sum().backward()
     #print(flow12)
     #print(flow12.grad)
-    x2 = backwarp(x_warp, flow12)
-    print(x2)
+    #x2 = backwarp(x_warp, flow12)
+    #print(x2)
     #g = make_dot(x_warp)
     #g.view()
