@@ -394,8 +394,8 @@ class IFNet(nn.Module):
             # so as to pass the sanity check in multiwarp().
             multimask_score_sofi    = torch.cat([multimask_score10_sofi, multimask_score01_sofi, global_mask_score_sofi], 1)
             # Using directly warped flow_sofi seems to perform slightly better.
-            # flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
-            flow_sofi               = torch.cat([flow10, flow01], 1)
+            flow_sofi               = multimerge_flow(multiflow_sofi, multimask_score_sofi, M)
+            #flow_sofi               = torch.cat([flow10, flow01], 1)
             img0_bwarp_sofi, img1_bwarp_sofi = \
                 multiwarp(img0, img1, multiflow_sofi, multimask_score_sofi, M)
 
