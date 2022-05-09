@@ -88,7 +88,7 @@ def forward_warp(image, flow12):
     weighted_img_b4gc = weights_bg.unsqueeze(-1) * image_b4gc
     image_warped_bgc.scatter_add_(1, xy_addr_c, weighted_img_b4gc)
     image_warped_bgc, indeg_bg  = image_warped_bgc[:, :, :-1], image_warped_bgc[:, :, [-1]]
-    indeg_bg[indeg_bg < 0.5] = 1
+    indeg_bg[indeg_bg < 0.2] = 1
     image_warped_bgc  = image_warped_bgc / indeg_bg
     image_warped      = image_warped_bgc.permute(0, 2, 1).reshape(B, C, H, W)
 
