@@ -48,8 +48,9 @@ def multiwarp(img0, img1, multiflow, multimask_score, M):
         multimaskm0_score_list.append(maskm0_score_warped)
 
         if img1 is not None:
-            # mid -> 1 flow to warp img1, which approximates mid.
-            img1_warped = backwarp(img1, multiflow[:, i*2+2*M : i*2+2*M+2])
+            # m->1 flow to warp img1, which approximates mid.
+            # m->1 flow starts from the 2*M-th channel.
+            img1_warped = backwarp(img1, multiflow[:, 2*M+i*2 : 2*M+i*2+2])
             img1_warped_list.append(img1_warped)
             maskm1_score_warped = backwarp(multimask_score[:, [i+M]], multiflow[:, i*2+2*M : i*2+2*M+2])
             multimaskm1_score_list.append(maskm1_score_warped)
