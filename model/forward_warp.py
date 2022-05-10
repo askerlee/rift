@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
+# from torch_scatter import scatter
 
 def mesh_grid(B, H, W):
     # mesh grid consisting of (x, y) coordinates.
@@ -87,6 +88,7 @@ def forward_warp(image, flow12):
     # weighted_img_b4gc: [B, 4*H*W, C].
     weighted_img_b4gc = weights_bg.unsqueeze(-1) * image_b4gc
     image_warped_bgc.scatter_add_(1, xy_addr_c, weighted_img_b4gc)
+    #scatter(weighted_img_b4gc, xy_addr_c, dim=1, out=image_warped_bgc, reduce="sum")
     image_warped_bgc, indeg_bg  = image_warped_bgc[:, :, :-1], image_warped_bgc[:, :, [-1]]
     indeg_bg[indeg_bg < 0.2] = 1
     image_warped_bgc  = image_warped_bgc / indeg_bg
