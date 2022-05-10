@@ -227,7 +227,6 @@ class VimeoDataset(BaseDataset):
 class SintelDataset(BaseDataset):
     def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0,\
         h=436, w=1024):
-        # BaseDataset.__init__(h, w, 416, 416, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         super(SintelDataset, self).__init__(h, w, 416, 416, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.data_root = data_root
         self.sample_rate = sample_rate
@@ -239,21 +238,16 @@ class SintelDataset(BaseDataset):
         for d in folders:
             self.sub_folders = self.sub_folders + sorted(glob.glob(d + '/*'))
         self.image_paths = [sorted(glob.glob(d + '/*.png')) for d in self.sub_folders]
-        self.sampled_paths = []
-        for img_paths in self.image_paths:
-            num = len(img_paths)
-            idxs = np.linspace(0, num-1, num//sample_rate, dtype=int)
-            img_paths = np.array(img_paths)
-            sampled = img_paths[idxs]
-            self.sampled_paths.append(sampled)
         self.triplets = self.make_triplet()
 
     def make_triplet(self):
         triplets = []
-        for paths in self.sampled_paths:
-            end = paths.shape[0] // 3 * 3
-            splits = np.split(paths[:end], paths.shape[0] // 3)
-            triplets = triplets + splits
+        for paths in self.image_paths:
+            for i, p in enumerate(paths[:-self.sample_rate*2]):
+                image_path0 = p
+                image_path1 = paths[i + self.sample_rate]
+                image_path2 = paths[i + self.sample_rate * 2]
+                triplets.append([image_path0, image_path1, image_path2])
         return triplets
 
 
