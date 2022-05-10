@@ -1,13 +1,11 @@
 import os
 import cv2
-import ast
+import glob
 import torch
 import numpy as np
 import random
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 import imgaug.augmenters as iaa
-import imgaug as ia
-from torchvision import transforms
 from torchvision.transforms import ColorJitter
 
 cv2.setNumThreads(1)
@@ -80,12 +78,63 @@ def random_shift(img0, img1, mid_gt, shift_sigmas=(10,8)):
 
     return img0a, img1a, mid_gta
 
-class VimeoDataset(Dataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0):
+
+class BaseDataset(Dataset):
+    def __init__(self, h, w, tgt_height, tgt_width, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0):
+        super(BaseDataset, self).__init__()
+        self.h = h
+        self.w = w
+        # Mean crop size at any side of the image. delta = 16.
+        delta = (self.h - tgt_height) // 2
+        affine_prob     = 0.1
+        perspect_prob   = 0.1 
+
+        self.geo_aug_func = iaa.Sequential(
+                [
+                    # Randomly crop to 256*256.
+                    iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
+                    # Mean crop length is delta (at one side). So the average output image size
+                    # is (self.h - 2*delta) * (self.w - 2*delta).
+                    iaa.Crop(px=(0, 2*delta), keep_size=False),
+                    # resize the image to the shape of orig_input_size
+                    iaa.Resize({'height': tgt_height, 'width': tgt_width}),
+                    # apply the following augmenters to most images
+                    iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
+                    iaa.Flipud(0.5),  # Vertically flip 50% of all images
+                    iaa.Sometimes(0.2, iaa.Rot90((1, 3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
+                    # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
+                    iaa.Sometimes(affine_prob, iaa.Affine(
+                            rotate=(-45, 45), # rotate by -45 to +45 degrees
+                            shear=(-16, 16), # shear by -16 to +16 degrees
+                            order=1,
+                            cval=(0,255),
+                            mode='constant'  
+                            # Previously mode='reflect' and no PerspectiveTransform => worse performance.
+                            # Which is the culprit? maybe mode='reflect'? 
+                            # But PerspectiveTransform should also have positive impact, as it simulates
+                            # a kind of scene changes due to motion.
+                    )),
+                    iaa.Sometimes(perspect_prob, 
+                                    iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
+                    iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
+                    # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
+                    # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
+                    # iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
+                    # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
+                ])
+        self.aug_shift_prob     = aug_shift_prob
+        self.shift_sigmas       = shift_sigmas
+        self.aug_jitter_prob    = aug_jitter_prob
+        self.asym_jitter_prob   = 0.2
+        self.color_fun          = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
+
+
+class VimeoDataset(BaseDataset):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0,\
+        h=256, w=448):
+        super(VimeoDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.batch_size = batch_size
-        self.dataset_name = dataset_name        
-        self.h = 256
-        self.w = 448
+        self.dataset_name = dataset_name
         self.data_root = 'data/vimeo_triplet'
         self.image_root = os.path.join(self.data_root, 'sequences')
         train_fn = os.path.join(self.data_root, 'tri_trainlist.txt')
@@ -95,52 +144,7 @@ class VimeoDataset(Dataset):
         with open(test_fn, 'r') as f:
             self.testlist = f.read().splitlines()   
         self.load_data()
-        if self.dataset_name == 'train':
-            tgt_height, tgt_width = 224, 224
-            # Mean crop size at any side of the image. delta = 16.
-            delta = (self.h - tgt_height) // 2
-            affine_prob     = 0.1
-            perspect_prob   = 0.1 
-
-            self.geo_aug_func =   iaa.Sequential(
-                    [
-                        # Randomly crop to 256*256.
-                        iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
-                        # Mean crop length is delta (at one side). So the average output image size
-                        # is (self.h - 2*delta) * (self.w - 2*delta).
-                        iaa.Crop(px=(0, 2*delta), keep_size=False),
-                        # resize the image to the shape of orig_input_size
-                        iaa.Resize({'height': tgt_height, 'width': tgt_width}),
-                        # apply the following augmenters to most images
-                        iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
-                        iaa.Flipud(0.5),  # Vertically flip 50% of all images
-                        iaa.Sometimes(0.2, iaa.Rot90((1, 3))), # Randomly rotate 90, 180, 270 degrees 30% of the time
-                        # Affine transformation reduces dice by ~1%. So disable it by setting affine_prob=0.
-                        iaa.Sometimes(affine_prob, iaa.Affine(
-                                rotate=(-45, 45), # rotate by -45 to +45 degrees
-                                shear=(-16, 16), # shear by -16 to +16 degrees
-                                order=1,
-                                cval=(0,255),
-                                mode='constant'  
-                                # Previously mode='reflect' and no PerspectiveTransform => worse performance.
-                                # Which is the culprit? maybe mode='reflect'? 
-                                # But PerspectiveTransform should also have positive impact, as it simulates
-                                # a kind of scene changes due to motion.
-                        )),
-                        iaa.Sometimes(perspect_prob, 
-                                        iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
-                        iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
-                        # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
-                        # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
-                        # iaa.PadToFixedSize(width=tgt_width,  height=tgt_height),
-                        # iaa.CropToFixedSize(width=tgt_width, height=tgt_height),
-                    ])
-                    
-        self.aug_shift_prob     = aug_shift_prob
-        self.shift_sigmas       = shift_sigmas
-        self.aug_jitter_prob    = aug_jitter_prob
-        self.asym_jitter_prob   = 0.2
-        self.color_fun          = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
+        
                 
     def __len__(self):
         return len(self.meta_data)
@@ -218,3 +222,98 @@ class VimeoDataset(Dataset):
 
         imgs = torch.cat((img0, img1, mid_gt), 0)    
         return imgs
+
+
+class SintelDataset(BaseDataset):
+    def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0,\
+        h=436, w=1024):
+        # BaseDataset.__init__(h, w, 416, 416, aug_shift_prob, shift_sigmas, aug_jitter_prob)
+        super(SintelDataset, self).__init__(h, w, 416, 416, aug_shift_prob, shift_sigmas, aug_jitter_prob)
+        self.data_root = data_root
+        self.sample_rate = sample_rate
+        sub_roots = glob.glob(self.data_root + '/*')
+        folders = []
+        for d in sub_roots:
+            folders = folders + glob.glob(d + '/*')
+        self.sub_folders = []
+        for d in folders:
+            self.sub_folders = self.sub_folders + sorted(glob.glob(d + '/*'))
+        self.image_paths = [sorted(glob.glob(d + '/*.png')) for d in self.sub_folders]
+        self.sampled_paths = []
+        for img_paths in self.image_paths:
+            num = len(img_paths)
+            idxs = np.linspace(0, num-1, num//sample_rate, dtype=int)
+            img_paths = np.array(img_paths)
+            sampled = img_paths[idxs]
+            self.sampled_paths.append(sampled)
+        self.triplets = self.make_triplet()
+
+    def make_triplet(self):
+        triplets = []
+        for paths in self.sampled_paths:
+            end = paths.shape[0] // 3 * 3
+            splits = np.split(paths[:end], paths.shape[0] // 3)
+            triplets = triplets + splits
+        return triplets
+
+
+    def __len__(self):
+        return len(self.triplets)
+
+    def getimg(self, index):
+        imgpaths = self.triplets[index]
+        # Load images
+        img0 = cv2.imread(imgpaths[0])
+        mid_gt = cv2.imread(imgpaths[1])
+        img1 = cv2.imread(imgpaths[2])
+        return img0, mid_gt, img1
+
+    def __getitem__(self, index):
+        img0, mid_gt, img1 = self.getimg(index)
+      
+        # A fake 9-channel image, so as to apply the same geometric augmentation to img0, img1 and mid_gt.
+        comb_img = np.concatenate((img0, mid_gt, img1), axis=2)
+        comb_img = self.geo_aug_func.augment_image(comb_img)
+        # Separate the fake 9-channel image into 3 normal images.
+        img0, mid_gt, img1 = comb_img[:,:,0:3], comb_img[:,:,3:6], comb_img[:,:,6:9]
+        # reverse the order of the RGB channels
+        if random.uniform(0, 1) < 0.5:
+            img0 = img0[:, :, ::-1]
+            img1 = img1[:, :, ::-1]
+            mid_gt = mid_gt[:, :, ::-1]
+
+        # swap img0 and img1
+        if random.uniform(0, 1) < 0.5:
+            img0, img1 = img1, img0
+
+        if self.aug_shift_prob > 0 and random.random() < self.aug_shift_prob:
+            img0, img1, mid_gt = random_shift(img0, img1, mid_gt, self.shift_sigmas)
+
+        # H, W, C => C, H, W
+        img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
+        img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
+        mid_gt = torch.from_numpy(mid_gt.copy()).permute(2, 0, 1)
+
+        # A small probability to do individual jittering. 
+        # More challenging, therefore smaller prob.        
+        if self.aug_jitter_prob > 0 and random.random() < self.aug_jitter_prob:
+            if random.random() < self.asym_jitter_prob:
+                img0 = self.color_fun(img0)
+                img1 = self.color_fun(img1)
+
+                if mid_gt.shape[1] == 3:
+                    mid_gt   = self.color_fun(mid_gt)
+            else:
+                # imgs: 3, C, H, W
+                imgs = torch.stack((img0, img1, mid_gt), 0)
+                imgs = self.color_fun(imgs)
+                # img0, img1, mid_gt: C, H, W
+                img0, img1, mid_gt = imgs[0], imgs[1], imgs[2]
+
+        imgs = torch.cat((img0, img1, mid_gt), 0)    
+        return imgs
+
+
+if __name__=='__main__':
+    ds = SintelDataset(sample_rate=2)
+    ds = VimeoDataset(dataset_name='train')
