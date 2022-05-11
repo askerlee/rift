@@ -12,7 +12,7 @@ from easydict import EasyDict as edict
 
 from model.RIFT import RIFT, SOFI_Wrapper
 from dataset import *
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
 
@@ -64,7 +64,7 @@ def flow2rgb(flow_map_np):
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
 def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_prob,
-          esti_sofi=False, flow_train_stage=None, flow_val_stage=None, 
+          esti_sofi=False, extra_triplet_datatype=None, flow_train_stage=None, flow_val_stage=None, 
           flowprob=0, flowstartep=20):
 
     if local_rank == 0:
@@ -77,6 +77,11 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
     step = 0
     nr_eval = 0
     dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
+    if extra_triplet_datatype is not None:
+        if extra_triplet_datatype == 'sintel':
+            extra_triplet_dataset = SintelDataset(aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
+            dataset = ConcatDataset([dataset, extra_triplet_dataset])
+
     if not args.debug:
         sampler = DistributedSampler(dataset)
         train_loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True, drop_last=True, sampler=sampler)
@@ -290,7 +295,7 @@ def evaluate(model, val_loader, epoch, nr_eval, local_rank, writer_val,
         sys.path.append('../craft')
         sys.path.append('../craft/core')        
         import evaluate
-        sofi_wrapper = SOFI_Wrapper(model.flownet)
+        sofi_wrapper = SOFI_Wrapper(model.flownet, sofi_mode='dual')
         if flow_val_stage == 'chairs':
             evaluate.validate_chairs(sofi_wrapper, 1)
         if flow_val_stage == 'things':
@@ -312,6 +317,8 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', dest='total_epochs', default=500, type=int)
     parser.add_argument('--bs', dest='batch_size', default=16, type=int)
     parser.add_argument('--cp', type=str, default=None, help='Load checkpoint from this path')
+    parser.add_argument('--extratrip', dest='extra_triplet_datatype', default=None, type=str, 
+                        choices=[None, 'sintel'], help='Extra triplet dataset to load')
     parser.add_argument('--flowts', dest='flow_train_stage', default=None, 
                         help="Which flow dataset to use for training")
     parser.add_argument('--flowvs', dest='flow_val_stage',   default=None, 
@@ -418,6 +425,7 @@ if __name__ == "__main__":
 
     train(model, args.local_rank, args.base_lr, 
           args.aug_shift_prob, args.shift_sigmas, args.aug_jitter_prob,
-          args.esti_sofi, args.flow_train_stage, args.flow_val_stage,
+          args.extra_triplet_datatype, args.esti_sofi, 
+          args.flow_train_stage, args.flow_val_stage,
           args.flowprob, args.flowstartep)
         

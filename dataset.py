@@ -163,7 +163,8 @@ class VimeoDataset(BaseDataset):
             self.meta_data = self.testlist
         else:
             self.meta_data = self.trainlist[cnt:]
-            
+        print('Loaded {} Vimeo {} triplets.'.format(len(self.meta_data), self.dataset_name))
+
     # random crop
     def aug(self, img0, mid_gt, img1, h, w):
         ih, iw, _ = img0.shape
@@ -233,7 +234,7 @@ class VimeoDataset(BaseDataset):
 class SintelDataset(BaseDataset):
     def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, 
                  shift_sigmas=(10,8), aug_jitter_prob=0, h=288, w=680):
-                 # Sintel images original size is (436, 1024). First resize to (288, 680), 
+                 # The original size of Sintel images is (436, 1024). First resize to (288, 680), 
                  # a size similar to Vimeo's (256, 448).
                  # Then do extra cropping and augmentation.
         super(SintelDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
@@ -255,6 +256,8 @@ class SintelDataset(BaseDataset):
                 image_path1 = paths[i + sample_rate]
                 image_path2 = paths[i + sample_rate * 2]
                 self.triplets.append([image_path0, image_path1, image_path2])
+
+        print('Loaded {} Sintel triplets.'.format(len(self.triplets)))
 
     def __len__(self):
         return len(self.triplets)
