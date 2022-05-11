@@ -64,7 +64,7 @@ def flow2rgb(flow_map_np):
 # aug_shift_prob:  image shifting probability in the augmentation.
 # cons_shift_prob: image shifting probability in the consistency loss computation.
 def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_prob,
-          esti_sofi=False, extra_triplet_datatype=None, flow_train_stage=None, flow_val_stage=None, 
+          extra_triplet_datatype=None, esti_sofi=False, flow_train_stage=None, flow_val_stage=None, 
           flowprob=0, flowstartep=20):
 
     if local_rank == 0:
