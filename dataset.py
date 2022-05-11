@@ -8,8 +8,8 @@ from torch.utils.data import Dataset
 import imgaug.augmenters as iaa
 from torchvision.transforms import ColorJitter
 
-cv2.setNumThreads(1)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#cv2.setNumThreads(1)
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # img0, img1, mid_gt are 3D np arrays of (H, W, 3).
 def random_shift(img0, img1, mid_gt, shift_sigmas=(10,8)):
@@ -91,6 +91,9 @@ class BaseDataset(Dataset):
 
         self.geo_aug_func = iaa.Sequential(
                 [
+                    # Resize the image to the shape of (h, w). 
+                    # For vimeo, (h, w) is already the actual image size.
+                    iaa.Resize({ 'height': self.h, 'width': self.w }),
                     # Randomly crop to 256*256.
                     iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
                     # Mean crop length is delta (at one side). So the average output image size
@@ -115,7 +118,7 @@ class BaseDataset(Dataset):
                             # a kind of scene changes due to motion.
                     )),
                     iaa.Sometimes(perspect_prob, 
-                                    iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
+                                  iaa.PerspectiveTransform(scale=(0.01, 0.15), cval=(0,255), mode='constant')), 
                     iaa.Sometimes(0.3, iaa.GammaContrast((0.7, 1.7))),    # Gamma contrast degrades?
                     # When tgt_width==tgt_height, PadToFixedSize and CropToFixedSize are unnecessary.
                     # Otherwise, we have to take care if the longer edge is rotated to the shorter edge.
@@ -130,8 +133,8 @@ class BaseDataset(Dataset):
 
 
 class VimeoDataset(BaseDataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0,\
-        h=256, w=448):
+    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), 
+                 aug_jitter_prob=0, h=256, w=448):
         super(VimeoDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.batch_size = batch_size
         self.dataset_name = dataset_name
@@ -145,7 +148,6 @@ class VimeoDataset(BaseDataset):
             self.testlist = f.read().splitlines()   
         self.load_data()
         
-                
     def __len__(self):
         return len(self.meta_data)
 
@@ -225,31 +227,27 @@ class VimeoDataset(BaseDataset):
 
 
 class SintelDataset(BaseDataset):
-    def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, shift_sigmas=(10,8), aug_jitter_prob=0,\
-        h=436, w=1024):
-        super(SintelDataset, self).__init__(h, w, 416, 416, aug_shift_prob, shift_sigmas, aug_jitter_prob)
+    def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, 
+                 shift_sigmas=(10,8), aug_jitter_prob=0, h=436, w=1024):
+        super(SintelDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.data_root = data_root
         self.sample_rate = sample_rate
-        sub_roots = glob.glob(self.data_root + '/*')
-        folders = []
-        for d in sub_roots:
-            folders = folders + glob.glob(d + '/*')
+        sub_roots   = [ 'training/clean', 'training/final', 'test/clean', 'test/final' ]
+        folders     = [ os.path.join(self.data_root, d) for d in sub_roots ]
         self.sub_folders = []
         for d in folders:
             self.sub_folders = self.sub_folders + sorted(glob.glob(d + '/*'))
-        self.image_paths = [sorted(glob.glob(d + '/*.png')) for d in self.sub_folders]
-        self.triplets = self.make_triplet()
+        self.image_paths = [ sorted(glob.glob(d + '/*.png')) for d in self.sub_folders ]
+        self.sample_triplet(sample_rate)
 
-    def make_triplet(self):
-        triplets = []
+    def sample_triplet(self, sample_rate):
+        self.triplets = []
         for paths in self.image_paths:
-            for i, p in enumerate(paths[:-self.sample_rate*2]):
+            for i, p in enumerate(paths[:-sample_rate*2]):
                 image_path0 = p
-                image_path1 = paths[i + self.sample_rate]
-                image_path2 = paths[i + self.sample_rate * 2]
-                triplets.append([image_path0, image_path1, image_path2])
-        return triplets
-
+                image_path1 = paths[i + sample_rate]
+                image_path2 = paths[i + sample_rate * 2]
+                self.triplets.append([image_path0, image_path1, image_path2])
 
     def __len__(self):
         return len(self.triplets)
@@ -257,9 +255,9 @@ class SintelDataset(BaseDataset):
     def getimg(self, index):
         imgpaths = self.triplets[index]
         # Load images
-        img0 = cv2.imread(imgpaths[0])
-        mid_gt = cv2.imread(imgpaths[1])
-        img1 = cv2.imread(imgpaths[2])
+        img0    = cv2.imread(imgpaths[0])
+        mid_gt  = cv2.imread(imgpaths[1])
+        img1    = cv2.imread(imgpaths[2])
         return img0, mid_gt, img1
 
     def __getitem__(self, index):
@@ -309,5 +307,13 @@ class SintelDataset(BaseDataset):
 
 
 if __name__=='__main__':
-    ds = SintelDataset(sample_rate=2)
-    ds = VimeoDataset(dataset_name='train')
+    ds1 = SintelDataset(sample_rate=2)
+    print(len(ds1))
+    ds1 = SintelDataset(sample_rate=4)
+    print(len(ds1))    
+    imgs = ds1[0]
+    print(imgs.shape)
+    ds2 = VimeoDataset(dataset_name='train')
+    print(len(ds2))
+    imgs = ds2[0]
+    print(imgs.shape)
