@@ -84,22 +84,26 @@ class BaseDataset(Dataset):
         super(BaseDataset, self).__init__()
         self.h = h
         self.w = w
-        # Mean crop size at any side of the image. delta = 16.
+        # Mean crop size at any side of the image. For Vimeo, delta = 16. For Sintel, delta = 32.
         delta = (self.h - tgt_height) // 2
         affine_prob     = 0.1
         perspect_prob   = 0.1 
 
         self.geo_aug_func = iaa.Sequential(
                 [
-                    # Resize the image to the shape of (h, w). 
-                    # For vimeo, (h, w) is already the actual image size.
+                    # Resize the image to the size (h, w). When the original image is too big, 
+                    # the first resizing avoids cropping too small fractions of the whole image.
+                    # For Sintel, (h, w) = (288, 680), around 2/3 of the original image size (436, 1024).
+                    # For Vimeo,  (h, w) = (256, 488) is the same as the original image size.
                     iaa.Resize({ 'height': self.h, 'width': self.w }),
-                    # Randomly crop to 256*256.
-                    iaa.CropToAspectRatio(aspect_ratio=1, position='uniform'),
-                    # Mean crop length is delta (at one side). So the average output image size
-                    # is (self.h - 2*delta) * (self.w - 2*delta).
+                    # As tgt_width=tgt_height=224, the aspect ratio is always 1.
+                    # Randomly crop to 256*256 (Vimeo) or 288*288 (Sintel).
+                    iaa.CropToAspectRatio(aspect_ratio=tgt_width/tgt_height, position='uniform'),
+                    # Crop a random length from uniform(0, 2*delta) (equal length at four sides). 
+                    # The mean crop length is delta, and the mean size of the output image is
+                    # (self.h - 2*delta) * (self.h - 2*delta) = tgt_height * tgt_height (=tgt_width).
                     iaa.Crop(px=(0, 2*delta), keep_size=False),
-                    # resize the image to the shape of orig_input_size
+                    # Resize the image to the shape of target size.
                     iaa.Resize({'height': tgt_height, 'width': tgt_width}),
                     # apply the following augmenters to most images
                     iaa.Fliplr(0.5),  # Horizontally flip 50% of all images
@@ -228,7 +232,10 @@ class VimeoDataset(BaseDataset):
 
 class SintelDataset(BaseDataset):
     def __init__(self, data_root='data/Sintel/', sample_rate=1, aug_shift_prob=0, 
-                 shift_sigmas=(10,8), aug_jitter_prob=0, h=436, w=1024):
+                 shift_sigmas=(10,8), aug_jitter_prob=0, h=288, w=680):
+                 # Sintel images original size is (436, 1024). First resize to (288, 680), 
+                 # a size similar to Vimeo's (256, 448).
+                 # Then do extra cropping and augmentation.
         super(SintelDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.data_root = data_root
         self.sample_rate = sample_rate
