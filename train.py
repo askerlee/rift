@@ -113,10 +113,10 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
 
     print('training...')
     for epoch in range(args.total_epochs):
+        schedule_difficulty(epoch, model, local_rank)
+
         if not args.debug:
             sampler.set_epoch(epoch)
-
-        schedule_difficulty(epoch, model, local_rank)
 
         time_stamp = time.time()
         for bi, data in enumerate(train_loader):

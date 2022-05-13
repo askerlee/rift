@@ -137,10 +137,9 @@ class BaseDataset(Dataset):
 
 
 class VimeoDataset(BaseDataset):
-    def __init__(self, dataset_name, batch_size=32, aug_shift_prob=0, shift_sigmas=(10,8), 
+    def __init__(self, dataset_name, aug_shift_prob=0, shift_sigmas=(10,8), 
                  aug_jitter_prob=0, h=256, w=448):
         super(VimeoDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
-        self.batch_size = batch_size
         self.dataset_name = dataset_name
         self.data_root = 'data/vimeo_triplet'
         self.image_root = os.path.join(self.data_root, 'sequences')
@@ -240,7 +239,10 @@ class SintelDataset(BaseDataset):
         super(SintelDataset, self).__init__(h, w, 224, 224, aug_shift_prob, shift_sigmas, aug_jitter_prob)
         self.data_root = data_root
         self.sample_rate = sample_rate
-        sub_roots   = [ 'training/clean', 'training/final', 'test/clean', 'test/final' ]
+        sub_roots_clean   = [ 'training/clean', 'test/clean' ]
+        sub_roots_final   = [ 'training/final', 'test/final' ]
+        # sub_roots = sub_roots_clean + sub_roots_final
+        sub_roots = sub_roots_clean # final images are too difficult
         folders     = [ os.path.join(self.data_root, d) for d in sub_roots ]
         self.sub_folders = []
         for d in folders:
