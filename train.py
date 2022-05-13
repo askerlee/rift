@@ -79,8 +79,8 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
     dataset = VimeoDataset('train', aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
     if extra_triplet_datatype is not None:
         if extra_triplet_datatype == 'sintel':
-            extra_triplet_dataset = SintelDataset(aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
-            dataset = ConcatDataset([dataset, extra_triplet_dataset])
+            sintel_dataset = SintelDataset(aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
+            dataset = dataset + 2 * sintel_dataset
 
     if not args.debug:
         sampler = DistributedSampler(dataset)

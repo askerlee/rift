@@ -134,7 +134,22 @@ class BaseDataset(Dataset):
         self.aug_jitter_prob    = aug_jitter_prob
         self.asym_jitter_prob   = 0.2
         self.color_fun          = ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.5/3.14)
+        self.triplets           = []
 
+    def __len__(self):
+        return len(self.triplets)
+
+    def getimg(self, index):
+        triplet = self.triplets[index]
+        # Load images
+        img0    = cv2.imread(triplet[0])
+        mid_gt  = cv2.imread(triplet[1])
+        img1    = cv2.imread(triplet[2])
+        return img0, mid_gt, img1
+
+    def __rmul__(self, v):
+        self.triplets = v * self.triplets
+        return self
 
 class VimeoDataset(BaseDataset):
     def __init__(self, dataset_name, aug_shift_prob=0, shift_sigmas=(10,8), 
@@ -151,39 +166,24 @@ class VimeoDataset(BaseDataset):
             self.testlist = f.read().splitlines()   
         self.load_data()
         
-    def __len__(self):
-        return len(self.meta_data)
 
     def load_data(self):
         cnt = int(len(self.trainlist) * 0.95)
         if self.dataset_name == 'train':
-            self.meta_data = self.trainlist[:cnt]
+            meta_data = self.trainlist[:cnt]
         elif self.dataset_name == 'test':
-            self.meta_data = self.testlist
+            meta_data = self.testlist
         else:
-            self.meta_data = self.trainlist[cnt:]
-        print('Loaded {} Vimeo {} triplets.'.format(len(self.meta_data), self.dataset_name))
+            meta_data = self.trainlist[cnt:]
+        
+        self.triplets = []
+        for meta_item in meta_data:
+            imgpath = os.path.join(self.image_root, meta_item)
+            triplet = [imgpath + '/im1.png', imgpath + '/im2.png', imgpath + '/im3.png']
+            self.triplets.append(triplet)
 
-    # random crop
-    def aug(self, img0, mid_gt, img1, h, w):
-        ih, iw, _ = img0.shape
-        x = np.random.randint(0, ih - h + 1)
-        y = np.random.randint(0, iw - w + 1)
-        img0 = img0[x:x+h, y:y+w, :]
-        img1 = img1[x:x+h, y:y+w, :]
-        mid_gt = mid_gt[x:x+h, y:y+w, :]
-        return img0, mid_gt, img1
+        print('Loaded {} Vimeo {} triplets.'.format(len(self.triplets), self.dataset_name))
 
-    def getimg(self, index):
-        imgpath = os.path.join(self.image_root, self.meta_data[index])
-        imgpaths = [imgpath + '/im1.png', imgpath + '/im2.png', imgpath + '/im3.png']
-
-        # Load images
-        img0 = cv2.imread(imgpaths[0])
-        mid_gt = cv2.imread(imgpaths[1])
-        img1 = cv2.imread(imgpaths[2])
-        return img0, mid_gt, img1
-            
     def __getitem__(self, index):        
         img0, mid_gt, img1 = self.getimg(index)
         if self.dataset_name == 'train':        
@@ -206,9 +206,9 @@ class VimeoDataset(BaseDataset):
             img0, img1, mid_gt = random_shift(img0, img1, mid_gt, self.shift_sigmas)
 
         # H, W, C => C, H, W
-        img0 = torch.from_numpy(img0.copy()).permute(2, 0, 1)
-        img1 = torch.from_numpy(img1.copy()).permute(2, 0, 1)
-        mid_gt = torch.from_numpy(mid_gt.copy()).permute(2, 0, 1)
+        img0    = torch.from_numpy(img0.copy()).permute(2, 0, 1)
+        img1    = torch.from_numpy(img1.copy()).permute(2, 0, 1)
+        mid_gt  = torch.from_numpy(mid_gt.copy()).permute(2, 0, 1)
 
         # A small probability to do individual jittering. 
         # More challenging, therefore smaller prob.        
@@ -260,17 +260,6 @@ class SintelDataset(BaseDataset):
                 self.triplets.append([image_path0, image_path1, image_path2])
 
         print('Loaded {} Sintel triplets.'.format(len(self.triplets)))
-
-    def __len__(self):
-        return len(self.triplets)
-
-    def getimg(self, index):
-        imgpaths = self.triplets[index]
-        # Load images
-        img0    = cv2.imread(imgpaths[0])
-        mid_gt  = cv2.imread(imgpaths[1])
-        img1    = cv2.imread(imgpaths[2])
-        return img0, mid_gt, img1
 
     def __getitem__(self, index):
         img0, mid_gt, img1 = self.getimg(index)
