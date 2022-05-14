@@ -1,90 +1,38 @@
+import os
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
+
 from model.warp import backwarp, multiwarp, multimerge_flow
 from model.refine import *
 from model.setrans import SETransConfig, SelfAttVisPosTrans, print0
-import os
-import torch.distributed as dist
-from model.laplacian import LapLoss
-import functools
 from model.forward_warp import fwarp_blob, fwarp_imgs
+from model.losses import dual_teaching_loss
+from model.raft.update import BasicUpdateBlock
+from model.raft.extractor import BasicEncoder
+from model.raft.corr import CorrBlock
 
 local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
-def deconv_gen(do_BN=False):
-    if do_BN:
-        norm_layer = nn.BatchNorm2d
-    else:
-        norm_layer = nn.Identity
-
-    def deconv(in_planes, out_planes, kernel_size=4, stride=2, padding=1):
-        return nn.Sequential(
-                    torch.nn.ConvTranspose2d(in_channels=in_planes, out_channels=out_planes, 
-                                            kernel_size=kernel_size, stride=stride, padding=padding),
-                    norm_layer(out_planes),
-                    nn.PReLU(out_planes)
-                )
-
-    return deconv
-
-def conv_gen(do_BN=False):
-    if do_BN:
-        norm_layer = nn.BatchNorm2d
-    else:
-        norm_layer = nn.Identity
-
-    def conv(in_planes, out_planes, kernel_size=3, stride=1, padding=1, dilation=1):
-        return nn.Sequential(
-                    nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride,
-                            padding=padding, dilation=dilation, bias=True),
-                    norm_layer(out_planes),
-                    nn.PReLU(out_planes)
-                )
-
-    return conv
+try:
+    autocast = torch.cuda.amp.autocast
+except:
+    # dummy autocast for PyTorch < 1.6
+    class autocast:
+        def __init__(self, enabled):
+            pass
+        def __enter__(self):
+            pass
+        def __exit__(self, *args):
+            pass
 
 def debug():
     if local_rank == 0:
         breakpoint()
     else:
         dist.barrier()
-
-# Dual teaching helps slightly.
-def dual_teaching_loss(mid_gt, img_stu, flow_stu, img_tea, flow_tea):
-    loss_distill = 0
-    # Ws[0]: weight of teacher -> student.
-    # Ws[1]: weight of student -> teacher.
-    # Two directions could take different weights.
-    # Set Ws[1] to 0 to disable student -> teacher.
-    Ws = [1, 0.5]
-    use_lap_loss = False
-    # Laplacian loss performs better in earlier epochs, but worse in later epochs.
-    # Moreover, Laplacian loss is significantly slower.
-    if use_lap_loss:
-        loss_fun = LapLoss(max_levels=3, reduction='none')
-    else:
-        loss_fun = nn.L1Loss(reduction='none')
-
-    for i in range(2):
-        student_error = loss_fun(img_stu, mid_gt).mean(1, True)
-        teacher_error = loss_fun(img_tea, mid_gt).mean(1, True)
-        # distill_mask indicates where the warped images according to student's prediction 
-        # is worse than that of the teacher.
-        # If at some points, the warped image of the teacher is better than the student,
-        # then regard the flow at these points are more accurate, and use them to teach the student.
-        distill_mask = (student_error > teacher_error + 0.01).float().detach()
-
-        # loss_distill is the sum of the distillation losses at 2 directions.
-        loss_distill += Ws[i] * ((flow_tea.detach() - flow_stu).abs() * distill_mask).mean()
-
-        # Swap student and teacher, and calculate the distillation loss again.
-        img_stu, flow_stu, img_tea, flow_tea = \
-            img_tea, flow_tea, img_stu, flow_stu
-        # The distillation loss from the student to the teacher is given a smaller weight.
-
-    # loss_distill = loss_distill / 2    
-    return loss_distill
 
 # https://discuss.pytorch.org/t/exluding-torch-clamp-from-backpropagation-as-tf-stop-gradient-in-tensorflow/52404/2
 class Clamp01(torch.autograd.Function):
@@ -96,135 +44,26 @@ class Clamp01(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output.clone()
 
-class IFBlock(nn.Module):
-    # If do_BN=True, batchnorm is inserted into each conv layer. But it reduces performance. So disabled.
-    def __init__(self, name, c, img_chans, nonimg_chans, multi, global_mask_chans=1):
-        super(IFBlock, self).__init__()
-        self.name = name
-        # Each image: concat of (original image, warped image).
-        self.img_chans   = img_chans    
-        # M, multi: How many copies of flow/mask are generated?
-        self.M = multi
-        if self.M == 1:
-            # originally, lastconv outputs 5 channels: 4 flow and 1 mask. upsample by 2x.
-            self.out_chan_num = 5
-        else:
-            # when outputting multiple flows, 4*M are flow channels, 
-            # 2*M flow group attention, 1 mask weight to combine warp0 and warp1.
-            self.out_chan_num = 6 * self.M + global_mask_chans
-        self.lastconv = nn.ConvTranspose2d(c, self.out_chan_num, 4, 2, 1)
-
-        conv = conv_gen(do_BN=False)
-
-        # At first scale, flow is absent. So nonimg_chans = 1.
-        # At other scales, nonimg_chans = 5: 1 channel of global_mask & 4 channels of flow.
-        self.nonimg_chans = nonimg_chans   
-
-        # conv_img downscales input image to 1/4 size.
-        self.conv_img = nn.Sequential(
-                            conv(self.img_chans, c//2, 3, 2, 1),
-                            conv(c//2, c//2, 3, 2, 1),
-                            conv(c//2, c//2),
-                            conv(c//2, c//2),
-                            conv(c//2, c//2),                
-                        )
-
-        # nonimg: mask + flow computed in the previous scale.
-        # In scale 1, they are initialized as 0.
-        self.conv_nonimg = nn.Sequential(
-                                conv(self.nonimg_chans, c//2, 3, 2, 1),
-                                conv(c//2, c//2, 3, 2, 1)
-                            )
-
-        # No non-img channels. Just to bridge the channel number difference.
-        self.conv_bridge = conv(3 * (c//2), c, 3, 1, 1)
-
-        # Moved 3 conv layers from mixconv in RIFE to conv_img.
-        self.mixconv = nn.Sequential(
-                            conv(c, c),
-                            conv(c, c),
-                            conv(c, c),
-                            conv(c, c),
-                            conv(c, c),
-                        )
-
-    def forward(self, imgs, nonimg, flow, scale):
-        # Downscale img0/img1 by scale.
-        imgs   = F.interpolate(imgs,   scale_factor = 1. / scale, recompute_scale_factor=False, 
-                               mode="bilinear", align_corners=False)
-        nonimg = F.interpolate(nonimg, scale_factor = 1. / scale, recompute_scale_factor=False, 
-                               mode="bilinear", align_corners=False)
-        if flow is not None:
-            # the size and magnitudes of the flow is scaled to the size of this layer. 
-            # Values in flow needs to be scaled as well. So flow and nonimg are treated separately.
-            flow   = F.interpolate(flow,   scale_factor = 1. / scale, recompute_scale_factor=False, 
-                                   mode="bilinear", align_corners=False) * 1. / scale
-            nonimg = torch.cat([nonimg, flow], dim=1)
-
-        # Pack the channels of the two images into the batch dimension,
-        # so that the channel number is the same as one image.
-        # This makes the feature extraction of the two images slightly faster (hopefully).
-        imgs_bpack_shape = list(imgs.shape)
-        imgs_bpack_shape[0:2] = [ -1, self.img_chans ]
-        imgs_bpack = imgs.reshape(imgs_bpack_shape)
-        xs_feat = self.conv_img(imgs_bpack)
-        # Unpack the two images in the batch dimension into the channel dimension.
-        xs_bunpack_shape = list(xs_feat.shape)
-        xs_bunpack_shape[0:2] = [ imgs.shape[0], -1 ]
-        xs_feat = xs_feat.reshape(xs_bunpack_shape)
-
-        nonimg_feat = self.conv_nonimg(nonimg)
-        x  = self.conv_bridge(torch.cat((xs_feat, nonimg_feat), 1))
-
-        # x: [1, 240, 14, 14] in 'block0'.
-        #    [1, 150, 28, 28] in 'block1'.
-        #    [1, 90,  56, 56] in 'block2'.
-        # That is, input size / scale / 4. 
-        # mixconv: 5 layers of conv, kernel size 3. 
-        # mixconv mixes the features of images, nonimg, and flow.
-        x = self.mixconv(x) + x
-        # unscaled_output size = input size / scale / 2.
-        unscaled_output = self.lastconv(x)
-
-        scaled_output = F.interpolate(unscaled_output, scale_factor = scale * 2, recompute_scale_factor=False, 
-                                      mode="bilinear", align_corners=False)
-        # multiflow/multimask_score: same size as original images.
-        # each group of flow has 4 channels. 2 for one direction, 2 for the other direction
-        # multiflow has 4*M channels.
-        multiflow = scaled_output[:, : 4*self.M] * scale * 2
-        # multimask_score: 
-        # if M == 1, multimask_score has one channel, just as the original scheme.
-        # if M > 1, 2*M+1 (2*M+2 for sofi) channels. 
-        # 2*M for M groups of (0.5->0, 0.5->1) flow group attention scores, 
-        # 1 channel (2 channels for sofi) for the warp0-warp1 combination weight.
-        # If M==1, the first two channels are redundant and never used or involved into training.
-        multimask_score = scaled_output[:, 4*self.M : ]
-
-        return multiflow, multimask_score
-    
 # Incorporate SOFI into RIFT.
 # SOFI: Self-supervised optical flow through video frame interpolation.    
-class IFNet(nn.Module):
+class IFNet_RAFT(nn.Module):
     def __init__(self, multi=(8,8,4), is_big_model=False, esti_sofi=False, num_sofi_loops=2):
-        super(IFNet, self).__init__()
+        super(IFNet_RAFT, self).__init__()
 
-        if is_big_model:
-            block_widths = [240, 160, 120]
-        else:
-            block_widths = [240, 144, 80]
-            
-        self.Ms = multi
-        self.block0     =   IFBlock('block0',     c=block_widths[0], img_chans=3, nonimg_chans=5, 
-                                    multi=self.Ms[0])
-        self.block1     =   IFBlock('block1',     c=block_widths[1], img_chans=6, nonimg_chans=5, 
-                                    multi=self.Ms[1])
-        self.block2     =   IFBlock('block2',     c=block_widths[2], img_chans=6, nonimg_chans=5,
-                                    multi=self.Ms[2])
-        # block_tea takes mid_gt (the middle frame) as extra input. 
-        self.block_tea  =   IFBlock('block_tea',  c=block_widths[2], img_chans=6, nonimg_chans=8,
-                                    multi=self.Ms[2])
-        
-        self.contextnet = Contextnet()
+        self.hidden_dim = hdim = 128
+        self.context_dim = cdim = 128
+        self.corr_levels = 4
+        self.corr_radius = 4
+
+        print("RAFT lookup radius: %d" %self.corr_radius)
+        if 'dropout' not in self.args:
+            self.args.dropout = 0
+
+        # feature network, context network, and update block
+        self.fnet = BasicEncoder(output_dim=256, norm_fn='instance', dropout=0)        
+        self.cnet = BasicEncoder(output_dim=hdim+cdim, norm_fn='batch', dropout=0)
+        self.update_block = BasicUpdateBlock(self.args, hidden_dim=hdim)
+
         # unet: 17 channels of input, 3 channels of output. Output is between 0 and 1.
         self.unet = Unet()
         self.esti_sofi = esti_sofi

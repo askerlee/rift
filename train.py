@@ -80,7 +80,7 @@ def train(model, local_rank, base_lr, aug_shift_prob, shift_sigmas, aug_jitter_p
     if extra_triplet_datatype is not None:
         if extra_triplet_datatype == 'sintel':
             sintel_dataset = SintelDataset(aug_shift_prob=aug_shift_prob, shift_sigmas=shift_sigmas, aug_jitter_prob=aug_jitter_prob)
-            dataset = dataset + 2 * sintel_dataset
+            dataset = dataset + sintel_dataset
 
     if not args.debug:
         sampler = DistributedSampler(dataset)

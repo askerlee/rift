@@ -3,6 +3,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+from model.laplacian import LapLoss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -189,6 +190,42 @@ def edge_aware_smoothness_order1(img0, img1, flow, constant=1.0, weight_type='ga
     smoothness_y = error_fn(flow_gy) * weights_y
     return torch.mean(smoothness_x) + torch.mean(smoothness_y)
 
+
+# Dual teaching helps slightly.
+def dual_teaching_loss(mid_gt, img_stu, flow_stu, img_tea, flow_tea):
+    loss_distill = 0
+    # Ws[0]: weight of teacher -> student.
+    # Ws[1]: weight of student -> teacher.
+    # Two directions could take different weights.
+    # Set Ws[1] to 0 to disable student -> teacher.
+    Ws = [1, 0.5]
+    use_lap_loss = False
+    # Laplacian loss performs better in earlier epochs, but worse in later epochs.
+    # Moreover, Laplacian loss is significantly slower.
+    if use_lap_loss:
+        loss_fun = LapLoss(max_levels=3, reduction='none')
+    else:
+        loss_fun = nn.L1Loss(reduction='none')
+
+    for i in range(2):
+        student_error = loss_fun(img_stu, mid_gt).mean(1, True)
+        teacher_error = loss_fun(img_tea, mid_gt).mean(1, True)
+        # distill_mask indicates where the warped images according to student's prediction 
+        # is worse than that of the teacher.
+        # If at some points, the warped image of the teacher is better than the student,
+        # then regard the flow at these points are more accurate, and use them to teach the student.
+        distill_mask = (student_error > teacher_error + 0.01).float().detach()
+
+        # loss_distill is the sum of the distillation losses at 2 directions.
+        loss_distill += Ws[i] * ((flow_tea.detach() - flow_stu).abs() * distill_mask).mean()
+
+        # Swap student and teacher, and calculate the distillation loss again.
+        img_stu, flow_stu, img_tea, flow_tea = \
+            img_tea, flow_tea, img_stu, flow_stu
+        # The distillation loss from the student to the teacher is given a smaller weight.
+
+    # loss_distill = loss_distill / 2    
+    return loss_distill
 
 if __name__ == '__main__':
     img0 = torch.zeros(3, 3, 256, 256).float().to(device)
