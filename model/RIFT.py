@@ -8,7 +8,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from model.IFNet import *
 from model.IFNet_m import *
 from model.IFNet_rife import IFNet_rife
-from model.loss import *
+from model.losses import *
 from model.laplacian import *
 from model.refine import *
 import random

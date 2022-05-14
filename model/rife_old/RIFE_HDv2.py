@@ -8,7 +8,7 @@ from model.warp import warp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from model.rife_old.IFNet_HDv2 import *
 import torch.nn.functional as F
-from model.loss import *
+from model.losses import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
