@@ -243,13 +243,9 @@ class RIFT:
             if flow is not None:
                 # by default, use flow_smooth_delta
                 if self.use_edge_aware_smooth_loss:
-                    curr_smooth_loss10 = edge_aware_smoothness_order1(img0, img1, flow[:, :2])
-                    curr_smooth_loss01 = edge_aware_smoothness_order1(img0, img1, flow[:, 2:4])
-                    curr_smooth_loss   = (curr_smooth_loss10 + curr_smooth_loss01) / 2
+                    curr_smooth_loss = edge_aware_smoothness_order1(img0, img1, flow, weight_type='exp')
                 else:
-                    curr_smooth_loss10 = flow_smooth_delta(flow[:, :2])
-                    curr_smooth_loss01 = flow_smooth_delta(flow[:, 2:4])
-                    curr_smooth_loss   = (curr_smooth_loss10 + curr_smooth_loss01) / 2
+                    curr_smooth_loss = flow_smooth_delta(flow)
                 loss_smooth += curr_smooth_loss
 
         if training:
