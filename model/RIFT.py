@@ -233,7 +233,7 @@ class RIFT:
             # loss on crude_img0/crude_img1 is highly inaccurate. So disable it.
             # Make the loss_refined_img0 and loss_refined_img1 asymmetric, 
             # to focus on the optimization of 1->0 flow.
-            IMG0_SOFI_WEIGHT    = 0.66
+            IMG0_SOFI_WEIGHT    = 0.5
             loss_sofi           = loss_refined_img0 * IMG0_SOFI_WEIGHT + loss_refined_img1 * (1 - IMG0_SOFI_WEIGHT)
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
@@ -243,9 +243,13 @@ class RIFT:
             if flow is not None:
                 # by default, use flow_smooth_delta
                 if self.use_edge_aware_smooth_loss:
-                    curr_smooth_loss = edge_aware_smoothness_order1(img0, img1, flow)
+                    curr_smooth_loss10 = edge_aware_smoothness_order1(img0, img1, flow[:, :2])
+                    curr_smooth_loss01 = edge_aware_smoothness_order1(img0, img1, flow[:, 2:4])
+                    curr_smooth_loss   = (curr_smooth_loss10 + curr_smooth_loss01) / 2
                 else:
-                    curr_smooth_loss = flow_smooth_delta(flow)
+                    curr_smooth_loss10 = flow_smooth_delta(flow[:, :2])
+                    curr_smooth_loss01 = flow_smooth_delta(flow[:, 2:4])
+                    curr_smooth_loss   = (curr_smooth_loss10 + curr_smooth_loss01) / 2
                 loss_smooth += curr_smooth_loss
 
         if training:

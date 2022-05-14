@@ -121,6 +121,7 @@ class VGGPerceptualLoss(torch.nn.Module):
                 k += 1
         return loss
 
+# flow should have two channels.
 # https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
 def flow_smooth_delta(flow, if_second_order=False):
     def gradient(x):
@@ -141,6 +142,7 @@ def flow_smooth_delta(flow, if_second_order=False):
     # 暂时不上二阶的平滑损失，似乎加上以后就太猛了，无法降低photo loss TODO
     return smooth_loss
 
+# flow should have two channels.
 # https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
 def edge_aware_smoothness_order1(img0, img1, flow, constant=1.0, weight_type='gauss', error_type='L1'):
     def weight_fn(x):
