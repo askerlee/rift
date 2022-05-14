@@ -231,7 +231,10 @@ class RIFT:
             loss_refined_img1   = (self.lap(refined_img1, img1)).mean()
 
             # loss on crude_img0/crude_img1 is highly inaccurate. So disable it.
-            loss_sofi           = (loss_refined_img0 + loss_refined_img1) / 2
+            # Make the loss_refined_img0 and loss_refined_img1 asymmetric, 
+            # to focus on the optimization of 1->0 flow.
+            IMG0_SOFI_WEIGHT    = 0.66
+            loss_sofi           = loss_refined_img0 * IMG0_SOFI_WEIGHT + loss_refined_img1 * (1 - IMG0_SOFI_WEIGHT)
         else:
             loss_sofi = torch.tensor(0, device=imgs.device)
 
