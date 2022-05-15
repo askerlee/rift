@@ -144,7 +144,8 @@ def flow_smooth_delta(flow, if_second_order=False):
 
 # flow should have 4 channels.
 # https://github.com/coolbeam/OIFlow/blob/main/utils/tools.py
-def edge_aware_smoothness_order1(img0, img1, flow, constant=1.0, weight_type='gauss', error_type='L1'):
+# weight_type='exp' seems to perform better than 'gauss'.
+def edge_aware_smoothness_order1(img0, img1, flow, constant=1.0, weight_type='exp', error_type='L1'):
     def weight_fn(x):
         if weight_type == 'gauss':
             y = x ** 2
