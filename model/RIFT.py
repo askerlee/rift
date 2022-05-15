@@ -341,4 +341,4 @@ class SOFI_Wrapper(nn.Module):
 
         # flow_small simulates the CRAFT un-upsampled flow (1/8 of full-sized flow).
         flow_small = F.interpolate(flow, scale_factor=0.125, mode='bilinear', align_corners=False)
-        return None, flow
+        return flow_small, flow
