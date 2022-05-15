@@ -338,5 +338,7 @@ class SOFI_Wrapper(nn.Module):
             # Take the average of the two directions.
             flow = (flow_01[0] + flow_10[1]) / 2
             flow = flow.unsqueeze(0)
-            
+
+        # flow_small simulates the CRAFT un-upsampled flow (1/8 of full-sized flow).
+        flow_small = F.interpolate(flow, scale_factor=0.125, mode='bilinear', align_corners=False)
         return None, flow
