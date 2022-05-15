@@ -337,5 +337,6 @@ class SOFI_Wrapper(nn.Module):
             # flow_10[2:]: 1->0 flow of images_RL. Still 0->1 flow, but estimated with the reverse image order.
             # Take the average of the two directions.
             flow = (flow_01[0] + flow_10[1]) / 2
-
+            flow = flow.unsqueeze(0)
+            
         return None, flow
